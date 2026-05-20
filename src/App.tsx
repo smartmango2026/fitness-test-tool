@@ -51,6 +51,13 @@ const scoreFields: FitnessField[] = [
   "item6",
 ];
 
+const tableEditableFields: EditableField[] = [
+  "studentName",
+  "height",
+  "weight",
+  ...scoreFields,
+];
+
 const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
   { label: "符合頁寬", value: "fit" },
   { label: "80%", value: 0.8 },
@@ -544,14 +551,36 @@ export default function App() {
     rowIndex: number,
     columnIndex: number,
   ): void {
+    let nextRowIndex = rowIndex;
+    let nextColumnIndex = columnIndex;
+
     if (event.key === "Enter") {
       event.preventDefault();
-      const nextRowIndex = Math.max(
+      nextRowIndex = Math.max(
         0,
         Math.min(rosterDraft.length - 1, rowIndex + (event.shiftKey ? -1 : 1)),
       );
       setRosterActiveCell({ rowIndex: nextRowIndex, columnIndex });
+      return;
     }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      nextRowIndex = Math.max(0, rowIndex - 1);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      nextRowIndex = Math.min(rosterDraft.length - 1, rowIndex + 1);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      nextColumnIndex = Math.max(0, columnIndex - 1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      nextColumnIndex = Math.min(2, columnIndex + 1);
+    } else {
+      return;
+    }
+
+    setRosterActiveCell({ rowIndex: nextRowIndex, columnIndex: nextColumnIndex });
   }
 
   function importRosterToRecords(): void {
@@ -616,6 +645,8 @@ export default function App() {
     recordId: string,
     field: EditableField,
     rowOffset: number,
+    columnOffset = 0,
+    navigationFields: EditableField[] = tableEditableFields,
   ): void {
     const currentIndex = currentEditableRecords.findIndex(
       (record) => record.id === recordId,
@@ -635,9 +666,19 @@ export default function App() {
       return;
     }
 
+    const currentFieldIndex = navigationFields.indexOf(field);
+    const nextFieldIndex =
+      currentFieldIndex === -1
+        ? 0
+        : Math.max(
+            0,
+            Math.min(navigationFields.length - 1, currentFieldIndex + columnOffset),
+          );
+    const nextField = navigationFields[nextFieldIndex] ?? field;
+
     setSelectedId(nextRecord.id);
     setDraftRecord(nextRecord);
-    setActiveCell({ recordId: nextRecord.id, field });
+    setActiveCell({ recordId: nextRecord.id, field: nextField });
   }
 
   async function handleDownloadCurrentPdf(): Promise<void> {
@@ -683,6 +724,7 @@ export default function App() {
     field: EditableField,
     value: string | number,
     options?: {
+      navigationFields?: EditableField[];
       inputType?: "text" | "number";
       min?: number;
       step?: number;
@@ -691,6 +733,8 @@ export default function App() {
   ) {
     const isEditing =
       activeCell?.recordId === record.id && activeCell.field === field;
+
+    const navigationFields = options?.navigationFields ?? tableEditableFields;
 
     if (isEditing) {
       return (
@@ -710,7 +754,33 @@ export default function App() {
                 record.id,
                 field,
                 event.shiftKey ? -1 : 1,
+                0,
+                navigationFields,
               );
+              return;
+            }
+
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              moveTableActiveCell(record.id, field, -1, 0, navigationFields);
+              return;
+            }
+
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              moveTableActiveCell(record.id, field, 1, 0, navigationFields);
+              return;
+            }
+
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              moveTableActiveCell(record.id, field, 0, -1, navigationFields);
+              return;
+            }
+
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              moveTableActiveCell(record.id, field, 0, 1, navigationFields);
               return;
             }
 
@@ -1127,6 +1197,7 @@ export default function App() {
                               {renderTableCell(record, activeMetric, record[activeMetric], {
                                 inputType: "number",
                                 min: 0,
+                                navigationFields: [activeMetric],
                                 step: 1,
                                 className: "cell-input-number",
                               })}
