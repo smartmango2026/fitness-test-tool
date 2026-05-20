@@ -22,7 +22,6 @@ type TabKey =
   | "editor"
   | "roster"
   | "analysis"
-  | "canvas"
   | "pdf";
 
 type EditableField = keyof FitnessRecord;
@@ -39,7 +38,6 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "metric", label: "測驗項目" },
   { key: "analysis", label: "檢視能力分析" },
   { key: "table", label: "檢視總表" },
-  { key: "canvas", label: "測試畫布" },
   { key: "pdf", label: "下載PDF" },
 ];
 
@@ -657,10 +655,6 @@ export default function App() {
     } finally {
       event.target.value = "";
     }
-  }
-
-  function handlePrintPdf(): void {
-    window.print();
   }
 
   function handleExport(): void {
@@ -1458,13 +1452,13 @@ export default function App() {
           </>
         ) : null}
 
-        {activeTab === "canvas" ? (
+        {activeTab === "pdf" ? (
           <>
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>測試畫布</h2>
-                  <p>這裡先提供 A4 比例畫布，之後可以繼續加上圖層、文字與模板功能。</p>
+                  <h2>下載PDF</h2>
+                  <p>這裡直接整合 A4 報表畫布與 PDF 輸出，適合整理學生能力分析並產出正式報表。</p>
                 </div>
               </div>
               <A4CanvasBoard
@@ -1473,26 +1467,10 @@ export default function App() {
                 rosterName={data.rosterName}
                 testDate={data.testDate}
               />
-            </section>
-          </>
-        ) : null}
-
-        {activeTab === "pdf" ? (
-          <>
-            <section className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>下載PDF</h2>
-                  <p>先用瀏覽器列印功能輸出 PDF，適合留存、列印或交付紙本。</p>
-                </div>
-              </div>
               <div className="callout">
-                點下面按鈕後，會開啟瀏覽器列印視窗。目的地選擇「另存為 PDF」就可以下載 PDF。
+                除了直接下載 PDF，你也可以在這裡同步處理 Excel 備份與重新匯入。
               </div>
               <div className="button-row">
-                <button className="primary-button" onClick={handlePrintPdf} type="button">
-                  開啟列印 / 下載 PDF
-                </button>
                 <button className="secondary-button" onClick={handleExport} type="button">
                   匯出 Excel
                 </button>
@@ -1505,6 +1483,16 @@ export default function App() {
                   />
                 </label>
               </div>
+            </section>
+            <section className="panel side-panel">
+              <h2>目前能力</h2>
+              <ul className="plain-list">
+                <li>會直接帶入目前選到學生的雷達圖與基本資訊。</li>
+                <li>可以再往上疊文字與圖片圖層。</li>
+                <li>可直接下載真正的 PDF 檔。</li>
+                <li>Excel 仍然保留給備份、搬移與重新匯入使用。</li>
+                <li>若匯入的 Excel 缺少 `_system` 工作表，系統會拒絕載入。</li>
+              </ul>
             </section>
           </>
         ) : null}
