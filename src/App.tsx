@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
-  ChangeEvent,
   ClipboardEvent,
   KeyboardEvent,
 } from "react";
-import A4CanvasBoard from "./A4CanvasBoard";
+import A4CanvasBoard, {
+  exportAllReportsPdf,
+  type A4CanvasBoardHandle,
+} from "./A4CanvasBoard";
 import {
   loadDebugSettings,
   type DebugSettings,
 } from "./debug-settings";
 import RadarChart from "./RadarChart";
-import { exportWorkbook, importWorkbook } from "./excel";
 import { defaultAppData } from "./sample-data";
 import { loadAppData, saveAppData } from "./storage";
 import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types";
@@ -187,6 +188,11 @@ export default function App() {
     () => data.records.find((record) => record.id === selectedId) ?? null,
     [data.records, selectedId],
   );
+  const selectedSeatNumber = useMemo(() => {
+    const index = data.records.findIndex((record) => record.id === selectedId);
+    return index >= 0 ? index + 1 : null;
+  }, [data.records, selectedId]);
+  const pdfCanvasRef = useRef<A4CanvasBoardHandle | null>(null);
 
   useEffect(() => {
     if (selectedRecord) {
@@ -634,32 +640,24 @@ export default function App() {
     setActiveCell({ recordId: nextRecord.id, field });
   }
 
-  async function handleImportChange(
-    event: ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
-    const file = event.target.files?.[0];
-    if (!file) {
+  async function handleDownloadCurrentPdf(): Promise<void> {
+    if (!selectedRecord) {
+      setMessage("請先選擇一位學生。");
       return;
     }
 
-    try {
-      const imported = await importWorkbook(file);
-      setData(imported);
-      setSelectedId(imported.records[0]?.id ?? "");
-      setDraftRecord(imported.records[0] ?? makeEmptyRecord(imported.testDate));
-      setMessage("Excel 匯入成功，已採用內嵌系統資料。");
-    } catch (error) {
-      const nextMessage =
-        error instanceof Error ? error.message : "Excel 匯入失敗。";
-      setMessage(nextMessage);
-    } finally {
-      event.target.value = "";
-    }
+    await pdfCanvasRef.current?.downloadCurrentPdf();
+    setMessage(`已下載 ${selectedRecord.studentName} 的報告。`);
   }
 
-  function handleExport(): void {
-    exportWorkbook(data);
-    setMessage("Excel 已匯出。");
+  async function handleDownloadAllPdfs(): Promise<void> {
+    await exportAllReportsPdf({
+      labels: data.itemLabels,
+      records: data.records,
+      rosterName: data.rosterName,
+      testDate: data.testDate,
+    });
+    setMessage(`已下載 ${data.rosterName || "本班"} 全班報告。`);
   }
 
   function updateScore(field: FitnessField, value: string): void {
@@ -1460,28 +1458,46 @@ export default function App() {
                   <h2>下載PDF</h2>
                   <p>這裡直接整合 A4 報表畫布與 PDF 輸出，適合整理學生能力分析並產出正式報表。</p>
                 </div>
+                <label className="shared-date-field">
+                  選擇學生
+                  <select
+                    className="search-input"
+                    onChange={(event) => {
+                      const nextRecord = data.records.find(
+                        (record) => record.id === event.target.value,
+                      );
+                      if (nextRecord) {
+                        selectRecord(nextRecord);
+                      }
+                    }}
+                    value={selectedId}
+                  >
+                    {data.records.map((record, index) => (
+                      <option key={record.id} value={record.id}>
+                        {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <A4CanvasBoard
+                ref={pdfCanvasRef}
                 labels={data.itemLabels}
                 record={selectedRecord}
                 rosterName={data.rosterName}
+                seatNumber={selectedSeatNumber}
                 testDate={data.testDate}
               />
               <div className="callout">
                 除了直接下載 PDF，你也可以在這裡同步處理 Excel 備份與重新匯入。
               </div>
               <div className="button-row">
-                <button className="secondary-button" onClick={handleExport} type="button">
-                  匯出 Excel
+                <button className="secondary-button" onClick={handleDownloadCurrentPdf} type="button">
+                  下載目前學生 PDF
                 </button>
-                <label className="file-button">
-                  匯入 Excel
-                  <input
-                    accept=".xlsx,.xls"
-                    onChange={handleImportChange}
-                    type="file"
-                  />
-                </label>
+                <button className="primary-button" onClick={handleDownloadAllPdfs} type="button">
+                  下載全班 PDF
+                </button>
               </div>
             </section>
             <section className="panel side-panel">
