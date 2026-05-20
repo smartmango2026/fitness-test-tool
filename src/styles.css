@@ -152,11 +152,24 @@ button {
   color: #475569;
 }
 
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .hero-meta {
   margin-top: 18px;
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.hero-auth {
+  margin-left: auto;
+  display: flex;
+  align-items: flex-start;
 }
 
 .shared-date-field {
@@ -173,6 +186,10 @@ button {
   border-radius: 14px;
   padding: 12px 14px;
   background: #fff;
+}
+
+.shared-date-field span {
+  display: inline-block;
 }
 
 .auth-entry {
