@@ -38,6 +38,43 @@ type TabKey =
 
 type EditableField = keyof FitnessRecord;
 
+function formatAuthError(error: unknown, fallback: string): string {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    switch (error.code) {
+      case "auth/email-already-in-use":
+        return "這個 Email 已經註冊過了。";
+      case "auth/invalid-email":
+        return "Email 格式不正確。";
+      case "auth/missing-password":
+        return "請輸入密碼。";
+      case "auth/weak-password":
+        return "密碼強度不足，請至少使用 6 個字元。";
+      case "auth/operation-not-allowed":
+        return "目前 Firebase 尚未開啟 Email / Password 登入。";
+      case "auth/user-not-found":
+      case "auth/invalid-credential":
+        return "找不到這組帳號密碼，請確認後再試一次。";
+      case "auth/wrong-password":
+        return "密碼不正確。";
+      case "auth/too-many-requests":
+        return "嘗試次數過多，請稍後再試。";
+      default:
+        break;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 type ActiveCell = {
   recordId: string;
   field: EditableField;
@@ -781,8 +818,7 @@ export default function App() {
       setAccountPanel("profile");
       setMessage(`已登入 ${user.displayName || user.email || "使用者"}。`);
     } catch (error) {
-      const nextMessage =
-        error instanceof Error ? error.message : "Email 登入失敗。";
+      const nextMessage = formatAuthError(error, "Email 登入失敗。");
       setMessage(`Email 登入失敗：${nextMessage}`);
     }
   }
@@ -805,8 +841,7 @@ export default function App() {
       setAccountPanel("profile");
       setMessage(`已建立帳號 ${user.email || "使用者"}。`);
     } catch (error) {
-      const nextMessage =
-        error instanceof Error ? error.message : "註冊失敗。";
+      const nextMessage = formatAuthError(error, "註冊失敗。");
       setMessage(`註冊失敗：${nextMessage}`);
     }
   }
@@ -1249,6 +1284,10 @@ export default function App() {
           ) : null}
         </div>
       </header>
+
+      <div className="status-banner" role="status">
+        {message}
+      </div>
 
       <nav className="tab-bar" aria-label="主要功能">
         {tabs.map((tab) => (
