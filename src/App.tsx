@@ -1104,15 +1104,15 @@ export default function App() {
         <div>
           <div className="hero-top">
             <div>
-              <p className="eyebrow">???????????</p>
-              <h1>?????????</h1>
+              <p className="eyebrow">新北市運動遊戲體育協會</p>
+              <h1>體適能測驗管理工具</h1>
               <p className="hero-copy">
-                ????????????????Excel ???????????????
+                第一版以網頁為唯一正式編輯來源，Excel 僅用於檢視、備份、列印與攜帶。
               </p>
             </div>
             <div className="hero-auth">
               <div className="shared-date-field auth-entry">
-                <span>??</span>
+                <span>帳號</span>
                 {!currentUser ? (
                   <div className="button-row">
                     <button
@@ -1126,7 +1126,7 @@ export default function App() {
                       }}
                       type="button"
                     >
-                      {authReady ? "??" : "??????"}
+                      {authReady ? "登入" : "登入初始化中"}
                     </button>
                     <button
                       className="secondary-button"
@@ -1139,7 +1139,7 @@ export default function App() {
                       }}
                       type="button"
                     >
-                      ??
+                      註冊
                     </button>
                   </div>
                 ) : (
@@ -1149,7 +1149,7 @@ export default function App() {
                       onClick={() => setShowAccountMenu((current) => !current)}
                       type="button"
                     >
-                      {currentUser.displayName || currentUser.email || "???"}
+                      {currentUser.displayName || currentUser.email || "未命名使用者"}
                     </button>
                     {showAccountMenu ? (
                       <div className="account-dropdown">
@@ -1158,14 +1158,14 @@ export default function App() {
                           onClick={() => openAccountPanel("profile")}
                           type="button"
                         >
-                          ????
+                          帳號資訊
                         </button>
                         <button
                           className="account-dropdown-item"
                           onClick={handleSignOut}
                           type="button"
                         >
-                          ??
+                          登出
                         </button>
                       </div>
                     ) : null}
@@ -1177,14 +1177,14 @@ export default function App() {
 
           <div className="hero-meta">
             <label className="shared-date-field">
-              ????
+              班級名稱
               <input
                 onChange={(event) => updateRosterName(event.target.value)}
                 value={data.rosterName}
               />
             </label>
             <label className="shared-date-field">
-              ??????
+              本次測驗日期
               <input
                 onChange={(event) => updateSharedTestDate(event.target.value)}
                 type="date"
@@ -1194,7 +1194,7 @@ export default function App() {
           </div>
           {!currentUser && showLoginPanel ? (
             <section className="auth-panel">
-              <h2>{authMode === "login" ? "?????" : "????"}</h2>
+              <h2>{authMode === "login" ? "使用者登入" : "建立帳號"}</h2>
               <div className="auth-form-grid">
                 <input
                   onChange={(event) => setLoginEmail(event.target.value)}
@@ -1204,7 +1204,7 @@ export default function App() {
                 />
                 <input
                   onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder="??"
+                  placeholder="密碼"
                   type="password"
                   value={loginPassword}
                 />
@@ -1215,14 +1215,14 @@ export default function App() {
                     onClick={authMode === "login" ? handleSignIn : handleRegister}
                     type="button"
                   >
-                    {authMode === "login" ? "??" : "??"}
+                    {authMode === "login" ? "登入" : "註冊"}
                   </button>
                   <button
                     className="secondary-button"
                     onClick={() => setShowLoginPanel(false)}
                     type="button"
                   >
-                    ??
+                    取消
                   </button>
                 </div>
               </div>
@@ -1230,15 +1230,15 @@ export default function App() {
           ) : null}
           {currentUser && accountPanel === "profile" ? (
             <section className="auth-panel">
-              <h2>????</h2>
+              <h2>帳號資訊</h2>
               <div className="auth-profile-grid">
                 <div>
                   <strong>Email</strong>
-                  <div>{currentUser.email || "???"}</div>
+                  <div>{currentUser.email || "未提供"}</div>
                 </div>
                 <div>
-                  <strong>??</strong>
-                  <div>{currentUser.displayName || "???"}</div>
+                  <strong>名稱</strong>
+                  <div>{currentUser.displayName || "尚未設定"}</div>
                 </div>
                 <div>
                   <strong>UID</strong>
