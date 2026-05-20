@@ -175,6 +175,76 @@ button {
   background: #fff;
 }
 
+.auth-entry {
+  position: relative;
+}
+
+.account-menu-shell {
+  position: relative;
+}
+
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  z-index: 20;
+}
+
+.account-dropdown-item {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #334155;
+  text-align: left;
+  font-weight: 600;
+}
+
+.account-dropdown-item:hover {
+  background: #f8fafc;
+}
+
+.auth-panel {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #dbe4ee;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.auth-panel h2 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  color: #172033;
+}
+
+.auth-form-grid,
+.auth-profile-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form-grid input {
+  width: 100%;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.auth-uid {
+  word-break: break-all;
+  color: #64748b;
+}
+
 .button-row {
   display: flex;
   gap: 12px;

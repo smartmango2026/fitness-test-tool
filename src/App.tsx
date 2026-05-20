@@ -12,10 +12,21 @@ import {
   loadDebugSettings,
   type DebugSettings,
 } from "./debug-settings";
+import {
+  readFirebaseConnectionTest,
+  writeFirebaseConnectionTest,
+} from "./firebase-test";
+import {
+  registerWithEmail,
+  signInWithEmail,
+  signOutCurrentUser,
+  subscribeToAuthState,
+} from "./firebase-auth";
 import RadarChart from "./RadarChart";
 import { defaultAppData } from "./sample-data";
 import { loadAppData, saveAppData } from "./storage";
 import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types";
+import type { User } from "firebase/auth";
 
 type TabKey =
   | "table"
@@ -127,6 +138,14 @@ export default function App() {
   const [data, setData] = useState<AppData>(() => loadAppData() ?? defaultAppData);
   const [activeTab, setActiveTab] = useState<TabKey>("roster");
   const [selectedId, setSelectedId] = useState<string>(data.records[0]?.id ?? "");
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPanel, setShowLoginPanel] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [accountPanel, setAccountPanel] = useState<"profile" | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
   );
@@ -134,6 +153,7 @@ export default function App() {
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
   const [activeMetric, setActiveMetric] = useState<FitnessField>("item1");
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [firebaseStatus, setFirebaseStatus] = useState("尚未測試 Firebase 連線。");
   const [rosterDraft, setRosterDraft] = useState<RosterEntry[]>(() =>
     data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()],
   );
@@ -168,6 +188,19 @@ export default function App() {
   useEffect(() => {
     saveAppData(data);
   }, [data]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthState((user) => {
+      setCurrentUser(user);
+      setAuthReady(true);
+      setShowAccountMenu(false);
+      if (!user) {
+        setAccountPanel(null);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -701,6 +734,102 @@ export default function App() {
     setMessage(`已下載 ${data.rosterName || "本班"} 全班報告。`);
   }
 
+  async function handleFirebaseWriteTest(): Promise<void> {
+    try {
+      await writeFirebaseConnectionTest(data);
+      setFirebaseStatus("Firebase 寫入測試成功。");
+      setMessage("Firebase 寫入測試成功。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "Firebase 寫入測試失敗。";
+      setFirebaseStatus(`Firebase 寫入失敗：${nextMessage}`);
+      setMessage(`Firebase 寫入失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleFirebaseReadTest(): Promise<void> {
+    try {
+      const result = await readFirebaseConnectionTest();
+      if (!result.exists) {
+        setFirebaseStatus("Firebase 讀取成功，但測試文件尚不存在。");
+        setMessage("Firebase 讀取成功，但測試文件尚不存在。");
+        return;
+      }
+
+      setFirebaseStatus(
+        `Firebase 讀取成功：${JSON.stringify(result.data, null, 2)}`,
+      );
+      setMessage("Firebase 讀取測試成功。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "Firebase 讀取測試失敗。";
+      setFirebaseStatus(`Firebase 讀取失敗：${nextMessage}`);
+      setMessage(`Firebase 讀取失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleSignIn(): Promise<void> {
+    if (!loginEmail.trim() || !loginPassword) {
+      setMessage("請輸入 Email 與密碼。");
+      return;
+    }
+
+    try {
+      const user = await signInWithEmail(loginEmail.trim(), loginPassword);
+      setShowLoginPanel(false);
+      setLoginPassword("");
+      setAccountPanel("profile");
+      setMessage(`已登入 ${user.displayName || user.email || "使用者"}。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "Email 登入失敗。";
+      setMessage(`Email 登入失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleRegister(): Promise<void> {
+    if (!loginEmail.trim() || !loginPassword) {
+      setMessage("請輸入 Email 與密碼。");
+      return;
+    }
+
+    if (loginPassword.length < 6) {
+      setMessage("密碼至少需要 6 個字元。");
+      return;
+    }
+
+    try {
+      const user = await registerWithEmail(loginEmail.trim(), loginPassword);
+      setShowLoginPanel(false);
+      setLoginPassword("");
+      setAccountPanel("profile");
+      setMessage(`已建立帳號 ${user.email || "使用者"}。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "註冊失敗。";
+      setMessage(`註冊失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleSignOut(): Promise<void> {
+    try {
+      await signOutCurrentUser();
+      setShowLoginPanel(false);
+      setShowAccountMenu(false);
+      setAccountPanel(null);
+      setMessage("已登出。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "登出失敗。";
+      setMessage(`登出失敗：${nextMessage}`);
+    }
+  }
+
+  function openAccountPanel(panel: "profile"): void {
+    setAccountPanel(panel);
+    setShowAccountMenu(false);
+  }
+
   function updateScore(field: FitnessField, value: string): void {
     updateDraftField(field, normalizeNumber(value));
   }
@@ -994,7 +1123,161 @@ export default function App() {
                 value={data.testDate}
               />
             </label>
+            <div className="shared-date-field" style={{ display: "none" }}>
+              <span>使用者登入</span>
+              {currentUser ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <span>{currentUser.email || "已登入"}</span>
+                  <button
+                    className="secondary-button"
+                    onClick={handleSignOut}
+                    type="button"
+                  >
+                    登出
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <input
+                    onChange={(event) => setLoginEmail(event.target.value)}
+                    placeholder="Email"
+                    type="email"
+                    value={loginEmail}
+                  />
+                  <input
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    placeholder="密碼"
+                    type="password"
+                    value={loginPassword}
+                  />
+                  <button
+                    className="primary-button"
+                    disabled={!authReady}
+                    onClick={handleSignIn}
+                    type="button"
+                  >
+                    {authReady ? "登入" : "登入初始化中"}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="shared-date-field auth-entry">
+              <span>帳號</span>
+              {!currentUser ? (
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={!authReady}
+                    onClick={() => {
+                      setAuthMode("login");
+                      setShowLoginPanel((current) =>
+                        authMode === "login" ? !current : true,
+                      );
+                    }}
+                    type="button"
+                  >
+                    {authReady ? "??" : "??????"}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={!authReady}
+                    onClick={() => {
+                      setAuthMode("register");
+                      setShowLoginPanel((current) =>
+                        authMode === "register" ? !current : true,
+                      );
+                    }}
+                    type="button"
+                  >
+                    ??
+                  </button>
+                </div>
+              ) : (
+                <div className="account-menu-shell">
+                  <button
+                    className="secondary-button"
+                    onClick={() => setShowAccountMenu((current) => !current)}
+                    type="button"
+                  >
+                    {currentUser.displayName || currentUser.email || "已登入"}
+                  </button>
+                  {showAccountMenu ? (
+                    <div className="account-dropdown">
+                      <button
+                        className="account-dropdown-item"
+                        onClick={() => openAccountPanel("profile")}
+                        type="button"
+                      >
+                        帳號資訊
+                      </button>
+                      <button
+                        className="account-dropdown-item"
+                        onClick={handleSignOut}
+                        type="button"
+                      >
+                        登出
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
+          {!currentUser && showLoginPanel ? (
+            <section className="auth-panel">
+              <h2>{authMode === "login" ? "?????" : "????"}</h2>
+              <div className="auth-form-grid">
+                <input
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  value={loginEmail}
+                />
+                <input
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  placeholder="??"
+                  type="password"
+                  value={loginPassword}
+                />
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={!authReady}
+                    onClick={authMode === "login" ? handleSignIn : handleRegister}
+                    type="button"
+                  >
+                    {authMode === "login" ? "??" : "??"}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setShowLoginPanel(false)}
+                    type="button"
+                  >
+                    ??
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+          {currentUser && accountPanel === "profile" ? (
+            <section className="auth-panel">
+              <h2>帳號資訊</h2>
+              <div className="auth-profile-grid">
+                <div>
+                  <strong>Email</strong>
+                  <div>{currentUser.email || "未提供"}</div>
+                </div>
+                <div>
+                  <strong>名稱</strong>
+                  <div>{currentUser.displayName || "未設定"}</div>
+                </div>
+                <div>
+                  <strong>UID</strong>
+                  <div className="auth-uid">{currentUser.uid}</div>
+                </div>
+              </div>
+            </section>
+          ) : null}
         </div>
       </header>
 
