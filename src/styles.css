@@ -169,7 +169,8 @@ button {
 .hero-auth {
   margin-left: auto;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
+  justify-content: flex-end;
 }
 
 .shared-date-field {
@@ -194,6 +195,8 @@ button {
 
 .auth-entry {
   position: relative;
+  justify-items: end;
+  text-align: right;
 }
 
 .account-menu-shell {
