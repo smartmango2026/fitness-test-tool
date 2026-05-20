@@ -1,9 +1,20 @@
 import { jsPDF } from "jspdf";
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { FitnessRecord } from "./types";
 
 const CANVAS_WIDTH = 1240;
 const CANVAS_HEIGHT = 1754;
+const SECTION_STROKE = "#9ac1f0";
+const SECTION_FILL = "#ffffff";
+const PAGE_BORDER = "#8fb7ea";
+const TITLE_COLOR = "#183b70";
+const SUBTITLE_COLOR = "#5d89c7";
+const TEXT_COLOR = "#1f2937";
+const MUTED_TEXT_COLOR = "#64748b";
+const CHART_LINE = "#2d72d8";
+const CHART_FILL = "rgba(69, 132, 220, 0.18)";
+const SCORE_COLORS = ["#5b8fd9", "#75bc67", "#f59b43", "#f26b75", "#8c80d8", "#f7b93f"];
 
 type CanvasTextBlock = {
   id: string;
@@ -41,6 +52,98 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+function drawRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
+}
+
+function drawSectionBadge(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  text: string,
+  width = 338,
+): void {
+  drawRoundedRect(context, x, y, width, 62, 22);
+  const gradient = context.createLinearGradient(x, y, x + width, y);
+  gradient.addColorStop(0, "#5c95d8");
+  gradient.addColorStop(1, "#79a8e5");
+  context.fillStyle = gradient;
+  context.fill();
+
+  context.fillStyle = "#ffffff";
+  context.font = "700 28px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.fillText(text, x + 24, y + 32);
+}
+
+function drawGenericBadge(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  drawRoundedRect(context, x, y, size, size, 24);
+  context.fillStyle = "#f4f9ff";
+  context.fill();
+  context.strokeStyle = "#c9def7";
+  context.lineWidth = 2;
+  context.stroke();
+
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  const radius = size * 0.24;
+
+  context.beginPath();
+  for (let index = 0; index < 8; index += 1) {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / 8;
+    const outerX = centerX + Math.cos(angle) * radius * 1.9;
+    const outerY = centerY + Math.sin(angle) * radius * 1.9;
+    const innerX = centerX + Math.cos(angle + Math.PI / 8) * radius * 0.75;
+    const innerY = centerY + Math.sin(angle + Math.PI / 8) * radius * 0.75;
+
+    if (index === 0) {
+      context.moveTo(outerX, outerY);
+    } else {
+      context.lineTo(outerX, outerY);
+    }
+    context.lineTo(innerX, innerY);
+  }
+  context.closePath();
+  context.fillStyle = "#9fc0ec";
+  context.fill();
+
+  context.beginPath();
+  context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  context.fillStyle = "#ffffff";
+  context.fill();
+  context.strokeStyle = "#8fb7ea";
+  context.lineWidth = 2;
+  context.stroke();
+
+  context.beginPath();
+  context.arc(centerX, centerY, radius * 0.35, 0, Math.PI * 2);
+  context.fillStyle = "#f8c85c";
+  context.fill();
+}
+
 function getRadarPolygonPoints(
   values: number[],
   centerX: number,
@@ -49,13 +152,61 @@ function getRadarPolygonPoints(
 ): Array<{ x: number; y: number }> {
   return values.map((value, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / values.length;
-    const normalized = Math.max(0, Math.min(1, value / 20));
+    const normalized = Math.max(0, Math.min(1, value / 5));
 
     return {
       x: centerX + Math.cos(angle) * radius * normalized,
       y: centerY + Math.sin(angle) * radius * normalized,
     };
   });
+}
+
+function scoreToLevel(score: number): string {
+  if (score >= 5) {
+    return "優良";
+  }
+  if (score >= 4) {
+    return "良好";
+  }
+  if (score >= 3) {
+    return "穩定發展中";
+  }
+  if (score >= 2) {
+    return "可再加強";
+  }
+  return "需要多練習";
+}
+
+function formatMetricSummary(labels: string[], record: FitnessRecord | null): string {
+  if (!record) {
+    return "尚未選擇學生，請先到能力分析頁或總表選定一位學生。";
+  }
+
+  const values = [record.item1, record.item2, record.item3, record.item4, record.item5, record.item6];
+  const strongestIndex = values.indexOf(Math.max(...values));
+  const supportIndex = values.indexOf(Math.min(...values));
+
+  return `本次測驗中，${labels[strongestIndex] ?? "表現"}相對突出；${
+    labels[supportIndex] ?? "另一項能力"
+  }則可安排更多遊戲化練習。建議持續透過日常活動維持身體控制、節奏感與協調能力。`;
+}
+
+function drawBarMeter(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  score: number,
+  color: string,
+): void {
+  const total = 5;
+  for (let index = 0; index < total; index += 1) {
+    drawRoundedRect(context, x + index * 34, y, 24, 16, 6);
+    context.fillStyle = index < score ? color : "#eef4fb";
+    context.fill();
+    context.strokeStyle = index < score ? color : "#d8e6f7";
+    context.lineWidth = 1;
+    context.stroke();
+  }
 }
 
 export default function A4CanvasBoard({
@@ -65,27 +216,8 @@ export default function A4CanvasBoard({
   testDate,
 }: A4CanvasBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [title, setTitle] = useState("A4 版面測試");
-  const [textBlocks, setTextBlocks] = useState<CanvasTextBlock[]>([
-    {
-      id: crypto.randomUUID(),
-      content: "這裡可以放標題或說明文字",
-      x: 120,
-      y: 180,
-      fontSize: 42,
-      color: "#172033",
-      fontWeight: "bold",
-    },
-    {
-      id: crypto.randomUUID(),
-      content: "下一步可以在這裡放入雷達圖、班級資訊或評量摘要。",
-      x: 120,
-      y: 260,
-      fontSize: 24,
-      color: "#475569",
-      fontWeight: "normal",
-    },
-  ]);
+  const [title, setTitle] = useState("幼兒體能測驗報告");
+  const [textBlocks, setTextBlocks] = useState<CanvasTextBlock[]>([]);
   const [imageBlocks, setImageBlocks] = useState<CanvasImageBlock[]>([]);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
@@ -102,40 +234,86 @@ export default function A4CanvasBoard({
       return;
     }
 
+    const values = record
+      ? [record.item1, record.item2, record.item3, record.item4, record.item5, record.item6]
+      : [0, 0, 0, 0, 0, 0];
+    const metricSummary = formatMetricSummary(labels, record);
+
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
 
-    context.strokeStyle = "#e2e8f0";
+    drawRoundedRect(context, 18, 18, canvas.width - 36, canvas.height - 36, 28);
+    context.strokeStyle = PAGE_BORDER;
+    context.lineWidth = 3;
+    context.stroke();
+
+    drawGenericBadge(context, 64, 54, 128);
+
+    context.fillStyle = TITLE_COLOR;
+    context.textAlign = "center";
+    context.textBaseline = "alphabetic";
+    context.font = "700 62px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.fillText(title, 620, 102);
+    context.fillStyle = SUBTITLE_COLOR;
+    context.font = "500 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.fillText("KINDERGARTEN PHYSICAL FITNESS REPORT", 620, 145);
+
+    drawRoundedRect(context, 970, 56, 196, 92, 22);
+    context.fillStyle = SECTION_FILL;
+    context.fill();
+    context.strokeStyle = "#c9def7";
     context.lineWidth = 2;
-    context.strokeRect(24, 24, canvas.width - 48, canvas.height - 48);
+    context.stroke();
+    context.fillStyle = SUBTITLE_COLOR;
+    context.font = "700 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.textAlign = "center";
+    context.fillText("測驗日期", 1068, 93);
+    context.fillStyle = TEXT_COLOR;
+    context.font = "500 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.fillText(testDate || "尚未設定", 1068, 128);
 
-    context.fillStyle = "#94a3b8";
-    context.font = "600 18px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.textAlign = "right";
-    context.fillText(title, canvas.width - 80, 90);
+    drawRoundedRect(context, 46, 178, 1148, 170, 24);
+    context.fillStyle = SECTION_FILL;
+    context.fill();
+    context.strokeStyle = SECTION_STROKE;
+    context.lineWidth = 3;
+    context.stroke();
 
-    context.textAlign = "left";
-    context.fillStyle = "#172033";
-    context.font = "700 34px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(rosterName || "未設定班級", 90, 88);
-    context.font = "500 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillStyle = "#475569";
-    context.fillText(`測驗日期：${testDate || "未設定"}`, 92, 126);
+    const infoColumns = [
+      { label: "班級", value: rosterName || "未設定班級", x: 155 },
+      { label: "身高", value: record?.height ? `${record.height} cm` : "未填寫", x: 420 },
+      { label: "姓名", value: record?.studentName || "未選擇學生", x: 690 },
+      { label: "體重", value: record?.weight ? `${record.weight} kg` : "未填寫", x: 960 },
+    ];
+
+    for (let index = 0; index < infoColumns.length; index += 1) {
+      const column = infoColumns[index];
+      context.fillStyle = SUBTITLE_COLOR;
+      context.textAlign = "center";
+      context.font = "700 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(column.label, column.x, 242);
+      context.fillStyle = TEXT_COLOR;
+      context.font = "500 38px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(column.value, column.x, 296);
+
+      if (index < infoColumns.length - 1) {
+        context.setLineDash([5, 8]);
+        context.beginPath();
+        context.moveTo(column.x + 132, 196);
+        context.lineTo(column.x + 132, 330);
+        context.strokeStyle = "#c8daf2";
+        context.lineWidth = 2;
+        context.stroke();
+        context.setLineDash([]);
+      }
+    }
+
+    drawSectionBadge(context, 44, 378, "六項體能表現雷達圖");
 
     const chartCenterX = 620;
-    const chartCenterY = 820;
-    const chartRadius = 280;
-    const values = record
-      ? [
-          record.item1,
-          record.item2,
-          record.item3,
-          record.item4,
-          record.item5,
-          record.item6,
-        ]
-      : [0, 0, 0, 0, 0, 0];
+    const chartCenterY = 790;
+    const chartRadius = 260;
 
     for (let ring = 1; ring <= 5; ring += 1) {
       const currentRadius = (chartRadius / 5) * ring;
@@ -144,7 +322,6 @@ export default function A4CanvasBoard({
         const angle = -Math.PI / 2 + (Math.PI * 2 * index) / labels.length;
         const x = chartCenterX + Math.cos(angle) * currentRadius;
         const y = chartCenterY + Math.sin(angle) * currentRadius;
-
         if (index === 0) {
           context.moveTo(x, y);
         } else {
@@ -152,12 +329,17 @@ export default function A4CanvasBoard({
         }
       });
       context.closePath();
-      context.strokeStyle = ring % 2 === 0 ? "#dbe4ee" : "#eef2f7";
+      context.strokeStyle = ring % 2 === 0 ? "#d9e7f8" : "#edf4fc";
       context.lineWidth = 2;
       context.stroke();
+
+      context.fillStyle = MUTED_TEXT_COLOR;
+      context.font = "500 16px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.textAlign = "center";
+      context.fillText(String(ring), chartCenterX, chartCenterY - currentRadius - 8);
     }
 
-    labels.forEach((label, index) => {
+    labels.forEach((_, index) => {
       const angle = -Math.PI / 2 + (Math.PI * 2 * index) / labels.length;
       const axisX = chartCenterX + Math.cos(angle) * chartRadius;
       const axisY = chartCenterY + Math.sin(angle) * chartRadius;
@@ -165,25 +347,12 @@ export default function A4CanvasBoard({
       context.beginPath();
       context.moveTo(chartCenterX, chartCenterY);
       context.lineTo(axisX, axisY);
-      context.strokeStyle = "#cbd5e1";
+      context.strokeStyle = "#c7d8ee";
       context.lineWidth = 2;
       context.stroke();
-
-      const labelX = chartCenterX + Math.cos(angle) * (chartRadius + 56);
-      const labelY = chartCenterY + Math.sin(angle) * (chartRadius + 56);
-      context.fillStyle = "#0f172a";
-      context.font = "600 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.fillText(label, labelX, labelY);
     });
 
-    const polygonPoints = getRadarPolygonPoints(
-      values,
-      chartCenterX,
-      chartCenterY,
-      chartRadius,
-    );
+    const polygonPoints = getRadarPolygonPoints(values, chartCenterX, chartCenterY, chartRadius);
     context.beginPath();
     polygonPoints.forEach((point, index) => {
       if (index === 0) {
@@ -193,48 +362,136 @@ export default function A4CanvasBoard({
       }
     });
     context.closePath();
-    context.fillStyle = "rgba(15, 118, 110, 0.24)";
-    context.strokeStyle = "#0f766e";
-    context.lineWidth = 5;
+    context.fillStyle = CHART_FILL;
+    context.strokeStyle = CHART_LINE;
+    context.lineWidth = 4;
     context.fill();
     context.stroke();
 
     polygonPoints.forEach((point) => {
       context.beginPath();
       context.arc(point.x, point.y, 8, 0, Math.PI * 2);
-      context.fillStyle = "#0f766e";
+      context.fillStyle = CHART_LINE;
       context.fill();
     });
 
+    labels.forEach((label, index) => {
+      const color = SCORE_COLORS[index % SCORE_COLORS.length];
+      const angle = -Math.PI / 2 + (Math.PI * 2 * index) / labels.length;
+      const iconX = chartCenterX + Math.cos(angle) * 372;
+      const iconY = chartCenterY + Math.sin(angle) * 372;
+      const textX = chartCenterX + Math.cos(angle) * 430;
+      const textY = chartCenterY + Math.sin(angle) * 430;
+
+      context.beginPath();
+      context.arc(iconX, iconY, 26, 0, Math.PI * 2);
+      context.fillStyle = "#ffffff";
+      context.fill();
+      context.strokeStyle = color;
+      context.lineWidth = 2;
+      context.stroke();
+
+      context.fillStyle = color;
+      context.font = "700 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(String(index + 1), iconX, iconY);
+
+      context.fillStyle = color;
+      context.font = "700 26px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.textAlign =
+        Math.cos(angle) < -0.1 ? "right" : Math.cos(angle) > 0.1 ? "left" : "center";
+      context.fillText(label, textX, textY);
+    });
+
+    drawSectionBadge(context, 44, 1134, "六項測驗結果摘要");
+    drawRoundedRect(context, 44, 1208, 1150, 290, 22);
+    context.fillStyle = SECTION_FILL;
+    context.fill();
+    context.strokeStyle = SECTION_STROKE;
+    context.lineWidth = 3;
+    context.stroke();
+
+    const tableColumns = [
+      { label: "測驗項目", x: 76, width: 220 },
+      { label: "分數", x: 334, width: 100 },
+      { label: "表現等級", x: 490, width: 220 },
+      { label: "表現長條圖", x: 760, width: 240 },
+    ];
+
+    context.strokeStyle = "#d5e4f7";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(44, 1262);
+    context.lineTo(1194, 1262);
+    context.stroke();
+
+    tableColumns.forEach((column) => {
+      context.fillStyle = SUBTITLE_COLOR;
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.font = "700 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(column.label, column.x, 1235);
+    });
+
+    for (let index = 0; index < labels.length; index += 1) {
+      const rowY = 1300 + index * 36;
+      const score = values[index] ?? 0;
+      const color = SCORE_COLORS[index % SCORE_COLORS.length];
+
+      if (index < labels.length - 1) {
+        context.beginPath();
+        context.moveTo(64, rowY + 24);
+        context.lineTo(1174, rowY + 24);
+        context.strokeStyle = "#ecf3fb";
+        context.stroke();
+      }
+
+      context.beginPath();
+      context.arc(92, rowY, 16, 0, Math.PI * 2);
+      context.fillStyle = color;
+      context.fill();
+      context.fillStyle = "#ffffff";
+      context.textAlign = "center";
+      context.font = "700 18px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(String(index + 1), 92, rowY + 1);
+
+      context.fillStyle = TEXT_COLOR;
+      context.textAlign = "left";
+      context.font = "500 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(labels[index] ?? `項目 ${index + 1}`, 126, rowY + 1);
+
+      context.textAlign = "center";
+      context.font = "700 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(String(score), 384, rowY + 1);
+
+      context.font = "500 20px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(scoreToLevel(score), 580, rowY + 1);
+
+      drawBarMeter(context, 804, rowY - 10, score, color);
+    }
+
+    drawSectionBadge(context, 44, 1524, "老師觀察與鼓勵", 300);
+    drawRoundedRect(context, 44, 1598, 1150, 118, 20);
+    context.fillStyle = "#fffdf8";
+    context.fill();
+    context.strokeStyle = "#e5d1a0";
+    context.lineWidth = 2.5;
+    context.stroke();
+
+    context.fillStyle = TEXT_COLOR;
     context.textAlign = "left";
     context.textBaseline = "top";
-    context.fillStyle = "#172033";
-    context.font = "700 32px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(record?.studentName || "尚未選擇學生", 92, 1410);
-    context.font = "24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillStyle = "#475569";
-    context.fillText(`身高：${record?.height || "—"} cm`, 92, 1460);
-    context.fillText(`體重：${record?.weight || "—"} kg`, 92, 1500);
-    context.fillText(`評語：${record?.comment || "—"}`, 92, 1560);
+    context.font = "500 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.fillText(record?.comment || metricSummary, 82, 1638, 1060);
 
     for (const imageBlock of imageBlocks) {
       try {
         const image = await loadImage(imageBlock.src);
-        context.drawImage(
-          image,
-          imageBlock.x,
-          imageBlock.y,
-          imageBlock.width,
-          imageBlock.height,
-        );
+        context.drawImage(image, imageBlock.x, imageBlock.y, imageBlock.width, imageBlock.height);
       } catch {
         context.fillStyle = "#fecaca";
-        context.fillRect(
-          imageBlock.x,
-          imageBlock.y,
-          imageBlock.width,
-          imageBlock.height,
-        );
+        context.fillRect(imageBlock.x, imageBlock.y, imageBlock.width, imageBlock.height);
       }
     }
 
@@ -258,9 +515,9 @@ export default function A4CanvasBoard({
   function addTextBlock(): void {
     const nextBlock: CanvasTextBlock = {
       id: crypto.randomUUID(),
-      content: "新的文字區塊",
+      content: "請輸入補充文字",
       x: 120,
-      y: 360,
+      y: 320,
       fontSize: 28,
       color: "#172033",
       fontWeight: "normal",
@@ -325,9 +582,7 @@ export default function A4CanvasBoard({
       return;
     }
 
-    setTextBlocks((current) =>
-      current.filter((block) => block.id !== selectedTextId),
-    );
+    setTextBlocks((current) => current.filter((block) => block.id !== selectedTextId));
     setSelectedTextId(null);
   }
 
@@ -336,15 +591,11 @@ export default function A4CanvasBoard({
       return;
     }
 
-    setImageBlocks((current) =>
-      current.filter((block) => block.id !== selectedImageId),
-    );
+    setImageBlocks((current) => current.filter((block) => block.id !== selectedImageId));
     setSelectedImageId(null);
   }
 
-  async function handleImageUpload(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
+  async function handleImageUpload(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
     if (!file) {
       return;
@@ -361,10 +612,10 @@ export default function A4CanvasBoard({
         id: crypto.randomUUID(),
         name: file.name,
         src,
-        x: 120,
-        y: 440,
-        width: 360,
-        height: 240,
+        x: 820,
+        y: 1540,
+        width: 200,
+        height: 120,
       };
       setImageBlocks((current) => [...current, nextBlock]);
       setSelectedImageId(nextBlock.id);
@@ -389,7 +640,7 @@ export default function A4CanvasBoard({
     });
 
     pdf.addImage(imageUrl, "PNG", 0, 0, 210, 297, undefined, "FAST");
-    pdf.save("a4-canvas-export.pdf");
+    pdf.save("fitness-report.pdf");
   }
 
   return (
@@ -398,7 +649,7 @@ export default function A4CanvasBoard({
         <section className="canvas-tools">
           <div className="canvas-tool-card">
             <label className="metric-label-editor">
-              版面標題
+              報告標題
               <input
                 onChange={(event) => setTitle(event.target.value)}
                 value={title}
@@ -445,9 +696,7 @@ export default function A4CanvasBoard({
                 <label>
                   內容
                   <textarea
-                    onChange={(event) =>
-                      updateSelectedText("content", event.target.value)
-                    }
+                    onChange={(event) => updateSelectedText("content", event.target.value)}
                     rows={4}
                     value={selectedText.content}
                   />
@@ -471,9 +720,7 @@ export default function A4CanvasBoard({
                 <label>
                   字級
                   <input
-                    onChange={(event) =>
-                      updateSelectedText("fontSize", event.target.value)
-                    }
+                    onChange={(event) => updateSelectedText("fontSize", event.target.value)}
                     type="number"
                     value={selectedText.fontSize}
                   />
@@ -487,11 +734,9 @@ export default function A4CanvasBoard({
                   />
                 </label>
                 <label>
-                  字重
+                  粗細
                   <select
-                    onChange={(event) =>
-                      updateSelectedText("fontWeight", event.target.value)
-                    }
+                    onChange={(event) => updateSelectedText("fontWeight", event.target.value)}
                     value={selectedText.fontWeight}
                   >
                     <option value="normal">一般</option>
@@ -503,7 +748,7 @@ export default function A4CanvasBoard({
                   onClick={removeSelectedText}
                   type="button"
                 >
-                  刪除這段文字
+                  刪除文字
                 </button>
               </div>
             ) : null}
@@ -549,9 +794,7 @@ export default function A4CanvasBoard({
                 <label>
                   寬度
                   <input
-                    onChange={(event) =>
-                      updateSelectedImage("width", event.target.value)
-                    }
+                    onChange={(event) => updateSelectedImage("width", event.target.value)}
                     type="number"
                     value={selectedImage.width}
                   />
@@ -559,9 +802,7 @@ export default function A4CanvasBoard({
                 <label>
                   高度
                   <input
-                    onChange={(event) =>
-                      updateSelectedImage("height", event.target.value)
-                    }
+                    onChange={(event) => updateSelectedImage("height", event.target.value)}
                     type="number"
                     value={selectedImage.height}
                   />
@@ -571,7 +812,7 @@ export default function A4CanvasBoard({
                   onClick={removeSelectedImage}
                   type="button"
                 >
-                  刪除這張圖片
+                  刪除圖片
                 </button>
               </div>
             ) : null}
