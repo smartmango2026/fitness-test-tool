@@ -264,6 +264,12 @@ button {
   background: #fff;
 }
 
+.auth-help {
+  margin: -2px 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
 .auth-uid {
   word-break: break-all;
   color: #64748b;

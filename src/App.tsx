@@ -17,8 +17,10 @@ import {
   writeFirebaseConnectionTest,
 } from "./firebase-test";
 import {
-  registerWithEmail,
-  signInWithEmail,
+  emailToUsername,
+  isValidUsername,
+  registerWithUsername,
+  signInWithUsername,
   signOutCurrentUser,
   subscribeToAuthState,
 } from "./firebase-auth";
@@ -47,15 +49,15 @@ function formatAuthError(error: unknown, fallback: string): string {
   ) {
     switch (error.code) {
       case "auth/email-already-in-use":
-        return "這個 Email 已經註冊過了。";
+        return "這個帳號已經註冊過了。";
       case "auth/invalid-email":
-        return "Email 格式不正確。";
+        return "帳號格式不正確。";
       case "auth/missing-password":
         return "請輸入密碼。";
       case "auth/weak-password":
         return "密碼強度不足，請至少使用 6 個字元。";
       case "auth/operation-not-allowed":
-        return "目前 Firebase 尚未開啟 Email / Password 登入。";
+        return "目前 Firebase 尚未開啟帳號密碼登入。";
       case "auth/user-not-found":
       case "auth/invalid-credential":
         return "找不到這組帳號密碼，請確認後再試一次。";
@@ -177,7 +179,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string>(data.records[0]?.id ?? "");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [loginEmail, setLoginEmail] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
@@ -806,26 +808,37 @@ export default function App() {
   }
 
   async function handleSignIn(): Promise<void> {
-    if (!loginEmail.trim() || !loginPassword) {
-      setMessage("請輸入 Email 與密碼。");
+    if (!loginUsername.trim() || !loginPassword) {
+      setMessage("請輸入帳號與密碼。");
+      return;
+    }
+
+    if (!isValidUsername(loginUsername)) {
+      setMessage("帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。");
       return;
     }
 
     try {
-      const user = await signInWithEmail(loginEmail.trim(), loginPassword);
+      const user = await signInWithUsername(loginUsername.trim(), loginPassword);
       setShowLoginPanel(false);
       setLoginPassword("");
+      setLoginUsername("");
       setAccountPanel("profile");
-      setMessage(`已登入 ${user.displayName || user.email || "使用者"}。`);
+      setMessage(`已登入 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
-      const nextMessage = formatAuthError(error, "Email 登入失敗。");
-      setMessage(`Email 登入失敗：${nextMessage}`);
+      const nextMessage = formatAuthError(error, "帳號登入失敗。");
+      setMessage(`帳號登入失敗：${nextMessage}`);
     }
   }
 
   async function handleRegister(): Promise<void> {
-    if (!loginEmail.trim() || !loginPassword) {
-      setMessage("請輸入 Email 與密碼。");
+    if (!loginUsername.trim() || !loginPassword) {
+      setMessage("請輸入帳號與密碼。");
+      return;
+    }
+
+    if (!isValidUsername(loginUsername)) {
+      setMessage("帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。");
       return;
     }
 
@@ -835,11 +848,12 @@ export default function App() {
     }
 
     try {
-      const user = await registerWithEmail(loginEmail.trim(), loginPassword);
+      const user = await registerWithUsername(loginUsername.trim(), loginPassword);
       setShowLoginPanel(false);
       setLoginPassword("");
+      setLoginUsername("");
       setAccountPanel("profile");
-      setMessage(`已建立帳號 ${user.email || "使用者"}。`);
+      setMessage(`已建立帳號 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "註冊失敗。");
       setMessage(`註冊失敗：${nextMessage}`);
@@ -1184,7 +1198,7 @@ export default function App() {
                       onClick={() => setShowAccountMenu((current) => !current)}
                       type="button"
                     >
-                      {currentUser.displayName || currentUser.email || "未命名使用者"}
+                      {currentUser.displayName || emailToUsername(currentUser.email) || "未命名使用者"}
                     </button>
                     {showAccountMenu ? (
                       <div className="account-dropdown">
@@ -1232,10 +1246,10 @@ export default function App() {
               <h2>{authMode === "login" ? "使用者登入" : "建立帳號"}</h2>
               <div className="auth-form-grid">
                 <input
-                  onChange={(event) => setLoginEmail(event.target.value)}
-                  placeholder="Email"
-                  type="email"
-                  value={loginEmail}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  placeholder="帳號（例如 teacher01）"
+                  type="text"
+                  value={loginUsername}
                 />
                 <input
                   onChange={(event) => setLoginPassword(event.target.value)}
@@ -1243,6 +1257,9 @@ export default function App() {
                   type="password"
                   value={loginPassword}
                 />
+                <p className="auth-help">
+                  帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。系統會自動轉成內部使用的假 Email。
+                </p>
                 <div className="button-row">
                   <button
                     className="primary-button"
@@ -1268,12 +1285,12 @@ export default function App() {
               <h2>帳號資訊</h2>
               <div className="auth-profile-grid">
                 <div>
-                  <strong>Email</strong>
-                  <div>{currentUser.email || "未提供"}</div>
+                  <strong>帳號</strong>
+                  <div>{currentUser.displayName || emailToUsername(currentUser.email) || "未提供"}</div>
                 </div>
                 <div>
-                  <strong>名稱</strong>
-                  <div>{currentUser.displayName || "尚未設定"}</div>
+                  <strong>系統 Email</strong>
+                  <div>{currentUser.email || "未提供"}</div>
                 </div>
                 <div>
                   <strong>UID</strong>
