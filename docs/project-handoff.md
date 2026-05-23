@@ -12,6 +12,13 @@ The current direction is:
 - The UI is gradually moving toward spreadsheet-style editing
 - The PDF/report workflow is being prototyped inside an A4 canvas page
 
+Recent maintenance has focused on:
+
+- mobile spreadsheet readability
+- sheet zoom and sticky-column behavior
+- simplifying the roster page into a smaller operational version
+- adding a dedicated `/debug` page for sheet parameter tuning
+
 ## Core Stack
 
 - `React 19`
@@ -53,6 +60,15 @@ The current direction is:
 - `src/types.ts`
   - Shared project data types
 
+- `src/debug-settings.ts`
+  - Debug-only sheet tuning parameters stored in `localStorage`
+
+- `src/DebugPage.tsx`
+  - Dedicated debug page UI
+
+- `debug/index.html`
+  - Secondary Vite entry for the `/debug/` route
+
 - `src/styles.css`
   - Global styling for the app
 
@@ -90,14 +106,22 @@ The app currently stores:
     - paste from Google Sheets / Excel
     - `Enter` / `Shift + Enter` navigation
     - auto-select current cell content on focus
+    - frozen first two columns (`#` and `姓名`)
+    - capped internal sheet viewport with vertical scrolling
   - Includes columns:
+    - `#`
     - `姓名`
     - `身高`
     - `體重`
+  - Also includes:
+    - class size input
+    - apply-size action
+    - warning before shrinking the roster when data may be removed
 
 - `測驗項目`
   - Single-column score editing view
   - Focuses on one fitness item at a time
+  - Now uses the same spreadsheet viewport / zoom model as the other table pages
 
 - `檢視能力分析`
   - Interactive radar chart page
@@ -110,6 +134,9 @@ The app currently stores:
     - `Enter` / `Shift + Enter` navigation
     - auto-select current cell content on focus
     - incomplete-only filter
+    - frozen first column
+    - capped internal sheet viewport with vertical scrolling
+    - zoom controls
 
 - `測試畫布`
   - A4 report prototype page
@@ -138,6 +165,40 @@ This is already implemented in:
 
 - roster editor
 - summary table
+- metric editor
+
+Additional current spreadsheet conventions:
+
+- sticky top row inside the sheet viewport
+- frozen first column on summary-style sheets
+- frozen first two columns on the roster sheet
+- internal viewport height can be capped instead of letting the full table expand
+- zoom options:
+  - `符合頁寬`
+  - `80%`
+  - `90%`
+  - `100%`
+  - `110%`
+
+## Debug Page
+
+There is now a public debug route:
+
+- `https://falcon12400.github.io/fitness-test-tool/debug/`
+
+Current debug controls:
+
+- visible row count
+- right-side scroll clamp padding
+- frozen first-column width for summary sheets
+- whether to show live debug values
+
+Important limitations:
+
+- settings are stored in browser `localStorage`
+- settings are not shared across devices
+- settings are not versioned
+- this is a development aid, not a secure admin tool
 
 ## Excel Import / Export
 
@@ -186,6 +247,14 @@ Current limitation:
   - report page wiring
 - It would be a good next refactor target
 
+- There is still no backend or cloud persistence
+  - app data is still mainly local browser storage plus Excel import/export
+
+- Firebase has not been integrated yet
+  - no Firebase SDK
+  - no auth flow
+  - no Firestore data model
+
 Suggested future split:
 
 - `src/features/roster/*`
@@ -224,6 +293,13 @@ Build:
 pnpm build
 ```
 
+Current local environment notes:
+
+- `pnpm build` currently succeeds
+- the main app bundle is still large and produces a Vite chunk-size warning
+- do not commit `dist/`
+- do not commit `tsconfig.app.tsbuildinfo`
+
 ## Handoff Notes For Another Machine
 
 On another computer, the expected setup flow is:
@@ -237,6 +313,9 @@ If PDF export behaves unexpectedly on another machine, the first thing to verify
 
 ## Recommended Next Steps
 
+- Decide whether `/debug` should remain public, become read-only, move into code-only settings, or later become authenticated admin tooling
+- Review which sheet tuning parameters should stay runtime-configurable
+- Start Firebase integration only after agreeing on auth method, ownership model, and Firestore rules
 - Refactor spreadsheet behavior into reusable helpers/hooks
 - Allow drag-and-drop positioning on the A4 report canvas
 - Make the radar chart on the A4 page configurable in position and size
