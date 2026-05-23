@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>體適能測驗工具</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f8fafc;
+        color: #172033;
+        font-family:
+          "Noto Sans TC",
+          "PingFang TC",
+          "Microsoft JhengHei",
+          sans-serif;
+      }
+
+      .boot-error,
+      .boot-note {
+        max-width: 780px;
+        margin: 48px auto;
+        padding: 24px;
+        border-radius: 18px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+      }
+
+      .boot-error {
+        border: 1px solid #fecaca;
+        background: #fff7f7;
+      }
+
+      .boot-note {
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+      }
+
+      .boot-error h1,
+      .boot-note h1 {
+        margin: 0 0 12px;
+        font-size: 1.35rem;
+      }
+
+      .boot-error p,
+      .boot-note p {
+        margin: 0 0 12px;
+        line-height: 1.6;
+      }
+
+      .boot-error code,
+      .boot-error pre,
+      .boot-note code,
+      .boot-note pre {
+        font-family:
+          ui-monospace,
+          "Cascadia Code",
+          "SFMono-Regular",
+          Consolas,
+          monospace;
+      }
+
+      .boot-error pre,
+      .boot-note pre {
+        overflow: auto;
+        padding: 12px;
+        border-radius: 12px;
+        background: #111827;
+        color: #f8fafc;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      html[data-app-ready="true"] .boot-note {
+        display: none;
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/main-DeNm2xre.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+  </head>
+  <body>
+    <div id="root">
+      <section class="boot-note">
+        <h1>體適能測驗工具</h1>
+        <p>如果你現在只看到這個區塊，代表前端 JavaScript 沒有成功啟動，所以 React 畫面尚未載入。</p>
+        <p>這通常發生在直接打開本機 <code>file:///.../dist/index.html</code>，而目前瀏覽器沒有允許相關模組資源正常載入。</p>
+        <p>建議改用本機預覽伺服器：</p>
+        <pre>cd fitness-test-tool
+pnpm preview</pre>
+        <p>如果部署到 GitHub Pages，因為會透過 <code>https://</code> 提供檔案，通常就能正常運作。</p>
+      </section>
+    </div>
+    <script>
+      window.__fitnessToolRenderBootError = function renderBootError(message, details) {
+        var root = document.getElementById("root");
+        if (!root) {
+          return;
+        }
+
+        root.innerHTML =
+          '<section class="boot-error">' +
+          "<h1>網頁載入失敗</h1>" +
+          "<p>" + message + "</p>" +
+          "<p>如果你是直接開啟原始專案中的 <code>index.html</code>，這個 React + Vite 專案通常需要透過開發伺服器或 build 後版本執行。</p>" +
+          "<p>建議做法：</p>" +
+          "<pre>cd fitness-test-tool\npnpm dev</pre>" +
+          "<p>或先執行：</p>" +
+          "<pre>cd fitness-test-tool\npnpm build\npnpm preview</pre>" +
+          (details ? "<pre>" + details + "</pre>" : "") +
+          "</section>";
+      };
+
+      window.addEventListener("error", function (event) {
+        if (!event.message) {
+          return;
+        }
+
+        window.__fitnessToolRenderBootError(
+          "啟動腳本或資源載入時發生錯誤。",
+          String(event.message),
+        );
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+        var reason = event.reason instanceof Error ? event.reason.stack || event.reason.message : String(event.reason);
+        window.__fitnessToolRenderBootError(
+          "應用程式初始化失敗。",
+          reason,
+        );
+      });
+    </script>
+  </body>
+</html>
