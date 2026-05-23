@@ -31,6 +31,7 @@ import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types"
 import type { User } from "firebase/auth";
 
 type TabKey =
+  | "files"
   | "table"
   | "metric"
   | "editor"
@@ -85,6 +86,7 @@ type ActiveCell = {
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 
 const tabs: Array<{ key: TabKey; label: string }> = [
+  { key: "files", label: "檔案中心" },
   { key: "roster", label: "編輯名冊" },
   { key: "metric", label: "測驗項目" },
   { key: "analysis", label: "檢視能力分析" },
@@ -287,7 +289,20 @@ export default function App() {
 
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = data.itemLabels[activeMetricIndex] ?? activeMetric;
+  const currentUsername =
+    currentUser?.displayName || emailToUsername(currentUser?.email) || "未登入";
+  const currentFileSummary = {
+    title: data.rosterName || "未命名班級",
+    seasonLabel: data.testDate ? `${data.testDate} 測驗檔案` : "尚未設定測驗日期",
+    rosterCount: data.rosterEntries.length,
+    recordCount: data.records.length,
+    incompleteCount: data.records.filter((record) => hasIncompleteScore(record)).length,
+  };
   const currentEditableRecords = useMemo(() => {
+    if (activeTab === "files") {
+      return data.records;
+    }
+
     if (activeTab === "table") {
       return tableRecords;
     }
@@ -1423,6 +1438,117 @@ export default function App() {
                     </table>
                   </div>
                 </div>
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "files" ? (
+          <>
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2>檔案中心</h2>
+                  <p>這一頁先作為帳號底下的檔案入口。之後支援多份班級檔案、好友共享與共同維護時，會從這裡往外長。</p>
+                </div>
+              </div>
+
+              <div className="file-hub-grid">
+                <article className="file-hub-card file-hub-card-hero">
+                  <p className="file-hub-eyebrow">目前帳號</p>
+                  <h3>{currentUsername}</h3>
+                  <p className="file-hub-copy">
+                    目前這個版本仍以單一工作檔為主，但版面已經預留成帳號底下可管理多份檔案的結構。
+                  </p>
+                  <div className="file-hub-stats">
+                    <div>
+                      <strong>{currentFileSummary.rosterCount}</strong>
+                      <span>名冊人數</span>
+                    </div>
+                    <div>
+                      <strong>{currentFileSummary.recordCount}</strong>
+                      <span>測驗筆數</span>
+                    </div>
+                    <div>
+                      <strong>{currentFileSummary.incompleteCount}</strong>
+                      <span>未完成</span>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="file-hub-card">
+                  <div className="file-hub-card-head">
+                    <div>
+                      <p className="file-hub-eyebrow">目前開啟檔案</p>
+                      <h3>{currentFileSummary.title}</h3>
+                    </div>
+                    <span className="file-hub-badge">本機工作中</span>
+                  </div>
+                  <p className="file-hub-meta">{currentFileSummary.seasonLabel}</p>
+                  <p className="file-hub-copy">
+                    目前仍是單一檔案模式。等 Firebase 多檔案結構接上後，這裡會變成真正的檔案列表與切換入口。
+                  </p>
+                  <div className="button-row">
+                    <button
+                      className="primary-button"
+                      onClick={() => setActiveTab("roster")}
+                      type="button"
+                    >
+                      繼續編輯名冊
+                    </button>
+                    <button
+                      className="secondary-button"
+                      onClick={() => setActiveTab("table")}
+                      type="button"
+                    >
+                      開啟總表
+                    </button>
+                  </div>
+                </article>
+
+                <article className="file-hub-card">
+                  <div className="file-hub-card-head">
+                    <div>
+                      <p className="file-hub-eyebrow">我的檔案</p>
+                      <h3>第一版列表</h3>
+                    </div>
+                  </div>
+                  <div className="file-hub-list">
+                    <button className="file-row is-active" type="button">
+                      <span>{currentFileSummary.title}</span>
+                      <small>{currentFileSummary.seasonLabel}</small>
+                    </button>
+                  </div>
+                  <p className="file-hub-note">
+                    現階段這裡只有目前工作檔。之後每一份班級資料會成為獨立檔案，例如「115學年度上學期 / 大象班」。
+                  </p>
+                </article>
+
+                <article className="file-hub-card">
+                  <div className="file-hub-card-head">
+                    <div>
+                      <p className="file-hub-eyebrow">與我共享</p>
+                      <h3>協作預留區</h3>
+                    </div>
+                  </div>
+                  <p className="file-hub-empty">
+                    目前還沒有共享檔案。之後可在這裡看到其他老師邀請你共同維護的班級檔案。
+                  </p>
+                </article>
+
+                <article className="file-hub-card">
+                  <div className="file-hub-card-head">
+                    <div>
+                      <p className="file-hub-eyebrow">好友與協作者</p>
+                      <h3>後續會加入</h3>
+                    </div>
+                  </div>
+                  <ul className="file-hub-bullets">
+                    <li>帳號好友列表</li>
+                    <li>檔案共同維護邀請</li>
+                    <li>每份檔案的成員權限</li>
+                  </ul>
+                </article>
               </div>
             </section>
           </>
