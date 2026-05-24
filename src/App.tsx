@@ -32,6 +32,7 @@ import type { User } from "firebase/auth";
 
 type TabKey =
   | "files"
+  | "account"
   | "table"
   | "metric"
   | "editor"
@@ -87,6 +88,7 @@ type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "files", label: "檔案中心" },
+  { key: "account", label: "帳號管理" },
   { key: "roster", label: "編輯名冊" },
   { key: "metric", label: "測驗項目" },
   { key: "analysis", label: "檢視能力分析" },
@@ -175,6 +177,23 @@ function parseClipboardGrid(text: string): string[][] {
     .map((row) => row.split("\t"));
 }
 
+function formatAcademicTerm(dateString: string): string {
+  if (!dateString) {
+    return "尚未設定";
+  }
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  const year = date.getFullYear() - 1911;
+  const month = date.getMonth() + 1;
+  const term = month >= 8 || month === 1 ? "上學期" : "下學期";
+  const academicYear = month === 1 ? year - 1 : year;
+  return `${academicYear}學年度${term}`;
+}
+
 export default function App() {
   const [data, setData] = useState<AppData>(() => loadAppData() ?? defaultAppData);
   const [activeTab, setActiveTab] = useState<TabKey>("roster");
@@ -185,7 +204,6 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const [accountPanel, setAccountPanel] = useState<"profile" | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
@@ -235,9 +253,6 @@ export default function App() {
       setCurrentUser(user);
       setAuthReady(true);
       setShowAccountMenu(false);
-      if (!user) {
-        setAccountPanel(null);
-      }
     });
 
     return unsubscribe;
@@ -291,9 +306,15 @@ export default function App() {
   const activeMetricLabel = data.itemLabels[activeMetricIndex] ?? activeMetric;
   const currentUsername =
     currentUser?.displayName || emailToUsername(currentUser?.email) || "未登入";
+  const currentAcademicTerm = formatAcademicTerm(data.testDate);
   const currentFileSummary = {
-    title: data.rosterName || "未命名班級",
-    seasonLabel: data.testDate ? `${data.testDate} 測驗檔案` : "尚未設定測驗日期",
+    className: data.rosterName || "未命名班級",
+    gradeLabel: "未設定",
+    termLabel: currentAcademicTerm,
+    fileName:
+      data.rosterName && currentAcademicTerm !== "尚未設定"
+        ? `${currentAcademicTerm} / ${data.rosterName}`
+        : data.rosterName || "未命名檔案",
     rosterCount: data.rosterEntries.length,
     recordCount: data.records.length,
     incompleteCount: data.records.filter((record) => hasIncompleteScore(record)).length,
@@ -838,7 +859,6 @@ export default function App() {
       setShowLoginPanel(false);
       setLoginPassword("");
       setLoginUsername("");
-      setAccountPanel("profile");
       setMessage(`已登入 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "帳號登入失敗。");
@@ -867,7 +887,6 @@ export default function App() {
       setShowLoginPanel(false);
       setLoginPassword("");
       setLoginUsername("");
-      setAccountPanel("profile");
       setMessage(`已建立帳號 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "註冊失敗。");
@@ -880,7 +899,6 @@ export default function App() {
       await signOutCurrentUser();
       setShowLoginPanel(false);
       setShowAccountMenu(false);
-      setAccountPanel(null);
       setMessage("已登出。");
     } catch (error) {
       const nextMessage =
@@ -889,8 +907,8 @@ export default function App() {
     }
   }
 
-  function openAccountPanel(panel: "profile"): void {
-    setAccountPanel(panel);
+  function openAccountPanel(): void {
+    setActiveTab("account");
     setShowAccountMenu(false);
   }
 
@@ -1219,10 +1237,10 @@ export default function App() {
                       <div className="account-dropdown">
                         <button
                           className="account-dropdown-item"
-                          onClick={() => openAccountPanel("profile")}
+                          onClick={openAccountPanel}
                           type="button"
                         >
-                          帳號資訊
+                          帳號管理
                         </button>
                         <button
                           className="account-dropdown-item"
@@ -1291,25 +1309,6 @@ export default function App() {
                   >
                     取消
                   </button>
-                </div>
-              </div>
-            </section>
-          ) : null}
-          {currentUser && accountPanel === "profile" ? (
-            <section className="auth-panel">
-              <h2>帳號資訊</h2>
-              <div className="auth-profile-grid">
-                <div>
-                  <strong>帳號</strong>
-                  <div>{currentUser.displayName || emailToUsername(currentUser.email) || "未提供"}</div>
-                </div>
-                <div>
-                  <strong>系統 Email</strong>
-                  <div>{currentUser.email || "未提供"}</div>
-                </div>
-                <div>
-                  <strong>UID</strong>
-                  <div className="auth-uid">{currentUser.uid}</div>
                 </div>
               </div>
             </section>
@@ -1449,104 +1448,106 @@ export default function App() {
               <div className="panel-header">
                 <div>
                   <h2>檔案中心</h2>
-                  <p>這一頁先作為帳號底下的檔案入口。之後支援多份班級檔案、好友共享與共同維護時，會從這裡往外長。</p>
+                  <p>這裡先整理帳號底下的檔案清單。之後接上 Firebase 後，每一份班級資料都會成為獨立檔案。</p>
+                </div>
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    onClick={() => setActiveTab("roster")}
+                    type="button"
+                  >
+                    開啟目前檔案
+                  </button>
                 </div>
               </div>
 
-              <div className="file-hub-grid">
-                <article className="file-hub-card file-hub-card-hero">
-                  <p className="file-hub-eyebrow">目前帳號</p>
-                  <h3>{currentUsername}</h3>
-                  <p className="file-hub-copy">
-                    目前這個版本仍以單一工作檔為主，但版面已經預留成帳號底下可管理多份檔案的結構。
-                  </p>
-                  <div className="file-hub-stats">
+              <div className="file-summary-strip">
+                <div>
+                  <strong>{currentUsername}</strong>
+                  <span>目前登入帳號</span>
+                </div>
+                <div>
+                  <strong>{currentFileSummary.rosterCount}</strong>
+                  <span>班級人數</span>
+                </div>
+                <div>
+                  <strong>{currentFileSummary.recordCount}</strong>
+                  <span>測驗筆數</span>
+                </div>
+                <div>
+                  <strong>{currentFileSummary.incompleteCount}</strong>
+                  <span>未完成</span>
+                </div>
+              </div>
+
+              <div className="file-list-shell">
+                <div className="file-list-head">
+                  <h3>我的檔案</h3>
+                  <p>目前先顯示這一份工作檔。之後會擴充為真正的多檔案列表與共享列表。</p>
+                </div>
+                <div className="file-table">
+                  <div className="file-table-row file-table-row-header">
+                    <span>檔案名稱</span>
+                    <span>班級名稱</span>
+                    <span>年級</span>
+                    <span>學期</span>
+                    <span>班級人數</span>
+                    <span>狀態</span>
+                  </div>
+                  <button
+                    className="file-table-row file-table-row-body is-active"
+                    onClick={() => setActiveTab("roster")}
+                    type="button"
+                  >
+                    <span>{currentFileSummary.fileName}</span>
+                    <span>{currentFileSummary.className}</span>
+                    <span>{currentFileSummary.gradeLabel}</span>
+                    <span>{currentFileSummary.termLabel}</span>
+                    <span>{currentFileSummary.rosterCount} 人</span>
+                    <span>目前工作中</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "account" ? (
+          <>
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2>帳號管理</h2>
+                  <p>這一頁集中放帳號本身的資訊。之後如果加入好友、共享檔案與共同維護，也會從這裡往外延伸。</p>
+                </div>
+              </div>
+
+              <div className="account-center-grid">
+                <article className="account-card">
+                  <h3>基本資料</h3>
+                  <div className="auth-profile-grid">
                     <div>
-                      <strong>{currentFileSummary.rosterCount}</strong>
-                      <span>名冊人數</span>
+                      <strong>帳號</strong>
+                      <div>{currentUser ? currentUsername : "尚未登入"}</div>
                     </div>
                     <div>
-                      <strong>{currentFileSummary.recordCount}</strong>
-                      <span>測驗筆數</span>
+                      <strong>系統 Email</strong>
+                      <div>{currentUser?.email || "尚未登入"}</div>
                     </div>
                     <div>
-                      <strong>{currentFileSummary.incompleteCount}</strong>
-                      <span>未完成</span>
+                      <strong>UID</strong>
+                      <div className="auth-uid">{currentUser?.uid || "尚未登入"}</div>
                     </div>
                   </div>
                 </article>
 
-                <article className="file-hub-card">
-                  <div className="file-hub-card-head">
-                    <div>
-                      <p className="file-hub-eyebrow">目前開啟檔案</p>
-                      <h3>{currentFileSummary.title}</h3>
-                    </div>
-                    <span className="file-hub-badge">本機工作中</span>
-                  </div>
-                  <p className="file-hub-meta">{currentFileSummary.seasonLabel}</p>
-                  <p className="file-hub-copy">
-                    目前仍是單一檔案模式。等 Firebase 多檔案結構接上後，這裡會變成真正的檔案列表與切換入口。
-                  </p>
-                  <div className="button-row">
-                    <button
-                      className="primary-button"
-                      onClick={() => setActiveTab("roster")}
-                      type="button"
-                    >
-                      繼續編輯名冊
-                    </button>
-                    <button
-                      className="secondary-button"
-                      onClick={() => setActiveTab("table")}
-                      type="button"
-                    >
-                      開啟總表
-                    </button>
-                  </div>
-                </article>
-
-                <article className="file-hub-card">
-                  <div className="file-hub-card-head">
-                    <div>
-                      <p className="file-hub-eyebrow">我的檔案</p>
-                      <h3>第一版列表</h3>
-                    </div>
-                  </div>
-                  <div className="file-hub-list">
-                    <button className="file-row is-active" type="button">
-                      <span>{currentFileSummary.title}</span>
-                      <small>{currentFileSummary.seasonLabel}</small>
-                    </button>
-                  </div>
-                  <p className="file-hub-note">
-                    現階段這裡只有目前工作檔。之後每一份班級資料會成為獨立檔案，例如「115學年度上學期 / 大象班」。
-                  </p>
-                </article>
-
-                <article className="file-hub-card">
-                  <div className="file-hub-card-head">
-                    <div>
-                      <p className="file-hub-eyebrow">與我共享</p>
-                      <h3>協作預留區</h3>
-                    </div>
-                  </div>
-                  <p className="file-hub-empty">
-                    目前還沒有共享檔案。之後可在這裡看到其他老師邀請你共同維護的班級檔案。
-                  </p>
-                </article>
-
-                <article className="file-hub-card">
-                  <div className="file-hub-card-head">
-                    <div>
-                      <p className="file-hub-eyebrow">好友與協作者</p>
-                      <h3>後續會加入</h3>
-                    </div>
-                  </div>
+                <article className="account-card">
+                  <h3>未來會放在這裡</h3>
                   <ul className="file-hub-bullets">
-                    <li>帳號好友列表</li>
-                    <li>檔案共同維護邀請</li>
-                    <li>每份檔案的成員權限</li>
+                    <li>好友列表與搜尋帳號</li>
+                    <li>共享檔案邀請</li>
+                    <li>共同維護者權限</li>
+                    <li>帳號偏好設定</li>
                   </ul>
                 </article>
               </div>
