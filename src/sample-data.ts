@@ -1,10 +1,12 @@
 import type { AppData } from "./types";
 
 export const defaultAppData: AppData = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   testDate: "2026-04-22",
+  academicTerm: "114學年度下學期",
   itemLabels: ["柔軟度", "平衡", "核心", "爆發力", "敏捷", "協調"],
   rosterName: "星星班",
+  gradeLabel: "大班",
   rosterEntries: [
     { id: "roster_001", studentName: "王小明", height: "118", weight: "22" },
     { id: "roster_002", studentName: "林小華", height: "121", weight: "23" },

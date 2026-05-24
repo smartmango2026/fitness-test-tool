@@ -120,6 +120,8 @@ const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
   { label: "110%", value: 1.1 },
 ];
 
+const GRADE_OPTIONS = ["幼幼班", "小班", "中班", "大班", "混齡班"];
+
 function hasIncompleteScore(record: FitnessRecord): boolean {
   return scoreFields.some(
     (field) => !Number.isFinite(record[field]) || record[field] <= 0,
@@ -204,6 +206,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [isCurrentFileExpanded, setIsCurrentFileExpanded] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
@@ -306,10 +309,10 @@ export default function App() {
   const activeMetricLabel = data.itemLabels[activeMetricIndex] ?? activeMetric;
   const currentUsername =
     currentUser?.displayName || emailToUsername(currentUser?.email) || "未登入";
-  const currentAcademicTerm = formatAcademicTerm(data.testDate);
+  const currentAcademicTerm = data.academicTerm?.trim() || formatAcademicTerm(data.testDate);
   const currentFileSummary = {
     className: data.rosterName || "未命名班級",
-    gradeLabel: "未設定",
+    gradeLabel: data.gradeLabel || "未設定",
     termLabel: currentAcademicTerm,
     fileName:
       data.rosterName && currentAcademicTerm !== "尚未設定"
@@ -510,6 +513,20 @@ export default function App() {
     setData((current) => ({
       ...current,
       rosterName: nextName,
+    }));
+  }
+
+  function updateGradeLabel(nextGrade: string): void {
+    setData((current) => ({
+      ...current,
+      gradeLabel: nextGrade,
+    }));
+  }
+
+  function updateAcademicTerm(nextTerm: string): void {
+    setData((current) => ({
+      ...current,
+      academicTerm: nextTerm,
     }));
   }
 
@@ -910,6 +927,10 @@ export default function App() {
   function openAccountPanel(): void {
     setActiveTab("account");
     setShowAccountMenu(false);
+  }
+
+  function openFileWorkspace(nextTab: Exclude<TabKey, "files" | "account" | "editor">): void {
+    setActiveTab(nextTab);
   }
 
   function updateScore(field: FitnessField, value: string): void {
@@ -1453,7 +1474,7 @@ export default function App() {
                 <div className="button-row">
                   <button
                     className="primary-button"
-                    onClick={() => setActiveTab("roster")}
+                    onClick={() => openFileWorkspace("roster")}
                     type="button"
                   >
                     開啟目前檔案
@@ -1494,18 +1515,124 @@ export default function App() {
                     <span>班級人數</span>
                     <span>狀態</span>
                   </div>
-                  <button
-                    className="file-table-row file-table-row-body is-active"
-                    onClick={() => setActiveTab("roster")}
-                    type="button"
-                  >
-                    <span>{currentFileSummary.fileName}</span>
-                    <span>{currentFileSummary.className}</span>
-                    <span>{currentFileSummary.gradeLabel}</span>
-                    <span>{currentFileSummary.termLabel}</span>
-                    <span>{currentFileSummary.rosterCount} 人</span>
-                    <span>目前工作中</span>
-                  </button>
+                  <div className="file-accordion-item">
+                    <button
+                      className="file-table-row file-table-row-body is-active"
+                      onClick={() => setIsCurrentFileExpanded((current) => !current)}
+                      type="button"
+                    >
+                      <span className="file-name-cell">
+                        <span
+                          className={
+                            isCurrentFileExpanded
+                              ? "file-row-chevron is-open"
+                              : "file-row-chevron"
+                          }
+                          aria-hidden="true"
+                        >
+                          ▾
+                        </span>
+                        {currentFileSummary.fileName}
+                      </span>
+                      <span>{currentFileSummary.className}</span>
+                      <span>{currentFileSummary.gradeLabel}</span>
+                      <span>{currentFileSummary.termLabel}</span>
+                      <span>{currentFileSummary.rosterCount} 人</span>
+                      <span>目前工作中</span>
+                    </button>
+                    {isCurrentFileExpanded ? (
+                      <div className="file-accordion-panel">
+                        <div className="file-detail-grid">
+                          <label>
+                            <strong>班級名稱</strong>
+                            <input
+                              onChange={(event) => updateRosterName(event.target.value)}
+                              type="text"
+                              value={data.rosterName}
+                            />
+                          </label>
+                          <label>
+                            <strong>年級</strong>
+                            <select
+                              onChange={(event) => updateGradeLabel(event.target.value)}
+                              value={data.gradeLabel}
+                            >
+                              <option value="">未設定</option>
+                              {GRADE_OPTIONS.map((grade) => (
+                                <option key={grade} value={grade}>
+                                  {grade}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>學期</strong>
+                            <input
+                              onChange={(event) => updateAcademicTerm(event.target.value)}
+                              placeholder="例如：115學年度上學期"
+                              type="text"
+                              value={data.academicTerm}
+                            />
+                          </label>
+                          <label className="file-size-field">
+                            <strong>班級人數</strong>
+                            <div className="file-size-row">
+                              <input
+                                min={1}
+                                onChange={(event) => setRosterSizeInput(event.target.value)}
+                                type="number"
+                                value={rosterSizeInput}
+                              />
+                              <button
+                                className="secondary-button"
+                                onClick={applyRosterSize}
+                                type="button"
+                              >
+                                套用
+                              </button>
+                            </div>
+                          </label>
+                        </div>
+                        <div className="file-status-row">
+                          <span className="status-chip is-active">目前使用中</span>
+                          <span>之後如果有多份名冊，可以在這裡直接切換目前使用中的檔案。</span>
+                        </div>
+                        <div className="file-accordion-actions">
+                          <button
+                            className="primary-button"
+                            onClick={() => openFileWorkspace("roster")}
+                            type="button"
+                          >
+                            編輯名冊資訊
+                          </button>
+                          <button
+                            className="secondary-button"
+                            onClick={() => openFileWorkspace("metric")}
+                            type="button"
+                          >
+                            開啟測驗項目
+                          </button>
+                          <button
+                            className="secondary-button"
+                            onClick={() => openFileWorkspace("table")}
+                            type="button"
+                          >
+                            開啟總表
+                          </button>
+                          <button
+                            className="secondary-button"
+                            onClick={() => openFileWorkspace("analysis")}
+                            type="button"
+                          >
+                            檢視能力分析
+                          </button>
+                        </div>
+                        <div className="file-switch-hint">
+                          之後如果有多份名冊，這裡可以加入「設為目前使用中」與「切換到這份檔案」的操作。現階段只有一份工作檔，所以它已經是目前使用中的名冊。
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </section>

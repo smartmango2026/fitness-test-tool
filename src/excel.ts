@@ -33,6 +33,8 @@ function buildVisibleSheet(data: AppData): XLSX.WorkSheet {
   ]);
   const rows = [
     ["班級名稱", data.rosterName],
+    ["年級", data.gradeLabel],
+    ["學期", data.academicTerm],
     ["測驗日期", data.testDate],
     [],
     headerRow,
@@ -64,8 +66,10 @@ function buildSystemRows(data: AppData): string[][] {
     ["toolName", "fitness-test-tool"],
     ["toolVersion", "0.1.0"],
     ["testDate", data.testDate],
+    ["academicTerm", data.academicTerm],
     ["itemLabels", JSON.stringify(data.itemLabels)],
     ["rosterName", data.rosterName],
+    ["gradeLabel", data.gradeLabel],
     ["rosterEntriesJson", JSON.stringify(data.rosterEntries)],
     ["recordsJson", JSON.stringify(data.records)],
   ];
@@ -137,8 +141,10 @@ export async function importWorkbook(file: File): Promise<AppData> {
   return {
     schemaVersion: Number(values.schemaVersion),
     testDate: values.testDate || records[0]?.testDate || new Date().toISOString().slice(0, 10),
+    academicTerm: values.academicTerm || "尚未設定",
     itemLabels: JSON.parse(values.itemLabels) as string[],
     rosterName: values.rosterName || "星星班",
+    gradeLabel: values.gradeLabel || "未設定",
     rosterEntries: values.rosterEntriesJson
       ? (JSON.parse(values.rosterEntriesJson) as AppData["rosterEntries"])
       : records.map((record, index) => ({

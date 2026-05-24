@@ -76,6 +76,10 @@ function migrateAppData(data: LegacyAppData): AppData {
         ? data.schemaVersion
         : defaultAppData.schemaVersion,
     testDate,
+    academicTerm:
+      ("academicTerm" in data && typeof data.academicTerm === "string" && data.academicTerm.trim()
+        ? data.academicTerm
+        : formatAcademicTermFromDate(testDate)),
     itemLabels:
       Array.isArray(data.itemLabels) && data.itemLabels.length
         ? data.itemLabels
@@ -84,9 +88,26 @@ function migrateAppData(data: LegacyAppData): AppData {
       ("rosterName" in data && typeof data.rosterName === "string"
         ? data.rosterName
         : defaultAppData.rosterName),
+    gradeLabel:
+      ("gradeLabel" in data && typeof data.gradeLabel === "string"
+        ? data.gradeLabel
+        : defaultAppData.gradeLabel),
     rosterEntries,
     records,
   };
+}
+
+function formatAcademicTermFromDate(dateString: string): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return defaultAppData.academicTerm;
+  }
+
+  const year = date.getFullYear() - 1911;
+  const month = date.getMonth() + 1;
+  const term = month >= 8 || month === 1 ? "上學期" : "下學期";
+  const academicYear = month === 1 ? year - 1 : year;
+  return `${academicYear}學年度${term}`;
 }
 
 export function loadAppData(): AppData | null {

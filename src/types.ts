@@ -31,8 +31,10 @@ export type FitnessRecord = {
 export type AppData = {
   schemaVersion: number;
   testDate: string;
+  academicTerm: string;
   itemLabels: string[];
   rosterName: string;
+  gradeLabel: string;
   rosterEntries: RosterEntry[];
   records: FitnessRecord[];
 };
