@@ -87,8 +87,8 @@ type ActiveCell = {
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 
 const tabs: Array<{ key: TabKey; label: string }> = [
-  { key: "files", label: "檔案中心" },
   { key: "account", label: "帳號管理" },
+  { key: "files", label: "檔案中心" },
   { key: "roster", label: "編輯名冊" },
   { key: "metric", label: "測驗項目" },
   { key: "analysis", label: "檢視能力分析" },
@@ -1658,12 +1658,8 @@ export default function App() {
                       <div>{currentUser ? currentUsername : "尚未登入"}</div>
                     </div>
                     <div>
-                      <strong>系統 Email</strong>
-                      <div>{currentUser?.email || "尚未登入"}</div>
-                    </div>
-                    <div>
-                      <strong>UID</strong>
-                      <div className="auth-uid">{currentUser?.uid || "尚未登入"}</div>
+                      <strong>說明</strong>
+                      <div>這裡顯示的是老師登入時輸入的那組帳號。</div>
                     </div>
                   </div>
                 </article>
