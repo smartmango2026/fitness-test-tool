@@ -29,6 +29,9 @@ export default function RadarChart({
           record.item6,
         ]
       : [0, 0, 0, 0, 0, 0];
+    const percentageValues = values.map((value) =>
+      Math.max(0, Math.min(100, Math.round((value / 5) * 100))),
+    );
 
     chart.setOption({
       animationDuration: 400,
@@ -43,7 +46,7 @@ export default function RadarChart({
         },
         indicator: labels.map((label) => ({
           name: label,
-          max: 20,
+          max: 100,
         })),
         splitArea: {
           areaStyle: {
@@ -56,7 +59,7 @@ export default function RadarChart({
           type: "radar",
           data: [
             {
-              value: values,
+              value: percentageValues,
               name: record?.studentName ?? "尚未選取",
               areaStyle: {
                 color: "rgba(15, 118, 110, 0.22)",

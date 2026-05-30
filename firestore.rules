@@ -32,6 +32,16 @@ service cloud.firestore {
           );
         allow update: if false;
       }
+
+      match /files/{fileId} {
+        allow read, create, update: if isSelf(userId);
+        allow delete: if false;
+      }
+
+      match /settings/{settingId} {
+        allow read, create, update: if isSelf(userId);
+        allow delete: if false;
+      }
     }
 
     match /friendRequests/{requestId} {

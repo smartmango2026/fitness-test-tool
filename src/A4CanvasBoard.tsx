@@ -142,7 +142,8 @@ function getRadarPolygonPoints(
 ): Array<{ x: number; y: number }> {
   return values.map((value, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / values.length;
-    const normalized = Math.max(0, Math.min(1, value / 5));
+    const percentage = Math.max(0, Math.min(100, (value / 5) * 100));
+    const normalized = percentage / 100;
 
     return {
       x: centerX + Math.cos(angle) * radius * normalized,
@@ -289,6 +290,7 @@ function renderReportPage(
 
   for (let ring = 1; ring <= 5; ring += 1) {
     const currentRadius = (chartRadius / 5) * ring;
+    const ringLabel = String(ring * 20);
     context.beginPath();
     labels.forEach((_, index) => {
       const angle = -Math.PI / 2 + (Math.PI * 2 * index) / labels.length;
@@ -308,7 +310,7 @@ function renderReportPage(
     context.fillStyle = MUTED_TEXT_COLOR;
     context.font = "500 16px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
     context.textAlign = "center";
-    context.fillText(String(ring), chartCenterX, chartCenterY - currentRadius - 8);
+    context.fillText(ringLabel, chartCenterX, chartCenterY - currentRadius - 8);
   }
 
   labels.forEach((_, index) => {

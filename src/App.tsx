@@ -26,6 +26,15 @@ import {
   subscribeToAuthState,
 } from "./firebase-auth";
 import {
+  archiveCloudFile,
+  createCloudFile,
+  loadCloudFile,
+  saveCloudFile as saveCloudFileData,
+  subscribeToCloudFiles,
+  type CloudFileSummary,
+  updateCloudFileInfo,
+} from "./cloud-files";
+import {
   acceptFriendRequest,
   createFriendInvite,
   ensureUserProfile,
@@ -43,7 +52,6 @@ import {
 } from "./friendships";
 import RadarChart from "./RadarChart";
 import { defaultAppData } from "./sample-data";
-import { loadAppData, saveAppData } from "./storage";
 import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types";
 import type { User } from "firebase/auth";
 import QRCode from "qrcode";
@@ -137,7 +145,12 @@ const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
   { label: "110%", value: 1.1 },
 ];
 
-const GRADE_OPTIONS = ["幼幼班", "小班", "中班", "大班", "混齡班"];
+const GRADE_OPTIONS = ["中大班", "小幼班"];
+const TERM_OPTIONS = ["上學期", "下學期"] as const;
+const CURRENT_ROC_YEAR = new Date().getFullYear() - 1911;
+const ACADEMIC_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) =>
+  String(CURRENT_ROC_YEAR - 2 + index),
+);
 
 function hasIncompleteScore(record: FitnessRecord): boolean {
   return scoreFields.some(
@@ -213,8 +226,37 @@ function formatAcademicTerm(dateString: string): string {
   return `${academicYear}學年度${term}`;
 }
 
+function parseAcademicTermParts(termValue: string): {
+  academicYear: string;
+  semester: string;
+} {
+  const matched = termValue.match(/^(\d+)學年度(上學期|下學期)$/);
+  if (!matched) {
+    return {
+      academicYear: String(CURRENT_ROC_YEAR),
+      semester: "上學期",
+    };
+  }
+
+  return {
+    academicYear: matched[1] ?? String(CURRENT_ROC_YEAR),
+    semester: matched[2] ?? "上學期",
+  };
+}
+
+function buildAcademicTermValue(
+  academicYear: string,
+  semester: string,
+): string {
+  if (!academicYear || !semester) {
+    return "";
+  }
+
+  return `${academicYear}學年度${semester}`;
+}
+
 export default function App() {
-  const [data, setData] = useState<AppData>(() => loadAppData() ?? defaultAppData);
+  const [data, setData] = useState<AppData>(defaultAppData);
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (
       typeof window !== "undefined" &&
@@ -232,7 +274,6 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const [isCurrentFileExpanded, setIsCurrentFileExpanded] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [friends, setFriends] = useState<FriendRecord[]>([]);
@@ -248,6 +289,12 @@ export default function App() {
   const [activeFriendInviteUrl, setActiveFriendInviteUrl] = useState("");
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
+  const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
+  const [currentCloudFileId, setCurrentCloudFileId] = useState<string | null>(null);
+  const [expandedCloudFileId, setExpandedCloudFileId] = useState<string | null>(null);
+  const [cloudFileDrafts, setCloudFileDrafts] = useState<
+    Record<string, { rosterName: string; gradeLabel: string; academicTerm: string }>
+  >({});
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
   );
@@ -287,9 +334,7 @@ export default function App() {
   const previousRosterScaleRef = useRef(1);
   const previousTableScaleRef = useRef(1);
   const previousMetricScaleRef = useRef(1);
-  useEffect(() => {
-    saveAppData(data);
-  }, [data]);
+  const skipNextCloudSaveRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToAuthState((user) => {
@@ -310,6 +355,8 @@ export default function App() {
       setFriends([]);
       setIncomingFriendRequests([]);
       setOutgoingFriendRequests([]);
+      setCloudFiles([]);
+      setCurrentCloudFileId(null);
       return;
     }
 
@@ -322,13 +369,70 @@ export default function App() {
       currentUser.uid,
       setOutgoingFriendRequests,
     );
+    const unsubscribeCloudFiles = subscribeToCloudFiles(
+      currentUser.uid,
+      setCloudFiles,
+    );
 
     return () => {
       unsubscribeFriends();
       unsubscribeIncoming();
       unsubscribeOutgoing();
+      unsubscribeCloudFiles();
     };
   }, [currentUser]);
+
+  useEffect(() => {
+    setCloudFileDrafts((current) => {
+      const next = { ...current };
+
+      for (const file of cloudFiles) {
+        next[file.id] = {
+          rosterName: current[file.id]?.rosterName ?? file.rosterName,
+          gradeLabel: current[file.id]?.gradeLabel ?? file.gradeLabel,
+          academicTerm: current[file.id]?.academicTerm ?? file.academicTerm,
+        };
+      }
+
+      for (const key of Object.keys(next)) {
+        if (!cloudFiles.some((file) => file.id === key)) {
+          delete next[key];
+        }
+      }
+
+      return next;
+    });
+  }, [cloudFiles]);
+
+  useEffect(() => {
+    if (!currentUser || !currentCloudFileId) {
+      return;
+    }
+
+    if (skipNextCloudSaveRef.current) {
+      skipNextCloudSaveRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const syncUsername =
+        currentUser.displayName || emailToUsername(currentUser.email) || "";
+      void saveCloudFileData({
+        uid: currentUser.uid,
+        fileId: currentCloudFileId,
+        username: syncUsername,
+        data,
+      }).catch((error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "雲端同步失敗。";
+        setMessage(`雲端同步失敗：${nextMessage}`);
+      });
+    }, 600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentCloudFileId, currentUser, data]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -385,19 +489,6 @@ export default function App() {
 
     return new URLSearchParams(window.location.search).get("invite") ?? "";
   }, []);
-  const currentAcademicTerm = data.academicTerm?.trim() || formatAcademicTerm(data.testDate);
-  const currentFileSummary = {
-    className: data.rosterName || "未命名班級",
-    gradeLabel: data.gradeLabel || "未設定",
-    termLabel: currentAcademicTerm,
-    fileName:
-      data.rosterName && currentAcademicTerm !== "尚未設定"
-        ? `${currentAcademicTerm} / ${data.rosterName}`
-        : data.rosterName || "未命名檔案",
-    rosterCount: data.rosterEntries.length,
-    recordCount: data.records.length,
-    incompleteCount: data.records.filter((record) => hasIncompleteScore(record)).length,
-  };
   const currentEditableRecords = useMemo(() => {
     if (activeTab === "files") {
       return data.records;
@@ -604,6 +695,17 @@ export default function App() {
       ...current,
       academicTerm: nextTerm,
     }));
+  }
+
+  function updateAcademicTermPart(
+    field: "academicYear" | "semester",
+    value: string,
+  ): void {
+    const currentParts = parseAcademicTermParts(data.academicTerm);
+    const nextAcademicYear =
+      field === "academicYear" ? value : currentParts.academicYear;
+    const nextSemester = field === "semester" ? value : currentParts.semester;
+    updateAcademicTerm(buildAcademicTermValue(nextAcademicYear, nextSemester));
   }
 
   function updateRosterDraftCell(
@@ -1200,8 +1302,156 @@ export default function App() {
     setShowAccountMenu(false);
   }
 
+  async function handleCreateCloudFile(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先註冊並登入，才能在 Firebase 建立自己的檔案。");
+      return;
+    }
+
+    try {
+      const fileId = await createCloudFile({
+        uid: currentUser.uid,
+        username: currentUsername,
+        data,
+      });
+      setCurrentCloudFileId(fileId);
+      setMessage("已在你的帳號下建立新的雲端檔案。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "建立雲端檔案失敗。";
+      setMessage(`建立雲端檔案失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleOpenCloudFile(file: CloudFileSummary): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再開啟雲端檔案。");
+      return;
+    }
+
+    try {
+      const nextData = await loadCloudFile(currentUser.uid, file.id);
+      skipNextCloudSaveRef.current = true;
+      setData(nextData);
+      setCurrentCloudFileId(file.id);
+      setSelectedId(nextData.records[0]?.id ?? "");
+      setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
+      setRosterDraft(
+        nextData.rosterEntries.length
+          ? nextData.rosterEntries
+          : [makeEmptyRosterEntry()],
+      );
+      setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+      setMessage(`已切換到檔案：${file.fileName}`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "開啟雲端檔案失敗。";
+      setMessage(`開啟雲端檔案失敗：${nextMessage}`);
+    }
+  }
+
+  function updateCloudFileDraft(
+    fileId: string,
+    field: "rosterName" | "gradeLabel" | "academicTerm",
+    value: string,
+  ): void {
+    setCloudFileDrafts((current) => ({
+      ...current,
+      [fileId]: {
+        rosterName: current[fileId]?.rosterName ?? "",
+        gradeLabel: current[fileId]?.gradeLabel ?? "",
+        academicTerm: current[fileId]?.academicTerm ?? "",
+        [field]: value,
+      },
+    }));
+  }
+
+  function updateCloudFileDraftTermPart(
+    fileId: string,
+    field: "academicYear" | "semester",
+    value: string,
+  ): void {
+    const currentValue =
+      cloudFileDrafts[fileId]?.academicTerm ??
+      cloudFiles.find((file) => file.id === fileId)?.academicTerm ??
+      "";
+    const currentParts = parseAcademicTermParts(currentValue);
+    const nextAcademicYear =
+      field === "academicYear" ? value : currentParts.academicYear;
+    const nextSemester = field === "semester" ? value : currentParts.semester;
+
+    updateCloudFileDraft(
+      fileId,
+      "academicTerm",
+      buildAcademicTermValue(nextAcademicYear, nextSemester),
+    );
+  }
+
+  async function handleSaveCloudFileInfo(file: CloudFileSummary): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再更新檔案資訊。");
+      return;
+    }
+
+    const draft = cloudFileDrafts[file.id];
+    if (!draft) {
+      return;
+    }
+
+    try {
+      await updateCloudFileInfo({
+        uid: currentUser.uid,
+        fileId: file.id,
+        rosterName: draft.rosterName,
+        gradeLabel: draft.gradeLabel,
+        academicTerm: draft.academicTerm,
+      });
+      setMessage(`已更新檔案資訊：${file.fileName}`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "更新檔案資訊失敗。";
+      setMessage(`更新檔案資訊失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleArchiveCloudFile(file: CloudFileSummary): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再封存檔案。");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `確定要封存「${file.fileName}」嗎？封存後它會從清單中移除，但不會真的刪除資料。`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await archiveCloudFile({
+        uid: currentUser.uid,
+        fileId: file.id,
+      });
+      if (currentCloudFileId === file.id) {
+        setCurrentCloudFileId(null);
+      }
+      if (expandedCloudFileId === file.id) {
+        setExpandedCloudFileId(null);
+      }
+      setMessage(`已封存檔案：${file.fileName}`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "封存檔案失敗。";
+      setMessage(`封存檔案失敗：${nextMessage}`);
+    }
+  }
+
   function openFileWorkspace(nextTab: Exclude<TabKey, "files" | "account" | "editor">): void {
     setActiveTab(nextTab);
+  }
+
+  function toggleCloudFilePanel(fileId: string): void {
+    setExpandedCloudFileId((current) => (current === fileId ? null : fileId));
   }
 
   function formatInviteExpiry(dateString: string | null): string {
@@ -1806,171 +2056,324 @@ export default function App() {
               <div className="panel-header">
                 <div>
                   <h2>檔案中心</h2>
-                  <p>這裡先整理帳號底下的檔案清單。之後接上 Firebase 後，每一份班級資料都會成為獨立檔案。</p>
+                  <p>所有檔案都會放在 Firebase，登入後才能在自己的帳號下建立與管理檔案。</p>
                 </div>
                 <div className="button-row">
                   <button
                     className="primary-button"
-                    onClick={() => openFileWorkspace("roster")}
+                    disabled={!currentUser}
+                    onClick={() => {
+                      void handleCreateCloudFile();
+                    }}
                     type="button"
                   >
-                    開啟目前檔案
+                    建立新檔案
                   </button>
-                </div>
-              </div>
-
-              <div className="file-summary-strip">
-                <div>
-                  <strong>{currentUsername}</strong>
-                  <span>目前登入帳號</span>
-                </div>
-                <div>
-                  <strong>{currentFileSummary.rosterCount}</strong>
-                  <span>班級人數</span>
-                </div>
-                <div>
-                  <strong>{currentFileSummary.recordCount}</strong>
-                  <span>測驗筆數</span>
-                </div>
-                <div>
-                  <strong>{currentFileSummary.incompleteCount}</strong>
-                  <span>未完成</span>
                 </div>
               </div>
 
               <div className="file-list-shell">
                 <div className="file-list-head">
                   <h3>我的檔案</h3>
-                  <p>目前先顯示這一份工作檔。之後會擴充為真正的多檔案列表與共享列表。</p>
+                  <p>登入後才可以在 Firebase 建立並管理自己的雲端檔案。</p>
                 </div>
-                <div className="file-table">
-                  <div className="file-table-row file-table-row-header">
-                    <span>檔案名稱</span>
-                    <span>班級名稱</span>
-                    <span>年級</span>
-                    <span>學期</span>
-                    <span>班級人數</span>
-                    <span>狀態</span>
+                {!currentUser ? (
+                  <div className="friend-empty-state">
+                    <strong>尚未登入</strong>
+                    <p>請先註冊並登入，之後才能在自己的帳號下建立雲端檔案。</p>
                   </div>
-                  <div className="file-accordion-item">
-                    <button
-                      className="file-table-row file-table-row-body is-active"
-                      onClick={() => setIsCurrentFileExpanded((current) => !current)}
-                      type="button"
-                    >
-                      <span className="file-name-cell">
-                        <span
+                ) : cloudFiles.length === 0 ? (
+                  <div className="file-list-head">
+                    <p>目前還沒有檔案。</p>
+                  </div>
+                ) : (
+                  <div className="file-table">
+                    <div className="file-table-row file-table-row-header">
+                      <span>檔案名稱</span>
+                      <span>班級名稱</span>
+                      <span>年級</span>
+                      <span>學期</span>
+                      <span>班級人數</span>
+                      <span>狀態</span>
+                    </div>
+                    {cloudFiles.map((file) => (
+                      <div className="file-accordion-item" key={file.id}>
+                        <div
                           className={
-                            isCurrentFileExpanded
-                              ? "file-row-chevron is-open"
-                              : "file-row-chevron"
+                            file.id === currentCloudFileId
+                              ? "file-table-row file-table-row-body is-active"
+                              : "file-table-row file-table-row-body"
                           }
-                          aria-hidden="true"
+                          onClick={() => toggleCloudFilePanel(file.id)}
                         >
-                          ▾
-                        </span>
-                        {currentFileSummary.fileName}
-                      </span>
-                      <span>{currentFileSummary.className}</span>
-                      <span>{currentFileSummary.gradeLabel}</span>
-                      <span>{currentFileSummary.termLabel}</span>
-                      <span>{currentFileSummary.rosterCount} 人</span>
-                      <span>目前工作中</span>
-                    </button>
-                    {isCurrentFileExpanded ? (
-                      <div className="file-accordion-panel">
-                        <div className="file-detail-grid">
-                          <label>
-                            <strong>班級名稱</strong>
-                            <input
-                              onChange={(event) => updateRosterName(event.target.value)}
-                              type="text"
-                              value={data.rosterName}
-                            />
-                          </label>
-                          <label>
-                            <strong>年級</strong>
-                            <select
-                              onChange={(event) => updateGradeLabel(event.target.value)}
-                              value={data.gradeLabel}
+                          <span className="file-name-cell">
+                            <span
+                              className={
+                                expandedCloudFileId === file.id
+                                  ? "file-row-chevron is-open"
+                                  : "file-row-chevron"
+                              }
+                              aria-hidden="true"
                             >
-                              <option value="">未設定</option>
-                              {GRADE_OPTIONS.map((grade) => (
-                                <option key={grade} value={grade}>
-                                  {grade}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <strong>學期</strong>
-                            <input
-                              onChange={(event) => updateAcademicTerm(event.target.value)}
-                              placeholder="例如：115學年度上學期"
-                              type="text"
-                              value={data.academicTerm}
-                            />
-                          </label>
-                          <label className="file-size-field">
-                            <strong>班級人數</strong>
-                            <div className="file-size-row">
-                              <input
-                                min={1}
-                                onChange={(event) => setRosterSizeInput(event.target.value)}
-                                type="number"
-                                value={rosterSizeInput}
-                              />
-                              <button
-                                className="secondary-button"
-                                onClick={applyRosterSize}
-                                type="button"
-                              >
-                                套用
-                              </button>
-                            </div>
-                          </label>
+                              ▾
+                            </span>
+                            {file.fileName}
+                          </span>
+                          <span>{file.rosterName}</span>
+                          <span>{file.gradeLabel}</span>
+                          <span>{file.academicTerm}</span>
+                          <span>{file.rosterCount} 人</span>
+                          {file.id === currentCloudFileId ? (
+                            <span>目前使用中</span>
+                          ) : (
+                            <button
+                              className="secondary-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleOpenCloudFile(file);
+                              }}
+                              type="button"
+                            >
+                              使用這個檔案
+                            </button>
+                          )}
                         </div>
-                        <div className="file-status-row">
-                          <span className="status-chip is-active">目前使用中</span>
-                          <span>之後如果有多份名冊，可以在這裡直接切換目前使用中的檔案。</span>
-                        </div>
-                        <div className="file-accordion-actions">
-                          <button
-                            className="primary-button"
-                            onClick={() => openFileWorkspace("roster")}
-                            type="button"
-                          >
-                            編輯名冊資訊
-                          </button>
-                          <button
-                            className="secondary-button"
-                            onClick={() => openFileWorkspace("metric")}
-                            type="button"
-                          >
-                            開啟測驗項目
-                          </button>
-                          <button
-                            className="secondary-button"
-                            onClick={() => openFileWorkspace("table")}
-                            type="button"
-                          >
-                            開啟總表
-                          </button>
-                          <button
-                            className="secondary-button"
-                            onClick={() => openFileWorkspace("pdf")}
-                            type="button"
-                          >
-                            檢視報表
-                          </button>
-                        </div>
-                        <div className="file-switch-hint">
-                          之後如果有多份名冊，這裡可以加入「設為目前使用中」與「切換到這份檔案」的操作。現階段只有一份工作檔，所以它已經是目前使用中的名冊。
-                        </div>
+                        {expandedCloudFileId === file.id ? (
+                          <div className="file-accordion-panel">
+                            {file.id === currentCloudFileId ? (
+                              <>
+                                <div className="file-detail-grid">
+                                  <label>
+                                    <strong>班級名稱</strong>
+                                    <input
+                                      onChange={(event) => updateRosterName(event.target.value)}
+                                      type="text"
+                                      value={data.rosterName}
+                                    />
+                                  </label>
+                                  <label>
+                                    <strong>年級</strong>
+                                    <select
+                                      onChange={(event) => updateGradeLabel(event.target.value)}
+                                      value={data.gradeLabel}
+                                    >
+                                      <option value="">未設定</option>
+                                      {GRADE_OPTIONS.map((grade) => (
+                                        <option key={grade} value={grade}>
+                                          {grade}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <strong>學年度</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateAcademicTermPart(
+                                          "academicYear",
+                                          event.target.value,
+                                        )}
+                                      value={parseAcademicTermParts(data.academicTerm).academicYear}
+                                    >
+                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                                        <option key={year} value={year}>
+                                          民國 {year} 年
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <strong>學期</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateAcademicTermPart(
+                                          "semester",
+                                          event.target.value,
+                                        )}
+                                      value={parseAcademicTermParts(data.academicTerm).semester}
+                                    >
+                                      {TERM_OPTIONS.map((term) => (
+                                        <option key={term} value={term}>
+                                          {term}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="file-size-field">
+                                    <strong>班級人數</strong>
+                                    <div className="file-size-row">
+                                      <input
+                                        min={1}
+                                        onChange={(event) => setRosterSizeInput(event.target.value)}
+                                        type="number"
+                                        value={rosterSizeInput}
+                                      />
+                                      <button
+                                        className="secondary-button"
+                                        onClick={applyRosterSize}
+                                        type="button"
+                                      >
+                                        套用
+                                      </button>
+                                    </div>
+                                  </label>
+                                </div>
+                                <div className="file-status-row">
+                                  <span className="status-chip is-active">目前使用中</span>
+                                  <span>
+                                    最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
+                                  </span>
+                                </div>
+                                <div className="file-accordion-actions">
+                                  <button
+                                    className="primary-button"
+                                    onClick={() => openFileWorkspace("roster")}
+                                    type="button"
+                                  >
+                                    編輯名冊資訊
+                                  </button>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => openFileWorkspace("metric")}
+                                    type="button"
+                                  >
+                                    開啟測驗項目
+                                  </button>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => openFileWorkspace("table")}
+                                    type="button"
+                                  >
+                                    開啟總表
+                                  </button>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => openFileWorkspace("pdf")}
+                                    type="button"
+                                  >
+                                    檢視報表
+                                  </button>
+                                  <button
+                                    className="danger-button"
+                                    onClick={() => {
+                                      void handleArchiveCloudFile(file);
+                                    }}
+                                    type="button"
+                                  >
+                                    刪除檔案
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="file-detail-grid">
+                                  <label>
+                                    <strong>班級名稱</strong>
+                                    <input
+                                      onChange={(event) =>
+                                        updateCloudFileDraft(
+                                          file.id,
+                                          "rosterName",
+                                          event.target.value,
+                                        )}
+                                      type="text"
+                                      value={cloudFileDrafts[file.id]?.rosterName ?? file.rosterName}
+                                    />
+                                  </label>
+                                  <label>
+                                    <strong>年級</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateCloudFileDraft(
+                                          file.id,
+                                          "gradeLabel",
+                                          event.target.value,
+                                        )}
+                                      value={cloudFileDrafts[file.id]?.gradeLabel ?? file.gradeLabel}
+                                    >
+                                      <option value="">未設定</option>
+                                      {GRADE_OPTIONS.map((grade) => (
+                                        <option key={grade} value={grade}>
+                                          {grade}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <strong>學年度</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateCloudFileDraftTermPart(
+                                          file.id,
+                                          "academicYear",
+                                          event.target.value,
+                                        )}
+                                      value={parseAcademicTermParts(
+                                        cloudFileDrafts[file.id]?.academicTerm ?? file.academicTerm,
+                                      ).academicYear}
+                                    >
+                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                                        <option key={year} value={year}>
+                                          民國 {year} 年
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <strong>學期</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateCloudFileDraftTermPart(
+                                          file.id,
+                                          "semester",
+                                          event.target.value,
+                                        )}
+                                      value={parseAcademicTermParts(
+                                        cloudFileDrafts[file.id]?.academicTerm ?? file.academicTerm,
+                                      ).semester}
+                                    >
+                                      {TERM_OPTIONS.map((term) => (
+                                        <option key={term} value={term}>
+                                          {term}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                </div>
+                                <div className="file-status-row">
+                                  <span className="status-chip">尚未切換</span>
+                                  <span>
+                                    最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
+                                  </span>
+                                </div>
+                                <div className="file-accordion-actions">
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => {
+                                      void handleSaveCloudFileInfo(file);
+                                    }}
+                                    type="button"
+                                  >
+                                    儲存檔案資訊
+                                  </button>
+                                  <button
+                                    className="danger-button"
+                                    onClick={() => {
+                                      void handleArchiveCloudFile(file);
+                                    }}
+                                    type="button"
+                                  >
+                                    刪除檔案
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             </section>
           </>

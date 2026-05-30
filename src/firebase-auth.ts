@@ -6,7 +6,9 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { ensureAbilityRulesConfig } from "./ability-cloud";
+import { auth, db } from "./firebase";
 
 const USERNAME_EMAIL_DOMAIN = "fitness-test.local";
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/;
@@ -67,6 +69,17 @@ export async function registerWithUsername(
   await updateProfile(result.user, {
     displayName: normalizedUsername,
   });
+  await setDoc(
+    doc(db, "users", result.user.uid),
+    {
+      username: normalizedUsername,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: "active",
+    },
+    { merge: true },
+  );
+  await ensureAbilityRulesConfig(result.user.uid);
   return result.user;
 }
 
