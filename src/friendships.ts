@@ -296,11 +296,43 @@ export async function sendFriendRequestFromInvite(options: {
     }
   }
 
-  await sendFriendRequest({
-    fromUid: options.fromUid,
-    fromUsername: options.fromUsername,
-    targetUsername: invite.issuedByUsername,
-  });
+  if (invite.issuedByUid === options.fromUid) {
+    throw new Error("不能把自己加入好友列表。");
+  }
+
+  const reverseRequestRef = doc(
+    db,
+    "friendRequests",
+    `${invite.issuedByUid}__${options.fromUid}`,
+  );
+  const reverseRequest = await getDoc(reverseRequestRef);
+  if (reverseRequest.exists() && reverseRequest.data().status === "pending") {
+    throw new Error("對方已經送出好友邀請，請等待你這邊確認。");
+  }
+
+  const requestRef = doc(
+    db,
+    "friendRequests",
+    `${options.fromUid}__${invite.issuedByUid}`,
+  );
+  const requestSnapshot = await getDoc(requestRef);
+  if (requestSnapshot.exists() && requestSnapshot.data().status === "pending") {
+    throw new Error("好友邀請已送出，請等待對方確認。");
+  }
+
+  await setDoc(
+    requestRef,
+    {
+      fromUid: options.fromUid,
+      fromUsername: normalizeUsername(options.fromUsername),
+      toUid: invite.issuedByUid,
+      toUsername: normalizeUsername(invite.issuedByUsername),
+      status: "pending",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 export async function acceptFriendRequest(
