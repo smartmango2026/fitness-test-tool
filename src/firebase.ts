@@ -3,12 +3,12 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBgaajXEXFjU6RRcpIWC6Qq1_wOCnr26u4",
-  authDomain: "fitness-test-tool.firebaseapp.com",
-  projectId: "fitness-test-tool",
-  storageBucket: "fitness-test-tool.firebasestorage.app",
-  messagingSenderId: "742147408129",
-  appId: "1:742147408129:web:a15440b49327d516955b00",
+  apiKey: "AIzaSyB092-jPGNKofKu51vQaayZC1qXwCmC_8g",
+  authDomain: "fitness-test-tool-42789.firebaseapp.com",
+  projectId: "fitness-test-tool-42789",
+  storageBucket: "fitness-test-tool-42789.firebasestorage.app",
+  messagingSenderId: "953175047502",
+  appId: "1:953175047502:web:1912d2f9ce23cbf83bf21f",
 };
 
 export const firebaseApp = initializeApp(firebaseConfig);

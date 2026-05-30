@@ -98,9 +98,8 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "files", label: "檔案中心" },
   { key: "roster", label: "編輯名冊" },
   { key: "metric", label: "測驗項目" },
-  { key: "analysis", label: "檢視能力分析" },
   { key: "table", label: "檢視總表" },
-  { key: "pdf", label: "下載PDF" },
+  { key: "pdf", label: "檢視報表" },
 ];
 
 const scoreFields: FitnessField[] = [
@@ -1746,10 +1745,10 @@ export default function App() {
                           </button>
                           <button
                             className="secondary-button"
-                            onClick={() => openFileWorkspace("analysis")}
+                            onClick={() => openFileWorkspace("pdf")}
                             type="button"
                           >
-                            檢視能力分析
+                            檢視報表
                           </button>
                         </div>
                         <div className="file-switch-hint">
@@ -2272,8 +2271,8 @@ export default function App() {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>下載PDF</h2>
-                  <p>這裡直接整合 A4 報表畫布與 PDF 輸出，適合整理學生能力分析並產出正式報表。</p>
+                  <h2>檢視報表</h2>
+                  <p>這裡直接整合 A4 報表畫布與 PDF 輸出，適合檢視學生報表內容並產出正式 PDF。</p>
                 </div>
                 <label className="shared-date-field">
                   選擇學生
@@ -2306,7 +2305,7 @@ export default function App() {
                 testDate={data.testDate}
               />
               <div className="callout">
-                除了直接下載 PDF，你也可以在這裡同步處理 Excel 備份與重新匯入。
+                這裡是目前主要的報表檢視頁。除了直接下載 PDF，你也可以在這裡同步處理 Excel 備份與重新匯入。
               </div>
               <div className="button-row">
                 <button className="secondary-button" onClick={handleDownloadCurrentPdf} type="button">
