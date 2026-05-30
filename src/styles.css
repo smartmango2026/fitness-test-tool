@@ -544,6 +544,73 @@ button {
   margin-top: 16px;
 }
 
+.friend-section + .friend-section {
+  margin-top: 20px;
+}
+
+.friend-section h4 {
+  margin: 0 0 10px;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.friend-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.friend-section-header h4 {
+  margin: 0;
+}
+
+.friend-qr-panel {
+  margin-bottom: 20px;
+}
+
+.friend-invite-state strong {
+  font-size: 1.04rem;
+}
+
+.friend-qr-card {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid #d6dbe5;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.friend-qr-image {
+  width: 100%;
+  max-width: 180px;
+  padding: 10px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+.friend-qr-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.friend-qr-copy strong {
+  color: #172033;
+  font-size: 1.04rem;
+}
+
+.friend-qr-copy small,
+.friend-qr-copy p {
+  margin: 0;
+  color: #64748b;
+}
+
 .friend-row {
   display: flex;
   justify-content: space-between;
@@ -564,6 +631,12 @@ button {
   display: block;
   margin-top: 4px;
   color: #64748b;
+}
+
+.friend-row-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .button-row {
@@ -1260,6 +1333,18 @@ tbody tr.is-selected {
   .friend-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .friend-qr-card {
+    grid-template-columns: 1fr;
+  }
+
+  .friend-qr-image {
+    max-width: 220px;
+  }
+
+  .friend-row-actions {
+    width: 100%;
   }
 
   .file-detail-grid {

@@ -25,11 +25,28 @@ import {
   signOutCurrentUser,
   subscribeToAuthState,
 } from "./firebase-auth";
+import {
+  acceptFriendRequest,
+  createFriendInvite,
+  ensureUserProfile,
+  getFriendInvite,
+  rejectFriendRequest,
+  removeFriend,
+  sendFriendRequest,
+  sendFriendRequestFromInvite,
+  subscribeToFriends,
+  subscribeToIncomingFriendRequests,
+  subscribeToOutgoingFriendRequests,
+  type FriendRecord,
+  type FriendInviteRecord,
+  type FriendRequestRecord,
+} from "./friendships";
 import RadarChart from "./RadarChart";
 import { defaultAppData } from "./sample-data";
 import { loadAppData, saveAppData } from "./storage";
 import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types";
 import type { User } from "firebase/auth";
+import QRCode from "qrcode";
 
 type TabKey =
   | "files"
@@ -86,12 +103,6 @@ type ActiveCell = {
 } | null;
 
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
-type FriendRecord = {
-  username: string;
-  addedAt: string;
-};
-
-const FRIENDS_STORAGE_PREFIX = "fitness-test-tool.friends";
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "account", label: "帳號管理" },
@@ -202,62 +213,18 @@ function formatAcademicTerm(dateString: string): string {
   return `${academicYear}學年度${term}`;
 }
 
-function getFriendStorageKey(username: string): string {
-  return `${FRIENDS_STORAGE_PREFIX}.${normalizeUsername(username)}`;
-}
-
-function loadFriendRecords(username: string): FriendRecord[] {
-  if (!username) {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(getFriendStorageKey(username));
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .filter((item): item is FriendRecord => {
-        return (
-          !!item &&
-          typeof item === "object" &&
-          "username" in item &&
-          typeof item.username === "string" &&
-          "addedAt" in item &&
-          typeof item.addedAt === "string"
-        );
-      })
-      .map((item) => ({
-        username: normalizeUsername(item.username),
-        addedAt: item.addedAt,
-      }))
-      .filter((item) => isValidUsername(item.username))
-      .sort((a, b) => a.username.localeCompare(b.username, "zh-Hant"));
-  } catch {
-    return [];
-  }
-}
-
-function saveFriendRecords(username: string, friends: FriendRecord[]): void {
-  if (!username) {
-    return;
-  }
-
-  window.localStorage.setItem(
-    getFriendStorageKey(username),
-    JSON.stringify(friends),
-  );
-}
-
 export default function App() {
   const [data, setData] = useState<AppData>(() => loadAppData() ?? defaultAppData);
-  const [activeTab, setActiveTab] = useState<TabKey>("roster");
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("invite")
+    ) {
+      return "account";
+    }
+
+    return "roster";
+  });
   const [selectedId, setSelectedId] = useState<string>(data.records[0]?.id ?? "");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -269,6 +236,17 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [friends, setFriends] = useState<FriendRecord[]>([]);
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<
+    FriendRequestRecord[]
+  >([]);
+  const [outgoingFriendRequests, setOutgoingFriendRequests] = useState<
+    FriendRequestRecord[]
+  >([]);
+  const [activeFriendInvite, setActiveFriendInvite] =
+    useState<FriendInviteRecord | null>(null);
+  const [friendInviteQrDataUrl, setFriendInviteQrDataUrl] = useState("");
+  const [scannedFriendInvite, setScannedFriendInvite] =
+    useState<FriendInviteRecord | null>(null);
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
   );
@@ -314,6 +292,9 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = subscribeToAuthState((user) => {
+      if (user) {
+        void ensureUserProfile(user);
+      }
       setCurrentUser(user);
       setAuthReady(true);
       setShowAccountMenu(false);
@@ -326,23 +307,27 @@ export default function App() {
     if (!currentUser) {
       setFriendDraft("");
       setFriends([]);
+      setIncomingFriendRequests([]);
+      setOutgoingFriendRequests([]);
       return;
     }
 
-    const username =
-      currentUser.displayName || emailToUsername(currentUser.email) || "";
-    setFriends(loadFriendRecords(username));
+    const unsubscribeFriends = subscribeToFriends(currentUser.uid, setFriends);
+    const unsubscribeIncoming = subscribeToIncomingFriendRequests(
+      currentUser.uid,
+      setIncomingFriendRequests,
+    );
+    const unsubscribeOutgoing = subscribeToOutgoingFriendRequests(
+      currentUser.uid,
+      setOutgoingFriendRequests,
+    );
+
+    return () => {
+      unsubscribeFriends();
+      unsubscribeIncoming();
+      unsubscribeOutgoing();
+    };
   }, [currentUser]);
-
-  useEffect(() => {
-    if (!currentUser) {
-      return;
-    }
-
-    const username =
-      currentUser.displayName || emailToUsername(currentUser.email) || "";
-    saveFriendRecords(username, friends);
-  }, [currentUser, friends]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -392,6 +377,13 @@ export default function App() {
   const activeMetricLabel = data.itemLabels[activeMetricIndex] ?? activeMetric;
   const currentUsername =
     currentUser?.displayName || emailToUsername(currentUser?.email) || "未登入";
+  const inviteIdFromUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    return new URLSearchParams(window.location.search).get("invite") ?? "";
+  }, []);
   const currentAcademicTerm = data.academicTerm?.trim() || formatAcademicTerm(data.testDate);
   const currentFileSummary = {
     className: data.rosterName || "未命名班級",
@@ -1007,7 +999,20 @@ export default function App() {
     }
   }
 
-  function handleAddFriend(): void {
+  function formatActivityDate(dateString: string | null): string {
+    if (!dateString) {
+      return "剛剛";
+    }
+
+    const parsed = new Date(dateString);
+    if (Number.isNaN(parsed.getTime())) {
+      return "剛剛";
+    }
+
+    return parsed.toLocaleString("zh-TW");
+  }
+
+  async function handleAddFriend(): Promise<void> {
     if (!currentUser) {
       setMessage("請先登入，再新增好友。");
       return;
@@ -1034,18 +1039,159 @@ export default function App() {
       return;
     }
 
-    setFriends((current) =>
-      [...current, { username: nextUsername, addedAt: new Date().toISOString() }].sort(
-        (a, b) => a.username.localeCompare(b.username, "zh-Hant"),
-      ),
-    );
-    setFriendDraft("");
-    setMessage(`已加入好友 ${nextUsername}。`);
+    if (
+      outgoingFriendRequests.some(
+        (request) => request.toUsername === nextUsername,
+      )
+    ) {
+      setMessage(`已送出給 ${nextUsername} 的好友邀請，請等待對方確認。`);
+      return;
+    }
+
+    if (
+      incomingFriendRequests.some(
+        (request) => request.fromUsername === nextUsername,
+      )
+    ) {
+      setMessage(`對方已送出好友邀請，請直接在下方按同意。`);
+      return;
+    }
+
+    try {
+      await sendFriendRequest({
+        fromUid: currentUser.uid,
+        fromUsername: currentUsername,
+        targetUsername: nextUsername,
+      });
+      setFriendDraft("");
+      setMessage(`已送出給 ${nextUsername} 的好友邀請。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "送出好友邀請失敗。";
+      setMessage(nextMessage);
+    }
   }
 
-  function handleRemoveFriend(username: string): void {
-    setFriends((current) => current.filter((friend) => friend.username !== username));
-    setMessage(`已移除好友 ${username}。`);
+  async function handleAcceptFriendRequest(
+    request: FriendRequestRecord,
+  ): Promise<void> {
+    try {
+      await acceptFriendRequest(request);
+      setMessage(`已和 ${request.fromUsername} 成為好友。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "同意好友邀請失敗。";
+      setMessage(nextMessage);
+    }
+  }
+
+  async function handleRejectFriendRequest(
+    request: FriendRequestRecord,
+  ): Promise<void> {
+    try {
+      await rejectFriendRequest(request.id);
+      setMessage(`已拒絕 ${request.fromUsername} 的好友邀請。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "拒絕好友邀請失敗。";
+      setMessage(nextMessage);
+    }
+  }
+
+  async function handleRemoveFriend(friend: FriendRecord): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再管理好友。");
+      return;
+    }
+
+    try {
+      await removeFriend({
+        currentUid: currentUser.uid,
+        friendUid: friend.friendUid,
+      });
+      setMessage(`已移除好友 ${friend.username}。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "移除好友失敗。";
+      setMessage(nextMessage);
+    }
+  }
+
+  async function handleCreateFriendInvite(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再產生加好友 QR Code。");
+      return;
+    }
+
+    try {
+      const invite = await createFriendInvite({
+        issuedByUid: currentUser.uid,
+        issuedByUsername: currentUsername,
+      });
+      setActiveFriendInvite(invite);
+      setMessage("已產生新的加好友 QR Code。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "產生加好友 QR Code 失敗。";
+      setMessage(nextMessage);
+    }
+  }
+
+  async function handleSendFriendRequestFromQr(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再送出好友邀請。");
+      return;
+    }
+
+    if (!scannedFriendInvite) {
+      setMessage("找不到這張加好友邀請。");
+      return;
+    }
+
+    if (scannedFriendInvite.issuedByUid === currentUser.uid) {
+      setMessage("這是你自己的加好友 QR Code。");
+      return;
+    }
+
+    if (
+      friends.some((friend) => friend.username === scannedFriendInvite.issuedByUsername)
+    ) {
+      setMessage(`${scannedFriendInvite.issuedByUsername} 已經在好友列表中。`);
+      return;
+    }
+
+    if (
+      outgoingFriendRequests.some(
+        (request) => request.toUid === scannedFriendInvite.issuedByUid,
+      )
+    ) {
+      setMessage("你已經送出好友邀請，請等待對方確認。");
+      return;
+    }
+
+    if (
+      incomingFriendRequests.some(
+        (request) => request.fromUid === scannedFriendInvite.issuedByUid,
+      )
+    ) {
+      setMessage("對方已先送出好友邀請，請直接在收到的邀請中按同意。");
+      return;
+    }
+
+    try {
+      await sendFriendRequestFromInvite({
+        inviteId: scannedFriendInvite.id,
+        fromUid: currentUser.uid,
+        fromUsername: currentUsername,
+      });
+      setMessage(
+        `已透過 QR Code 對 ${scannedFriendInvite.issuedByUsername} 送出好友邀請。`,
+      );
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "送出好友邀請失敗。";
+      setMessage(nextMessage);
+    }
   }
 
   function openAccountPanel(): void {
@@ -1055,6 +1201,19 @@ export default function App() {
 
   function openFileWorkspace(nextTab: Exclude<TabKey, "files" | "account" | "editor">): void {
     setActiveTab(nextTab);
+  }
+
+  function formatInviteExpiry(dateString: string | null): string {
+    if (!dateString) {
+      return "短效邀請";
+    }
+
+    const parsed = new Date(dateString);
+    if (Number.isNaN(parsed.getTime())) {
+      return "短效邀請";
+    }
+
+    return `有效至 ${parsed.toLocaleString("zh-TW")}`;
   }
 
   function updateScore(field: FitnessField, value: string): void {
@@ -1268,6 +1427,56 @@ export default function App() {
     );
     previousMetricScaleRef.current = metricScale;
   }, [metricScale]);
+
+  useEffect(() => {
+    if (!inviteIdFromUrl) {
+      setScannedFriendInvite(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    void getFriendInvite(inviteIdFromUrl)
+      .then((invite) => {
+        if (!isCancelled) {
+          setScannedFriendInvite(invite);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setScannedFriendInvite(null);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [inviteIdFromUrl]);
+
+  useEffect(() => {
+    if (!activeFriendInvite) {
+      setFriendInviteQrDataUrl("");
+      return;
+    }
+
+    let isCancelled = false;
+    const inviteUrl = new URL(window.location.href);
+    inviteUrl.searchParams.set("invite", activeFriendInvite.id);
+    inviteUrl.hash = "";
+
+    void QRCode.toDataURL(inviteUrl.toString(), {
+      width: 280,
+      margin: 1,
+    }).then((dataUrl: string) => {
+      if (!isCancelled) {
+        setFriendInviteQrDataUrl(dataUrl);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeFriendInvite]);
 
   function renderSheetZoomToolbar(
     currentMode: SheetZoomMode,
@@ -1782,14 +1991,6 @@ export default function App() {
                       <div>{currentUser ? currentUsername : "尚未登入"}</div>
                     </div>
                     <div>
-                      <strong>E-mail</strong>
-                      <div>{currentUser?.email || "尚未驗證"}</div>
-                    </div>
-                    <div>
-                      <strong>手機</strong>
-                      <div>{currentUser?.phoneNumber || "尚未驗證"}</div>
-                    </div>
-                    <div>
                       <strong>說明</strong>
                       <div>這裡顯示的是老師登入時輸入的那組帳號。</div>
                     </div>
@@ -1800,64 +2001,200 @@ export default function App() {
                   <div className="account-card-head">
                     <div>
                       <h3>好友列表</h3>
-                      <p>先提供本機版好友管理介面，之後接上 Firestore 後可改成跨裝置同步。</p>
+                      <p>現在會把好友與好友邀請同步到 Firestore，也支援用 QR Code 快速送出好友邀請。</p>
                     </div>
                   </div>
 
-                  <div className="friend-toolbar">
-                    <input
-                      disabled={!currentUser}
-                      onChange={(event) => setFriendDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          handleAddFriend();
-                        }
-                      }}
-                      placeholder="輸入好友帳號，例如 coach.lin"
-                      type="text"
-                      value={friendDraft}
-                    />
-                    <button
-                      className="primary-button"
-                      disabled={!currentUser}
-                      onClick={handleAddFriend}
-                      type="button"
-                    >
-                      新增好友
-                    </button>
+                  {scannedFriendInvite ? (
+                    <div className="friend-section friend-qr-panel">
+                      <h4>掃描到的加好友邀請</h4>
+                      <div className="friend-empty-state friend-invite-state">
+                        <strong>{scannedFriendInvite.issuedByUsername}</strong>
+                        <p>{formatInviteExpiry(scannedFriendInvite.expiresAt)}</p>
+                        {!currentUser ? (
+                          <p>請先登入，再把這位老師加入好友。</p>
+                        ) : scannedFriendInvite.issuedByUid === currentUser.uid ? (
+                          <p>這是你自己的加好友 QR Code。</p>
+                        ) : (
+                          <div className="friend-row-actions">
+                            <button
+                              className="primary-button"
+                              onClick={() => {
+                                void handleSendFriendRequestFromQr();
+                              }}
+                              type="button"
+                            >
+                              送出好友邀請
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="friend-section">
+                    <div className="friend-section-header">
+                      <h4>新增好友</h4>
+                      <button
+                        className="secondary-button"
+                        disabled={!currentUser}
+                        onClick={() => {
+                          void handleCreateFriendInvite();
+                        }}
+                        type="button"
+                      >
+                        顯示我的加好友 QR Code
+                      </button>
+                    </div>
+
+                    <div className="friend-toolbar">
+                      <input
+                        disabled={!currentUser}
+                        onChange={(event) => setFriendDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void handleAddFriend();
+                          }
+                        }}
+                        placeholder="輸入好友帳號，例如 coach.lin"
+                        type="text"
+                        value={friendDraft}
+                      />
+                      <button
+                        className="primary-button"
+                        disabled={!currentUser}
+                        onClick={() => {
+                          void handleAddFriend();
+                        }}
+                        type="button"
+                      >
+                        送出邀請
+                      </button>
+                    </div>
+
+                    {activeFriendInvite && friendInviteQrDataUrl ? (
+                      <div className="friend-qr-card">
+                        <img
+                          alt={`加 ${activeFriendInvite.issuedByUsername} 好友的 QR Code`}
+                          className="friend-qr-image"
+                          src={friendInviteQrDataUrl}
+                        />
+                        <div className="friend-qr-copy">
+                          <strong>{activeFriendInvite.issuedByUsername}</strong>
+                          <small>{formatInviteExpiry(activeFriendInvite.expiresAt)}</small>
+                          <p>讓對方掃描後登入自己的帳號，就能送出好友邀請給你。</p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   {!currentUser ? (
                     <div className="friend-empty-state">
                       <strong>尚未登入</strong>
-                      <p>登入後才會顯示你的好友列表，也才能新增好友。</p>
-                    </div>
-                  ) : friends.length === 0 ? (
-                    <div className="friend-empty-state">
-                      <strong>目前還沒有好友</strong>
-                      <p>可以先從上方輸入帳號，把常一起維護資料的老師加入列表。</p>
+                      <p>登入後才會顯示你的好友列表，也才能送出好友邀請。</p>
                     </div>
                   ) : (
-                    <div className="friend-list">
-                      {friends.map((friend) => (
-                        <div className="friend-row" key={friend.username}>
-                          <div>
-                            <strong>{friend.username}</strong>
-                            <small>
-                              加入時間 {new Date(friend.addedAt).toLocaleDateString("zh-TW")}
-                            </small>
+                    <>
+                      <div className="friend-section">
+                        <h4>收到的邀請</h4>
+                        {incomingFriendRequests.length === 0 ? (
+                          <div className="friend-empty-state">
+                            <strong>目前沒有待確認邀請</strong>
+                            <p>之後如果有老師加你好友，這裡會即時顯示。</p>
                           </div>
-                          <button
-                            className="secondary-button"
-                            onClick={() => handleRemoveFriend(friend.username)}
-                            type="button"
-                          >
-                            移除
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                        ) : (
+                          <div className="friend-list">
+                            {incomingFriendRequests.map((request) => (
+                              <div className="friend-row" key={request.id}>
+                                <div>
+                                  <strong>{request.fromUsername}</strong>
+                                  <small>
+                                    送出時間 {formatActivityDate(request.createdAt)}
+                                  </small>
+                                </div>
+                                <div className="friend-row-actions">
+                                  <button
+                                    className="primary-button"
+                                    onClick={() => {
+                                      void handleAcceptFriendRequest(request);
+                                    }}
+                                    type="button"
+                                  >
+                                    同意
+                                  </button>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => {
+                                      void handleRejectFriendRequest(request);
+                                    }}
+                                    type="button"
+                                  >
+                                    拒絕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="friend-section">
+                        <h4>已送出的邀請</h4>
+                        {outgoingFriendRequests.length === 0 ? (
+                          <div className="friend-empty-state">
+                            <strong>目前沒有送出的邀請</strong>
+                            <p>你送出的好友邀請會先留在這裡，等待對方確認。</p>
+                          </div>
+                        ) : (
+                          <div className="friend-list">
+                            {outgoingFriendRequests.map((request) => (
+                              <div className="friend-row" key={request.id}>
+                                <div>
+                                  <strong>{request.toUsername}</strong>
+                                  <small>
+                                    送出時間 {formatActivityDate(request.createdAt)}
+                                  </small>
+                                </div>
+                                <span className="status-chip">等待對方確認</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="friend-section">
+                        <h4>我的好友</h4>
+                        {friends.length === 0 ? (
+                          <div className="friend-empty-state">
+                            <strong>目前還沒有好友</strong>
+                            <p>可以先從上方輸入帳號送出邀請，等對方確認後會顯示在這裡。</p>
+                          </div>
+                        ) : (
+                          <div className="friend-list">
+                            {friends.map((friend) => (
+                              <div className="friend-row" key={friend.friendUid}>
+                                <div>
+                                  <strong>{friend.username}</strong>
+                                  <small>
+                                    成為好友時間 {formatActivityDate(friend.addedAt)}
+                                  </small>
+                                </div>
+                                <button
+                                  className="secondary-button"
+                                  onClick={() => {
+                                    void handleRemoveFriend(friend);
+                                  }}
+                                  type="button"
+                                >
+                                  移除
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </article>
               </div>
