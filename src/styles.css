@@ -611,6 +611,16 @@ button {
   color: #64748b;
 }
 
+.friend-qr-link {
+  word-break: break-all;
+  color: #0f766e;
+  text-decoration: none;
+}
+
+.friend-qr-link:hover {
+  text-decoration: underline;
+}
+
 .friend-row {
   display: flex;
   justify-content: space-between;

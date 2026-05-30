@@ -245,6 +245,7 @@ export default function App() {
   const [activeFriendInvite, setActiveFriendInvite] =
     useState<FriendInviteRecord | null>(null);
   const [friendInviteQrDataUrl, setFriendInviteQrDataUrl] = useState("");
+  const [activeFriendInviteUrl, setActiveFriendInviteUrl] = useState("");
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
@@ -1456,6 +1457,7 @@ export default function App() {
   useEffect(() => {
     if (!activeFriendInvite) {
       setFriendInviteQrDataUrl("");
+      setActiveFriendInviteUrl("");
       return;
     }
 
@@ -1463,8 +1465,10 @@ export default function App() {
     const inviteUrl = new URL(window.location.href);
     inviteUrl.searchParams.set("invite", activeFriendInvite.id);
     inviteUrl.hash = "";
+    const inviteUrlText = inviteUrl.toString();
+    setActiveFriendInviteUrl(inviteUrlText);
 
-    void QRCode.toDataURL(inviteUrl.toString(), {
+    void QRCode.toDataURL(inviteUrlText, {
       width: 280,
       margin: 1,
     }).then((dataUrl: string) => {
@@ -2084,6 +2088,16 @@ export default function App() {
                           <strong>{activeFriendInvite.issuedByUsername}</strong>
                           <small>{formatInviteExpiry(activeFriendInvite.expiresAt)}</small>
                           <p>讓對方掃描後登入自己的帳號，就能送出好友邀請給你。</p>
+                          {activeFriendInviteUrl ? (
+                            <a
+                              className="friend-qr-link"
+                              href={activeFriendInviteUrl}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              {activeFriendInviteUrl}
+                            </a>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
