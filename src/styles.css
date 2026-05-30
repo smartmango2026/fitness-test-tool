@@ -321,6 +321,11 @@ button {
   font-size: 1.18rem;
 }
 
+.account-card-head p {
+  margin: 10px 0 0;
+  color: #64748b;
+}
+
 .file-list-head p {
   margin: 10px 0 0;
   color: #64748b;
@@ -492,6 +497,71 @@ button {
 }
 
 .auth-profile-grid div > div {
+  margin-top: 4px;
+  color: #64748b;
+}
+
+.friend-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.friend-toolbar input {
+  flex: 1 1 260px;
+  min-width: 0;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.friend-toolbar input:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.friend-empty-state {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 18px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.friend-empty-state p {
+  margin: 0;
+}
+
+.friend-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.friend-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid #d6dbe5;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.friend-row strong {
+  display: block;
+  color: #172033;
+}
+
+.friend-row small {
+  display: block;
   margin-top: 4px;
   color: #64748b;
 }
@@ -1185,6 +1255,11 @@ tbody tr.is-selected {
   .file-summary-strip,
   .account-center-grid {
     grid-template-columns: 1fr;
+  }
+
+  .friend-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .file-detail-grid {

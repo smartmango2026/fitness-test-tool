@@ -29,6 +29,50 @@ Do not open the source `index.html` in the project root. That file is the Vite e
 
 This project now uses relative asset paths, so the built output is suitable for GitHub Pages and for opening `dist/index.html` locally.
 
+## Agent Notes
+
+Use this section as the fast orientation block for future maintenance agents.
+
+### Repository
+
+- Canonical remote: `origin`
+- Canonical repo: `smartmango2026/fitness-test-tool`
+- Archive remote: `archive`
+- Archive repo: `falcon12400/fitness-test-tool`
+- Primary branch for development: `main`
+
+### Deployment
+
+- GitHub Pages URL: `https://smartmango2026.github.io/fitness-test-tool/`
+- Deployment mode: GitHub Actions only
+- Deployment workflow file: `.github/workflows/deploy-pages.yml`
+- Pages build type: `workflow`
+- Allowed deployment branch for `github-pages` environment: `main`
+- `gh-pages` still exists as a historical branch, but it is not the deployment source anymore
+
+### Expected Workflow
+
+- Make code changes on `main`
+- Run `pnpm build` before pushing when deployment-related files change
+- Push to `origin/main`
+- GitHub Actions builds and deploys the site automatically
+
+### Do Not Assume
+
+- Do not assume GitHub Pages is deployed from the `gh-pages` branch
+- Do not assume `falcon12400/fitness-test-tool` is the active publishing repo
+- Do not change the Pages deployment model back to `legacy` unless explicitly requested
+
+### Useful Commands
+
+```bash
+pnpm install --ignore-workspace
+pnpm dev
+pnpm build
+git push origin main
+gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
+```
+
 ## Documents
 
 - `docs/product-spec.md`: first-version product scope and feature rules

@@ -19,6 +19,7 @@ import {
 import {
   emailToUsername,
   isValidUsername,
+  normalizeUsername,
   registerWithUsername,
   signInWithUsername,
   signOutCurrentUser,
@@ -85,6 +86,12 @@ type ActiveCell = {
 } | null;
 
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
+type FriendRecord = {
+  username: string;
+  addedAt: string;
+};
+
+const FRIENDS_STORAGE_PREFIX = "fitness-test-tool.friends";
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "account", label: "帳號管理" },
@@ -196,6 +203,59 @@ function formatAcademicTerm(dateString: string): string {
   return `${academicYear}學年度${term}`;
 }
 
+function getFriendStorageKey(username: string): string {
+  return `${FRIENDS_STORAGE_PREFIX}.${normalizeUsername(username)}`;
+}
+
+function loadFriendRecords(username: string): FriendRecord[] {
+  if (!username) {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getFriendStorageKey(username));
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((item): item is FriendRecord => {
+        return (
+          !!item &&
+          typeof item === "object" &&
+          "username" in item &&
+          typeof item.username === "string" &&
+          "addedAt" in item &&
+          typeof item.addedAt === "string"
+        );
+      })
+      .map((item) => ({
+        username: normalizeUsername(item.username),
+        addedAt: item.addedAt,
+      }))
+      .filter((item) => isValidUsername(item.username))
+      .sort((a, b) => a.username.localeCompare(b.username, "zh-Hant"));
+  } catch {
+    return [];
+  }
+}
+
+function saveFriendRecords(username: string, friends: FriendRecord[]): void {
+  if (!username) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    getFriendStorageKey(username),
+    JSON.stringify(friends),
+  );
+}
+
 export default function App() {
   const [data, setData] = useState<AppData>(() => loadAppData() ?? defaultAppData);
   const [activeTab, setActiveTab] = useState<TabKey>("roster");
@@ -208,6 +268,8 @@ export default function App() {
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [isCurrentFileExpanded, setIsCurrentFileExpanded] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [friendDraft, setFriendDraft] = useState("");
+  const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
   );
@@ -260,6 +322,28 @@ export default function App() {
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setFriendDraft("");
+      setFriends([]);
+      return;
+    }
+
+    const username =
+      currentUser.displayName || emailToUsername(currentUser.email) || "";
+    setFriends(loadFriendRecords(username));
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    const username =
+      currentUser.displayName || emailToUsername(currentUser.email) || "";
+    saveFriendRecords(username, friends);
+  }, [currentUser, friends]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -922,6 +1006,47 @@ export default function App() {
         error instanceof Error ? error.message : "登出失敗。";
       setMessage(`登出失敗：${nextMessage}`);
     }
+  }
+
+  function handleAddFriend(): void {
+    if (!currentUser) {
+      setMessage("請先登入，再新增好友。");
+      return;
+    }
+
+    const nextUsername = normalizeUsername(friendDraft);
+    if (!nextUsername) {
+      setMessage("請先輸入好友帳號。");
+      return;
+    }
+
+    if (!isValidUsername(nextUsername)) {
+      setMessage("好友帳號格式不正確，請使用 3 到 32 碼的小寫英數，可包含 .、_、-。");
+      return;
+    }
+
+    if (nextUsername === currentUsername) {
+      setMessage("不能把自己加入好友列表。");
+      return;
+    }
+
+    if (friends.some((friend) => friend.username === nextUsername)) {
+      setMessage(`好友 ${nextUsername} 已經在列表中。`);
+      return;
+    }
+
+    setFriends((current) =>
+      [...current, { username: nextUsername, addedAt: new Date().toISOString() }].sort(
+        (a, b) => a.username.localeCompare(b.username, "zh-Hant"),
+      ),
+    );
+    setFriendDraft("");
+    setMessage(`已加入好友 ${nextUsername}。`);
+  }
+
+  function handleRemoveFriend(username: string): void {
+    setFriends((current) => current.filter((friend) => friend.username !== username));
+    setMessage(`已移除好友 ${username}。`);
   }
 
   function openAccountPanel(): void {
@@ -1658,6 +1783,14 @@ export default function App() {
                       <div>{currentUser ? currentUsername : "尚未登入"}</div>
                     </div>
                     <div>
+                      <strong>E-mail</strong>
+                      <div>{currentUser?.email || "尚未驗證"}</div>
+                    </div>
+                    <div>
+                      <strong>手機</strong>
+                      <div>{currentUser?.phoneNumber || "尚未驗證"}</div>
+                    </div>
+                    <div>
                       <strong>說明</strong>
                       <div>這裡顯示的是老師登入時輸入的那組帳號。</div>
                     </div>
@@ -1665,13 +1798,68 @@ export default function App() {
                 </article>
 
                 <article className="account-card">
-                  <h3>未來會放在這裡</h3>
-                  <ul className="file-hub-bullets">
-                    <li>好友列表與搜尋帳號</li>
-                    <li>共享檔案邀請</li>
-                    <li>共同維護者權限</li>
-                    <li>帳號偏好設定</li>
-                  </ul>
+                  <div className="account-card-head">
+                    <div>
+                      <h3>好友列表</h3>
+                      <p>先提供本機版好友管理介面，之後接上 Firestore 後可改成跨裝置同步。</p>
+                    </div>
+                  </div>
+
+                  <div className="friend-toolbar">
+                    <input
+                      disabled={!currentUser}
+                      onChange={(event) => setFriendDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleAddFriend();
+                        }
+                      }}
+                      placeholder="輸入好友帳號，例如 coach.lin"
+                      type="text"
+                      value={friendDraft}
+                    />
+                    <button
+                      className="primary-button"
+                      disabled={!currentUser}
+                      onClick={handleAddFriend}
+                      type="button"
+                    >
+                      新增好友
+                    </button>
+                  </div>
+
+                  {!currentUser ? (
+                    <div className="friend-empty-state">
+                      <strong>尚未登入</strong>
+                      <p>登入後才會顯示你的好友列表，也才能新增好友。</p>
+                    </div>
+                  ) : friends.length === 0 ? (
+                    <div className="friend-empty-state">
+                      <strong>目前還沒有好友</strong>
+                      <p>可以先從上方輸入帳號，把常一起維護資料的老師加入列表。</p>
+                    </div>
+                  ) : (
+                    <div className="friend-list">
+                      {friends.map((friend) => (
+                        <div className="friend-row" key={friend.username}>
+                          <div>
+                            <strong>{friend.username}</strong>
+                            <small>
+                              加入時間 {new Date(friend.addedAt).toLocaleDateString("zh-TW")}
+                            </small>
+                          </div>
+                          <button
+                            className="secondary-button"
+                            onClick={() => handleRemoveFriend(friend.username)}
+                            type="button"
+                          >
+                            移除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </article>
               </div>
             </section>
