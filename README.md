@@ -117,6 +117,7 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 - `docs/implementation-notes.md`: suggested technical direction and phased rollout
 - `docs/project-handoff.md`: current architecture, feature status, and handoff notes for continuing development on another machine
 - `docs/development-history.md`: staged release history and major feature milestones
+- `docs/time-estimate.md`: effort estimate and phased time breakdown based on commit history
 
 ## Current App Scope
 
