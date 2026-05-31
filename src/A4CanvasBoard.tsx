@@ -479,9 +479,9 @@ function renderReportPage(
   });
 
   const tableColumns = [
-    { label: "測驗項目", x: 674 },
+    { label: "測驗項目", x: 696 },
     { label: "表現等級", x: 856 },
-    { label: "表現長條圖", x: 1030 },
+    { label: "表現長條圖", x: 996 },
   ];
 
   context.strokeStyle = "#d5e4f7";
@@ -501,6 +501,7 @@ function renderReportPage(
 
   for (let index = 0; index < labels.length; index += 1) {
     const rowY = 552 + index * 92;
+    const rowCenterY = rowY;
     const score = values[index] ?? 0;
     const color = SCORE_COLORS[index % SCORE_COLORS.length];
 
@@ -519,34 +520,21 @@ function renderReportPage(
     context.fillStyle = "#ffffff";
     context.textAlign = "center";
     context.font = "700 18px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(String(index + 1), 692, rowY + 1);
+    context.fillText(String(index + 1), 692, rowY);
+
+    context.fillStyle = color;
+    context.textAlign = "left";
+    context.font = "700 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.textBaseline = "middle";
+    context.fillText(labels[index] ?? `項目 ${index + 1}`, 722, rowCenterY);
 
     context.fillStyle = TEXT_COLOR;
     context.textAlign = "left";
-    context.font = "500 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    drawWrappedText(
-      context,
-      labels[index] ?? `項目 ${index + 1}`,
-      722,
-      rowY - 18,
-      118,
-      28,
-      2,
-    );
-
-    context.textAlign = "left";
     context.font = "500 18px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    drawWrappedText(
-      context,
-      abilityLevelLabels[index] ?? "未分級",
-      856,
-      rowY - 16,
-      120,
-      26,
-      2,
-    );
+    context.textBaseline = "middle";
+    context.fillText(abilityLevelLabels[index] ?? "未分級", 856, rowCenterY);
 
-    drawBarMeter(context, 1026, rowY - 10, score, color);
+    drawBarMeter(context, 992, rowCenterY - 8, score, color);
   }
 
   drawSectionBadge(context, 44, 1158, "老師觀察與鼓勵", 300);
