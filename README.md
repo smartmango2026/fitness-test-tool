@@ -86,6 +86,57 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 - Legacy `?id=1` is still accepted as a fallback alias for `seat=1`, but new work should prefer `seat`
 - In debug mode, the app renders the report canvas directly so headless Chrome screenshots can be taken without navigating the normal UI
 
+### Recent Development History
+
+- `v0.3.0` (`9107e9d`)
+  - Moved deployment and active maintenance to `smartmango2026/fitness-test-tool`
+  - Switched GitHub Pages to GitHub Actions deployment
+  - Connected the app to the new Firebase project `fitness-test-tool-42789`
+  - Added account management basics, friend list UI groundwork, and report/debug cleanup
+  - Adjusted landing flow and file sorting defaults
+
+- `v0.4.0` (`a5c043a`)
+  - Added report score mapping based on configurable ability rules
+  - Hid the old analysis tab and consolidated report viewing into `檢視報表`
+  - Refined radar chart rendering, report debug URL workflow, and report summary layout
+  - Added auto-generated `老師觀察與鼓勵` content and improved its readability
+
+- `v0.5.0` (`974533d`)
+  - Moved files to Firebase cloud storage and removed the local-file editing path
+  - Added manual save mode for cloud files instead of auto-uploading every edit
+  - Restored the last opened cloud file after login or page reload, with fallback to the newest created file
+  - Added the association logo to the app header
+
+- `main` after `v0.5.0`
+  - Added self nickname and per-friend custom nickname support
+  - Added file ownership and shared editing through Firestore-backed sharing metadata
+  - Simplified collaborator management to `select friend -> share`, showing nickname-only recipients
+  - Improved mobile report interactions: normal page scroll over the report canvas, plus tap-to-open image preview with pinch zoom and pan
+
+### Current Architecture Snapshot
+
+- Authentication
+  - Username/password UX backed by Firebase Auth
+  - User profile document stored at `users/{uid}`
+
+- Files
+  - Owned files stored under `users/{ownerUid}/files/{fileId}`
+  - Shared access tracked through top-level `fileShares`
+  - Last opened file persisted per user in local storage as `{ fileId, ownerUid }`
+
+- Friends
+  - Friend relationships and friend requests live in Firestore
+  - QR invite flow is enabled for adding friends
+  - Display name priority is:
+    1. custom friend nickname
+    2. friend self nickname
+    3. username
+
+- Reports
+  - Raw test values stay as teacher-entered values in roster/table/editor views
+  - Report radar chart and summary convert raw values through ability rule ranges
+  - Observation text is auto-generated from scored abilities
+
 ## Documents
 
 - `docs/product-spec.md`: first-version product scope and feature rules
