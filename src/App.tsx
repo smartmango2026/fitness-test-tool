@@ -44,8 +44,10 @@ import {
 import {
   archiveCloudFile,
   createCloudFile,
+  getCloudFileEditorUids,
   loadCloudFile,
   saveCloudFile as saveCloudFileData,
+  setCloudFileEditors,
   subscribeToCloudFiles,
   type CloudFileSummary,
   updateCloudFileInfo,
@@ -282,26 +284,51 @@ function getLastCloudFileStorageKey(uid: string): string {
   return `${LAST_CLOUD_FILE_STORAGE_PREFIX}${uid}`;
 }
 
-function readLastCloudFileId(uid: string): string | null {
+function readLastCloudFileSelection(uid: string): { fileId: string; ownerUid: string } | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  return window.localStorage.getItem(getLastCloudFileStorageKey(uid));
+  const raw = window.localStorage.getItem(getLastCloudFileStorageKey(uid));
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { fileId?: string; ownerUid?: string };
+    if (
+      typeof parsed.fileId === "string" &&
+      parsed.fileId &&
+      typeof parsed.ownerUid === "string" &&
+      parsed.ownerUid
+    ) {
+      return {
+        fileId: parsed.fileId,
+        ownerUid: parsed.ownerUid,
+      };
+    }
+  } catch {
+    // ignore malformed legacy value
+  }
+
+  return null;
 }
 
-function writeLastCloudFileId(uid: string, fileId: string | null): void {
+function writeLastCloudFileSelection(
+  uid: string,
+  selection: { fileId: string; ownerUid: string } | null,
+): void {
   if (typeof window === "undefined") {
     return;
   }
 
   const storageKey = getLastCloudFileStorageKey(uid);
-  if (!fileId) {
+  if (!selection) {
     window.localStorage.removeItem(storageKey);
     return;
   }
 
-  window.localStorage.setItem(storageKey, fileId);
+  window.localStorage.setItem(storageKey, JSON.stringify(selection));
 }
 
 type ReportDebugParams = {
@@ -392,8 +419,11 @@ export default function App() {
     defaultAbilityRulesConfig,
   );
   const [currentCloudFileId, setCurrentCloudFileId] = useState<string | null>(null);
+  const [currentCloudFileOwnerUid, setCurrentCloudFileOwnerUid] = useState<string | null>(null);
   const [isCloudDirty, setIsCloudDirty] = useState(false);
   const [expandedCloudFileId, setExpandedCloudFileId] = useState<string | null>(null);
+  const [shareEditorUids, setShareEditorUids] = useState<string[]>([]);
+  const [selectedShareFriendUid, setSelectedShareFriendUid] = useState("");
   const [cloudFileDrafts, setCloudFileDrafts] = useState<
     Record<string, { rosterName: string; gradeLabel: string; academicTerm: string }>
   >({});
@@ -470,7 +500,9 @@ export default function App() {
       setCloudFiles([]);
       setAbilityRulesConfig(defaultAbilityRulesConfig);
       setCurrentCloudFileId(null);
+      setCurrentCloudFileOwnerUid(null);
       setIsCloudDirty(false);
+      setShareEditorUids([]);
       return;
     }
 
@@ -538,7 +570,9 @@ export default function App() {
         skipNextCloudDirtyRef.current = true;
         setData(nextData);
         setCurrentCloudFileId(reportDebugParams.fileId);
+        setCurrentCloudFileOwnerUid(currentUser.uid);
         setIsCloudDirty(false);
+        setShareEditorUids([]);
         setSelectedId(nextData.records[0]?.id ?? "");
         setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
         setRosterDraft(
@@ -606,36 +640,51 @@ export default function App() {
       return;
     }
 
-    const lastFileId = readLastCloudFileId(currentUser.uid);
-    if (lastFileId && autoOpenedLastCloudFileRef.current === lastFileId) {
+    const lastSelection = readLastCloudFileSelection(currentUser.uid);
+    const lastFileKey = lastSelection
+      ? `${lastSelection.ownerUid}:${lastSelection.fileId}`
+      : null;
+    if (lastFileKey && autoOpenedLastCloudFileRef.current === lastFileKey) {
       return;
     }
 
     const newestFile = [...cloudFiles].sort((left, right) =>
       (right.createdAt ?? "").localeCompare(left.createdAt ?? ""),
     )[0];
-    const targetFile = lastFileId
-      ? cloudFiles.find((file) => file.id === lastFileId) ?? newestFile
+    const targetFile = lastSelection
+      ? cloudFiles.find(
+          (file) =>
+            file.id === lastSelection.fileId &&
+            file.ownerUid === lastSelection.ownerUid,
+        ) ?? newestFile
       : newestFile;
 
     if (!targetFile) {
-      if (lastFileId) {
-        writeLastCloudFileId(currentUser.uid, null);
-        autoOpenedLastCloudFileRef.current = lastFileId;
+      if (lastSelection) {
+        writeLastCloudFileSelection(currentUser.uid, null);
+        autoOpenedLastCloudFileRef.current = lastFileKey;
       }
       return;
     }
 
-    if (lastFileId && !cloudFiles.some((file) => file.id === lastFileId)) {
-      writeLastCloudFileId(currentUser.uid, null);
+    if (
+      lastSelection &&
+      !cloudFiles.some(
+        (file) =>
+          file.id === lastSelection.fileId &&
+          file.ownerUid === lastSelection.ownerUid,
+      )
+    ) {
+      writeLastCloudFileSelection(currentUser.uid, null);
     }
 
-    autoOpenedLastCloudFileRef.current = targetFile.id;
-    void loadCloudFile(currentUser.uid, targetFile.id)
+    autoOpenedLastCloudFileRef.current = `${targetFile.ownerUid}:${targetFile.id}`;
+    void loadCloudFile(targetFile.ownerUid, targetFile.id)
       .then((nextData) => {
         skipNextCloudDirtyRef.current = true;
         setData(nextData);
         setCurrentCloudFileId(targetFile.id);
+        setCurrentCloudFileOwnerUid(targetFile.ownerUid);
         setIsCloudDirty(false);
         setSelectedId(nextData.records[0]?.id ?? "");
         setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
@@ -646,8 +695,13 @@ export default function App() {
         );
         setRosterSizeInput(String(nextData.rosterEntries.length || 1));
         setExpandedCloudFileId(targetFile.id);
+        void getCloudFileEditorUids(targetFile.ownerUid, targetFile.id).then(
+          setShareEditorUids,
+        );
         setMessage(
-          lastFileId && targetFile.id === lastFileId
+          lastSelection &&
+          targetFile.id === lastSelection.fileId &&
+          targetFile.ownerUid === lastSelection.ownerUid
             ? `已自動開啟上次使用的檔案：${targetFile.fileName}`
             : `已自動開啟最新建立的檔案：${targetFile.fileName}`,
         );
@@ -673,16 +727,35 @@ export default function App() {
   }, [currentCloudFileId, data]);
 
   useEffect(() => {
+    if (!currentUser || !currentCloudFileId || !currentCloudFileOwnerUid) {
+      setShareEditorUids([]);
+      return;
+    }
+
+    if (currentCloudFileOwnerUid !== currentUser.uid) {
+      setShareEditorUids([]);
+      return;
+    }
+
+    void getCloudFileEditorUids(currentCloudFileOwnerUid, currentCloudFileId).then(
+      setShareEditorUids,
+    );
+  }, [currentCloudFileId, currentCloudFileOwnerUid, currentUser]);
+
+  useEffect(() => {
     if (!currentUser) {
       return;
     }
 
-    if (!currentCloudFileId) {
+    if (!currentCloudFileId || !currentCloudFileOwnerUid) {
       return;
     }
 
-    writeLastCloudFileId(currentUser.uid, currentCloudFileId);
-  }, [currentCloudFileId, currentUser]);
+    writeLastCloudFileSelection(currentUser.uid, {
+      fileId: currentCloudFileId,
+      ownerUid: currentCloudFileOwnerUid,
+    });
+  }, [currentCloudFileId, currentCloudFileOwnerUid, currentUser]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -789,6 +862,40 @@ export default function App() {
     "未登入";
   const currentDisplayName =
     currentProfile?.displayNickname?.trim() || currentUsername;
+  const currentCloudFileSummary = useMemo(
+    () =>
+      cloudFiles.find(
+        (file) =>
+          file.id === currentCloudFileId &&
+          file.ownerUid === currentCloudFileOwnerUid,
+      ) ?? null,
+    [cloudFiles, currentCloudFileId, currentCloudFileOwnerUid],
+  );
+  const currentCloudFileIsOwner = Boolean(
+    currentUser &&
+      currentCloudFileOwnerUid &&
+      currentUser.uid === currentCloudFileOwnerUid,
+  );
+  const shareableFriends = useMemo(
+    () => friends.filter((friend) => friend.friendUid !== currentUser?.uid),
+    [friends, currentUser],
+  );
+  const sharedEditorFriends = useMemo(
+    () => shareableFriends.filter((friend) => shareEditorUids.includes(friend.friendUid)),
+    [shareEditorUids, shareableFriends],
+  );
+  const availableShareFriends = useMemo(
+    () => shareableFriends.filter((friend) => !shareEditorUids.includes(friend.friendUid)),
+    [shareEditorUids, shareableFriends],
+  );
+  useEffect(() => {
+    if (
+      selectedShareFriendUid &&
+      !availableShareFriends.some((friend) => friend.friendUid === selectedShareFriendUid)
+    ) {
+      setSelectedShareFriendUid("");
+    }
+  }, [availableShareFriends, selectedShareFriendUid]);
   const inviteIdFromUrl = useMemo(() => {
     if (typeof window === "undefined") {
       return "";
@@ -1717,11 +1824,14 @@ export default function App() {
       const fileId = await createCloudFile({
         uid: currentUser.uid,
         username: currentUsername,
+        displayName: currentProfile?.displayNickname ?? null,
         data,
       });
       setCurrentCloudFileId(fileId);
+      setCurrentCloudFileOwnerUid(currentUser.uid);
       setExpandedCloudFileId(fileId);
       setIsCloudDirty(false);
+      setShareEditorUids([]);
       setMessage("已在你的帳號下建立新的雲端檔案。");
     } catch (error) {
       const nextMessage =
@@ -1731,16 +1841,17 @@ export default function App() {
   }
 
   async function handleSaveCurrentCloudFile(): Promise<void> {
-    if (!currentUser || !currentCloudFileId) {
+    if (!currentUser || !currentCloudFileId || !currentCloudFileOwnerUid) {
       setMessage("請先開啟一份雲端檔案，再儲存。");
       return;
     }
 
     try {
       await saveCloudFileData({
-        uid: currentUser.uid,
+        ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
         username: currentUsername,
+        displayName: currentProfile?.displayNickname ?? null,
         data,
       });
       setIsCloudDirty(false);
@@ -1763,12 +1874,14 @@ export default function App() {
     }
 
     try {
-      const nextData = await loadCloudFile(currentUser.uid, file.id);
+      const nextData = await loadCloudFile(file.ownerUid, file.id);
       skipNextCloudDirtyRef.current = true;
       setData(nextData);
       setCurrentCloudFileId(file.id);
+      setCurrentCloudFileOwnerUid(file.ownerUid);
       setExpandedCloudFileId(file.id);
       setIsCloudDirty(false);
+      setShareEditorUids(await getCloudFileEditorUids(file.ownerUid, file.id));
       setSelectedId(nextData.records[0]?.id ?? "");
       setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
       setRosterDraft(
@@ -1835,7 +1948,7 @@ export default function App() {
 
     try {
       await updateCloudFileInfo({
-        uid: currentUser.uid,
+        ownerUid: currentUser.uid,
         fileId: file.id,
         rosterName: draft.rosterName,
         gradeLabel: draft.gradeLabel,
@@ -1864,13 +1977,15 @@ export default function App() {
 
     try {
       await archiveCloudFile({
-        uid: currentUser.uid,
+        ownerUid: currentUser.uid,
         fileId: file.id,
       });
       if (currentCloudFileId === file.id) {
         setCurrentCloudFileId(null);
+        setCurrentCloudFileOwnerUid(null);
         setIsCloudDirty(false);
-        writeLastCloudFileId(currentUser.uid, null);
+        setShareEditorUids([]);
+        writeLastCloudFileSelection(currentUser.uid, null);
       }
       if (expandedCloudFileId === file.id) {
         setExpandedCloudFileId(null);
@@ -1881,6 +1996,89 @@ export default function App() {
         error instanceof Error ? error.message : "封存檔案失敗。";
       setMessage(`封存檔案失敗：${nextMessage}`);
     }
+  }
+
+  async function persistFileEditors(
+    file: CloudFileSummary,
+    nextEditorUids: string[],
+    successMessage: string,
+  ): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再設定共同編輯好友。");
+      return;
+    }
+
+    if (file.ownerUid !== currentUser.uid) {
+      setMessage("只有檔案擁有者可以設定共同編輯好友。");
+      return;
+    }
+
+    const previousEditorUids = shareEditorUids;
+    try {
+      setShareEditorUids(nextEditorUids);
+      await setCloudFileEditors({
+        ownerUid: currentUser.uid,
+        ownerUsername: currentUsername,
+        ownerDisplayName: currentProfile?.displayNickname ?? null,
+        file,
+        editorTargets: shareableFriends
+          .filter((friend) => nextEditorUids.includes(friend.friendUid))
+          .map((friend) => ({
+            uid: friend.friendUid,
+            username: friend.username,
+            displayName: friend.profileNickname,
+          })),
+      });
+      setMessage(successMessage);
+    } catch (error) {
+      setShareEditorUids(previousEditorUids);
+      const nextMessage =
+        error instanceof Error ? error.message : "更新共同編輯好友失敗。";
+      setMessage(`更新共同編輯好友失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleShareFileWithFriend(file: CloudFileSummary): Promise<void> {
+    if (!selectedShareFriendUid) {
+      setMessage("請先選擇要分享的好友。");
+      return;
+    }
+
+    const targetFriend = shareableFriends.find(
+      (friend) => friend.friendUid === selectedShareFriendUid,
+    );
+    if (!targetFriend) {
+      setMessage("找不到要分享的好友。");
+      return;
+    }
+
+    if (shareEditorUids.includes(targetFriend.friendUid)) {
+      setMessage(`「${targetFriend.displayName}」已經是共同編輯。`);
+      return;
+    }
+
+    const nextEditorUids = [...shareEditorUids, targetFriend.friendUid];
+    await persistFileEditors(
+      file,
+      nextEditorUids,
+      `已將「${targetFriend.displayName}」加入「${file.fileName}」的共同編輯。`,
+    );
+    setSelectedShareFriendUid("");
+  }
+
+  async function handleRemoveFileEditor(
+    file: CloudFileSummary,
+    friendUid: string,
+  ): Promise<void> {
+    const targetFriend = shareableFriends.find((friend) => friend.friendUid === friendUid);
+    const nextEditorUids = shareEditorUids.filter((uid) => uid !== friendUid);
+    await persistFileEditors(
+      file,
+      nextEditorUids,
+      targetFriend
+        ? `已移除「${targetFriend.displayName}」的共同編輯權限。`
+        : `已更新「${file.fileName}」的共同編輯名單。`,
+    );
   }
 
   function openFileWorkspace(nextTab: Exclude<TabKey, "files" | "account" | "editor">): void {
@@ -2634,7 +2832,7 @@ export default function App() {
               <div className="file-list-shell">
                 <div className="file-list-head">
                   <h3>我的檔案</h3>
-                  <p>登入後才可以在 Firebase 建立並管理自己的雲端檔案。</p>
+                  <p>登入後可以建立自己的檔案，也能開啟好友分享給你的共同編輯檔案。</p>
                   {currentUser ? (
                     <label className="file-sort-field">
                       <span>排序方式</span>
@@ -2674,7 +2872,8 @@ export default function App() {
                       <div className="file-accordion-item" key={file.id}>
                         <div
                           className={
-                            file.id === currentCloudFileId
+                            file.id === currentCloudFileId &&
+                            file.ownerUid === currentCloudFileOwnerUid
                               ? "file-table-row file-table-row-body is-active"
                               : "file-table-row file-table-row-body"
                           }
@@ -2697,7 +2896,8 @@ export default function App() {
                           <span>{file.gradeLabel}</span>
                           <span>{file.academicTerm}</span>
                           <span>{file.rosterCount} 人</span>
-                          {file.id === currentCloudFileId ? (
+                          {file.id === currentCloudFileId &&
+                          file.ownerUid === currentCloudFileOwnerUid ? (
                             <span>目前使用中</span>
                           ) : (
                             <button
@@ -2714,9 +2914,23 @@ export default function App() {
                         </div>
                         {expandedCloudFileId === file.id ? (
                           <div className="file-accordion-panel">
-                            {file.id === currentCloudFileId ? (
+                            {file.id === currentCloudFileId &&
+                            file.ownerUid === currentCloudFileOwnerUid ? (
                               <>
                                 <div className="file-detail-grid">
+                                  <label>
+                                    <strong>檔案擁有者</strong>
+                                    <div className="static-field">
+                                      {file.ownerDisplayName || file.ownerUsername}
+                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
+                                    </div>
+                                  </label>
+                                  <label>
+                                    <strong>你的權限</strong>
+                                    <div className="static-field">
+                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
+                                    </div>
+                                  </label>
                                   <label>
                                     <strong>班級名稱</strong>
                                     <input
@@ -2792,6 +3006,83 @@ export default function App() {
                                     </div>
                                   </label>
                                 </div>
+                                {file.accessRole === "owner" ? (
+                                  <div className="file-share-section">
+                                    <div className="friend-section-header">
+                                      <h4>共同編輯好友</h4>
+                                    </div>
+                                    {shareableFriends.length === 0 ? (
+                                      <div className="friend-empty-state">
+                                        <strong>目前還沒有可分享的好友</strong>
+                                        <p>先到帳號管理加入好友，之後就能把檔案分享給對方共同編輯。</p>
+                                      </div>
+                                    ) : (
+                                      <div className="file-share-controls">
+                                        {sharedEditorFriends.length > 0 ? (
+                                          <div className="file-share-current-list">
+                                            {sharedEditorFriends.map((friend) => (
+                                              <div
+                                                className="file-share-current-item"
+                                                key={friend.friendUid}
+                                              >
+                                                <span>{friend.displayName}</span>
+                                                <button
+                                                  className="secondary-button"
+                                                  onClick={() => {
+                                                    void handleRemoveFileEditor(
+                                                      file,
+                                                      friend.friendUid,
+                                                    );
+                                                  }}
+                                                  type="button"
+                                                >
+                                                  取消分享
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="file-share-hint">
+                                            目前還沒有共同編輯好友。
+                                          </p>
+                                        )}
+                                        <div className="file-share-row">
+                                          <select
+                                            onChange={(event) =>
+                                              setSelectedShareFriendUid(event.target.value)
+                                            }
+                                            value={selectedShareFriendUid}
+                                          >
+                                            <option value="">選擇好友暱稱</option>
+                                            {availableShareFriends.map((friend) => (
+                                              <option
+                                                key={friend.friendUid}
+                                                value={friend.friendUid}
+                                              >
+                                                {friend.displayName}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <button
+                                            className="secondary-button"
+                                            disabled={!selectedShareFriendUid}
+                                            onClick={() => {
+                                              void handleShareFileWithFriend(file);
+                                            }}
+                                            type="button"
+                                          >
+                                            分享
+                                          </button>
+                                        </div>
+                                        {availableShareFriends.length === 0 ? (
+                                          <p className="file-share-hint">
+                                            目前沒有其他好友可再分享。
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : null}
                                 <div className="file-status-row">
                                   <span className="status-chip is-active">
                                     {isCloudDirty ? "目前使用中・尚未儲存" : "目前使用中"}
@@ -2839,20 +3130,35 @@ export default function App() {
                                   >
                                     檢視報表
                                   </button>
-                                  <button
-                                    className="danger-button"
-                                    onClick={() => {
-                                      void handleArchiveCloudFile(file);
-                                    }}
-                                    type="button"
-                                  >
-                                    刪除檔案
-                                  </button>
+                                  {file.accessRole === "owner" ? (
+                                    <button
+                                      className="danger-button"
+                                      onClick={() => {
+                                        void handleArchiveCloudFile(file);
+                                      }}
+                                      type="button"
+                                    >
+                                      刪除檔案
+                                    </button>
+                                  ) : null}
                                 </div>
                               </>
                             ) : (
                               <>
                                 <div className="file-detail-grid">
+                                  <label>
+                                    <strong>檔案擁有者</strong>
+                                    <div className="static-field">
+                                      {file.ownerDisplayName || file.ownerUsername}
+                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
+                                    </div>
+                                  </label>
+                                  <label>
+                                    <strong>你的權限</strong>
+                                    <div className="static-field">
+                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
+                                    </div>
+                                  </label>
                                   <label>
                                     <strong>班級名稱</strong>
                                     <input
@@ -2927,30 +3233,36 @@ export default function App() {
                                   </label>
                                 </div>
                                 <div className="file-status-row">
-                                  <span className="status-chip">尚未切換</span>
+                                  <span className="status-chip">
+                                    {file.accessRole === "owner" ? "尚未切換" : "由好友分享"}
+                                  </span>
                                   <span>
                                     最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
                                   </span>
                                 </div>
                                 <div className="file-accordion-actions">
-                                  <button
-                                    className="secondary-button"
-                                    onClick={() => {
-                                      void handleSaveCloudFileInfo(file);
-                                    }}
-                                    type="button"
-                                  >
-                                    儲存檔案資訊
-                                  </button>
-                                  <button
-                                    className="danger-button"
-                                    onClick={() => {
-                                      void handleArchiveCloudFile(file);
-                                    }}
-                                    type="button"
-                                  >
-                                    刪除檔案
-                                  </button>
+                                  {file.accessRole === "owner" ? (
+                                    <>
+                                      <button
+                                        className="secondary-button"
+                                        onClick={() => {
+                                          void handleSaveCloudFileInfo(file);
+                                        }}
+                                        type="button"
+                                      >
+                                        儲存檔案資訊
+                                      </button>
+                                      <button
+                                        className="danger-button"
+                                        onClick={() => {
+                                          void handleArchiveCloudFile(file);
+                                        }}
+                                        type="button"
+                                      >
+                                        刪除檔案
+                                      </button>
+                                    </>
+                                  ) : null}
                                 </div>
                               </>
                             )}

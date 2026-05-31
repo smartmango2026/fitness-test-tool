@@ -10,6 +10,24 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function isFileOwner(userId) {
+      return isSelf(userId);
+    }
+
+    function isFileEditor() {
+      return isSignedIn() &&
+        (
+          (
+            resource.data.editorUids is list &&
+            request.auth.uid in resource.data.editorUids
+          ) ||
+          (
+            request.resource.data.editorUids is list &&
+            request.auth.uid in request.resource.data.editorUids
+          )
+        );
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSelf(userId);
@@ -34,7 +52,9 @@ service cloud.firestore {
       }
 
       match /files/{fileId} {
-        allow read, create, update: if isSelf(userId);
+        allow read: if isFileOwner(userId) || isFileEditor();
+        allow create: if isFileOwner(userId);
+        allow update: if isFileOwner(userId) || isFileEditor();
         allow delete: if false;
       }
 
@@ -93,6 +113,21 @@ service cloud.firestore {
         isSignedIn() &&
         request.auth.uid == resource.data.issuedByUid &&
         request.auth.uid == request.resource.data.issuedByUid;
+
+      allow delete: if false;
+    }
+
+    match /fileShares/{shareId} {
+      allow read: if
+        isSignedIn() &&
+        (
+          request.auth.uid == resource.data.ownerUid ||
+          request.auth.uid == resource.data.recipientUid
+        );
+
+      allow create, update: if
+        isSignedIn() &&
+        request.auth.uid == request.resource.data.ownerUid;
 
       allow delete: if false;
     }

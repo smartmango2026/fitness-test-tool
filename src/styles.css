@@ -773,6 +773,72 @@ button {
   flex-wrap: wrap;
 }
 
+.static-field {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.file-share-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.file-share-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.file-share-current-list {
+  display: grid;
+  gap: 10px;
+}
+
+.file-share-current-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #d6dbe5;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.file-share-current-item span {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.file-share-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.file-share-row select {
+  min-width: 220px;
+  flex: 1 1 220px;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.file-share-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
 .friend-alias-form {
   display: grid;
   gap: 10px;
