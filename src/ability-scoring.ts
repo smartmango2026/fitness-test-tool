@@ -162,7 +162,7 @@ export function generateObservationAndEncouragement(
   config: AbilityRulesConfig,
 ): string {
   if (!record || !profile) {
-    return "尚未選擇學生，請先完成測驗資料後再產生報表。";
+    return "整體觀察\n尚未選擇學生，請先完成測驗資料後再產生報表。";
   }
 
   const entries = metricKeys
@@ -178,7 +178,7 @@ export function generateObservationAndEncouragement(
     .filter((entry) => entry.score > 0);
 
   if (entries.length === 0) {
-    return "目前尚未填入足夠的測驗資料，建議完成六項測驗後再查看老師觀察與鼓勵。";
+    return "整體觀察\n目前尚未填入足夠的測驗資料，建議完成六項測驗後再查看老師觀察與鼓勵。";
   }
 
   const averageScore = Math.round(
@@ -220,7 +220,13 @@ export function generateObservationAndEncouragement(
         : `${joinLabels(lowAbilities.map((entry) => entry.abilityLabel))}較需要持續練習，建議安排更多遊戲化身體活動，逐步建立動作經驗與自信。`
       : "六項能力發展大致均衡，建議持續安排多元且有趣的身體活動，幫助孩子穩定累積動作經驗。";
 
-  return [overallSentence, strengthSentence, lowAbilitySentence].filter(Boolean).join("");
+  const sections = [
+    `整體觀察\n${overallSentence}`,
+    strengthSentence ? `優勢表現\n${strengthSentence}` : "",
+    `建議方向\n${lowAbilitySentence}`,
+  ].filter(Boolean);
+
+  return sections.join("\n\n");
 }
 
 export function getDisplayValueForField(

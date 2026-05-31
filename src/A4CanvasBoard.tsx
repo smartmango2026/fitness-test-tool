@@ -177,6 +177,58 @@ function drawWrappedText(
   lineHeight: number,
   maxLines: number,
 ): void {
+  const lines: string[] = [];
+  const paragraphs = text.split("\n");
+
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (!paragraph.trim()) {
+      lines.push("");
+      return;
+    }
+
+    const characters = Array.from(paragraph);
+    let currentLine = "";
+
+    characters.forEach((character) => {
+      const candidate = `${currentLine}${character}`;
+      if (!currentLine || context.measureText(candidate).width <= maxWidth) {
+        currentLine = candidate;
+        return;
+      }
+
+      lines.push(currentLine);
+      currentLine = character;
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    if (paragraphIndex < paragraphs.length - 1) {
+      lines.push("");
+    }
+  });
+
+  const visibleLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines && visibleLines.length > 0) {
+    const lastLine = visibleLines[visibleLines.length - 1] ?? "";
+    visibleLines[visibleLines.length - 1] = `${lastLine.slice(0, -1)}…`;
+  }
+
+  visibleLines.forEach((line, index) => {
+    context.fillText(line, x, y + index * lineHeight);
+  });
+}
+
+function getWrappedLines(
+  context: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  if (!text.trim()) {
+    return [];
+  }
+
   const characters = Array.from(text);
   const lines: string[] = [];
   let currentLine = "";
@@ -196,15 +248,68 @@ function drawWrappedText(
     lines.push(currentLine);
   }
 
-  const visibleLines = lines.slice(0, maxLines);
-  if (lines.length > maxLines && visibleLines.length > 0) {
-    const lastLine = visibleLines[visibleLines.length - 1] ?? "";
-    visibleLines[visibleLines.length - 1] = `${lastLine.slice(0, -1)}…`;
-  }
+  return lines;
+}
 
-  visibleLines.forEach((line, index) => {
-    context.fillText(line, x, y + index * lineHeight);
-  });
+function drawObservationSections(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  maxLines: number,
+): void {
+  const sections = text
+    .split("\n\n")
+    .map((section) => section.trim())
+    .filter(Boolean)
+    .map((section) => {
+      const [heading = "", ...bodyParts] = section.split("\n");
+      return {
+        heading: heading.trim(),
+        body: bodyParts.join("").trim(),
+      };
+    });
+
+  let cursorY = y;
+  let usedLines = 0;
+
+  for (const section of sections) {
+    if (usedLines >= maxLines) {
+      break;
+    }
+
+    context.fillStyle = "#476fbb";
+    context.font = "700 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.textAlign = "left";
+    context.textBaseline = "top";
+    context.fillText(section.heading, x, cursorY);
+    cursorY += 32;
+    usedLines += 1;
+
+    if (usedLines >= maxLines) {
+      break;
+    }
+
+    context.fillStyle = TEXT_COLOR;
+    context.font = "500 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    const bodyLines = getWrappedLines(context, section.body, maxWidth);
+    const remainingLines = Math.max(0, maxLines - usedLines);
+    const visibleBodyLines = bodyLines.slice(0, remainingLines);
+
+    if (bodyLines.length > remainingLines && visibleBodyLines.length > 0) {
+      const lastLine = visibleBodyLines[visibleBodyLines.length - 1] ?? "";
+      visibleBodyLines[visibleBodyLines.length - 1] = `${lastLine.slice(0, -1)}…`;
+    }
+
+    visibleBodyLines.forEach((line) => {
+      context.fillText(line, x, cursorY);
+      cursorY += 34;
+      usedLines += 1;
+    });
+
+    cursorY += 10;
+  }
 }
 
 function drawBarMeter(
@@ -546,10 +651,7 @@ function renderReportPage(
   context.stroke();
 
   context.fillStyle = TEXT_COLOR;
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.font = "500 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-  drawWrappedText(context, generatedObservation, 82, 1272, 1070, 34, 11);
+  drawObservationSections(context, generatedObservation, 82, 1272, 1070, 11);
 }
 
 function createReportCanvas(payload: ReportRenderPayload): HTMLCanvasElement {
