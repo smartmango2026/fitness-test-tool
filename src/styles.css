@@ -1488,7 +1488,47 @@ tbody tr.is-selected {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 16px 48px rgba(15, 23, 42, 0.12);
+  touch-action: auto;
+  cursor: zoom-in;
+}
+
+.report-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.report-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1001;
+}
+
+.report-lightbox-stage {
+  width: min(100vw - 24px, 980px);
+  height: min(100vh - 48px, 92vh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   touch-action: none;
+}
+
+.report-lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.4);
+  user-select: none;
+  -webkit-user-drag: none;
+  transform-origin: center center;
+  transition: transform 0.12s ease-out;
 }
 
 .chart-shell {

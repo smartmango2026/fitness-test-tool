@@ -1,5 +1,13 @@
 import { jsPDF } from "jspdf";
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type TouchEvent,
+} from "react";
 import {
   generateObservationAndEncouragement,
   getAbilityBandLabel,
@@ -57,6 +65,11 @@ type ExportAllReportsPayload = {
   records: FitnessRecord[];
   rosterName: string;
   testDate: string;
+};
+
+type TouchPointLike = {
+  clientX: number;
+  clientY: number;
 };
 
 function drawRoundedRect(
@@ -748,6 +761,17 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
     ref,
   ) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [previewDataUrl, setPreviewDataUrl] = useState("");
+    const [previewScale, setPreviewScale] = useState(1);
+    const [previewOffset, setPreviewOffset] = useState({ x: 0, y: 0 });
+    const pinchStateRef = useRef<{
+      startDistance: number;
+      startScale: number;
+      startOffset: { x: number; y: number };
+      startCenter: { x: number; y: number };
+      lastPanPoint: { x: number; y: number } | null;
+    } | null>(null);
     const renderPayload = useMemo(
       () => ({
         abilityProfile,
@@ -783,6 +807,136 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
       renderReportPage(context, renderPayload);
     }, [renderPayload]);
 
+    useEffect(() => {
+      if (!isPreviewOpen) {
+        return;
+      }
+
+      const nextDataUrl = canvasRef.current?.toDataURL("image/png") ?? "";
+      setPreviewDataUrl(nextDataUrl);
+      setPreviewScale(1);
+      setPreviewOffset({ x: 0, y: 0 });
+      pinchStateRef.current = null;
+    }, [isPreviewOpen, renderPayload]);
+
+    useEffect(() => {
+      if (!isPreviewOpen) {
+        return;
+      }
+
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = previousOverflow;
+      };
+    }, [isPreviewOpen]);
+
+    const resetPreviewTransform = (): void => {
+      setPreviewScale(1);
+      setPreviewOffset({ x: 0, y: 0 });
+      pinchStateRef.current = null;
+    };
+
+    const openPreview = (): void => {
+      const nextDataUrl = canvasRef.current?.toDataURL("image/png") ?? "";
+      if (!nextDataUrl) {
+        return;
+      }
+      setPreviewDataUrl(nextDataUrl);
+      setPreviewScale(1);
+      setPreviewOffset({ x: 0, y: 0 });
+      pinchStateRef.current = null;
+      setIsPreviewOpen(true);
+    };
+
+    const closePreview = (): void => {
+      setIsPreviewOpen(false);
+      resetPreviewTransform();
+    };
+
+    const getTouchDistance = (first: TouchPointLike, second: TouchPointLike): number => {
+      const dx = second.clientX - first.clientX;
+      const dy = second.clientY - first.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const getTouchCenter = (first: TouchPointLike, second: TouchPointLike): { x: number; y: number } => ({
+      x: (first.clientX + second.clientX) / 2,
+      y: (first.clientY + second.clientY) / 2,
+    });
+
+    const handlePreviewTouchStart = (event: TouchEvent<HTMLDivElement>): void => {
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        const [first, second] = Array.from(event.touches);
+        pinchStateRef.current = {
+          startDistance: getTouchDistance(first, second),
+          startScale: previewScale,
+          startOffset: previewOffset,
+          startCenter: getTouchCenter(first, second),
+          lastPanPoint: null,
+        };
+        return;
+      }
+
+      if (event.touches.length === 1 && previewScale > 1) {
+        event.preventDefault();
+        const [touch] = Array.from(event.touches);
+        pinchStateRef.current = {
+          startDistance: 0,
+          startScale: previewScale,
+          startOffset: previewOffset,
+          startCenter: { x: touch.clientX, y: touch.clientY },
+          lastPanPoint: { x: touch.clientX, y: touch.clientY },
+        };
+      }
+    };
+
+    const handlePreviewTouchMove = (event: TouchEvent<HTMLDivElement>): void => {
+      const state = pinchStateRef.current;
+      if (!state) {
+        return;
+      }
+
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        const [first, second] = Array.from(event.touches);
+        const nextDistance = getTouchDistance(first, second);
+        const nextCenter = getTouchCenter(first, second);
+        const scaleRatio = nextDistance / Math.max(state.startDistance, 1);
+        const nextScale = Math.min(4, Math.max(1, state.startScale * scaleRatio));
+        setPreviewScale(nextScale);
+        setPreviewOffset({
+          x: state.startOffset.x + (nextCenter.x - state.startCenter.x),
+          y: state.startOffset.y + (nextCenter.y - state.startCenter.y),
+        });
+        return;
+      }
+
+      if (event.touches.length === 1 && state.lastPanPoint && previewScale > 1) {
+        event.preventDefault();
+        const [touch] = Array.from(event.touches);
+        const deltaX = touch.clientX - state.lastPanPoint.x;
+        const deltaY = touch.clientY - state.lastPanPoint.y;
+        setPreviewOffset((current) => ({
+          x: current.x + deltaX,
+          y: current.y + deltaY,
+        }));
+        pinchStateRef.current = {
+          ...state,
+          lastPanPoint: { x: touch.clientX, y: touch.clientY },
+        };
+      }
+    };
+
+    const handlePreviewTouchEnd = (): void => {
+      if (previewScale <= 1) {
+        resetPreviewTransform();
+        return;
+      }
+      pinchStateRef.current = null;
+    };
+
     useImperativeHandle(ref, () => ({
       async downloadCurrentPdf(): Promise<void> {
         const canvas = createReportCanvas(renderPayload);
@@ -813,10 +967,47 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
           <canvas
             className="a4-canvas"
             height={CANVAS_HEIGHT}
+            onClick={openPreview}
             ref={canvasRef}
             width={CANVAS_WIDTH}
           />
         </div>
+        {isPreviewOpen ? (
+          <div
+            aria-label="報表圖片預覽"
+            className="report-lightbox"
+            onClick={closePreview}
+            role="dialog"
+          >
+            <button
+              className="report-lightbox-close"
+              onClick={(event) => {
+                event.stopPropagation();
+                closePreview();
+              }}
+              type="button"
+            >
+              關閉
+            </button>
+            <div
+              className="report-lightbox-stage"
+              onClick={(event) => event.stopPropagation()}
+              onTouchEnd={handlePreviewTouchEnd}
+              onTouchMove={handlePreviewTouchMove}
+              onTouchStart={handlePreviewTouchStart}
+            >
+              <img
+                alt={`${rosterName || "班級"} ${record?.studentName || "學生"} 報表預覽`}
+                className="report-lightbox-image"
+                draggable={false}
+                src={previewDataUrl}
+                style={{
+                  transform: `translate(${previewOffset.x}px, ${previewOffset.y}px) scale(${previewScale})`,
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   },
