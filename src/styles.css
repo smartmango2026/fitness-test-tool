@@ -396,6 +396,22 @@ button {
   color: #64748b;
 }
 
+.file-sort-field {
+  display: inline-grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.file-sort-field select {
+  min-width: 220px;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
 .file-table {
   display: grid;
   gap: 10px;

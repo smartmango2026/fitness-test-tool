@@ -127,6 +127,7 @@ type ActiveCell = {
 } | null;
 
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
+type FileSortKey = "created-desc" | "updated-desc" | "name-asc" | "roster-asc" | "grade-asc";
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "account", label: "帳號管理" },
@@ -281,7 +282,7 @@ export default function App() {
       return "account";
     }
 
-    return "roster";
+    return "account";
   });
   const [selectedId, setSelectedId] = useState<string>(data.records[0]?.id ?? "");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -306,6 +307,7 @@ export default function App() {
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
+  const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
   const [abilityRulesConfig, setAbilityRulesConfig] = useState<AbilityRulesConfig>(
     defaultAbilityRulesConfig,
   );
@@ -360,6 +362,7 @@ export default function App() {
     const unsubscribe = subscribeToAuthState((user) => {
       if (user) {
         void ensureUserProfile(user);
+        setActiveTab((current) => (current === "account" ? "files" : current));
       }
       setCurrentUser(user);
       setAuthReady(true);
@@ -436,6 +439,29 @@ export default function App() {
       return next;
     });
   }, [cloudFiles]);
+
+  const sortedCloudFiles = useMemo(() => {
+    const nextFiles = [...cloudFiles];
+
+    nextFiles.sort((left, right) => {
+      switch (fileSortKey) {
+        case "created-desc":
+          return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
+        case "updated-desc":
+          return (right.updatedAt ?? "").localeCompare(left.updatedAt ?? "");
+        case "name-asc":
+          return left.fileName.localeCompare(right.fileName, "zh-Hant");
+        case "roster-asc":
+          return left.rosterName.localeCompare(right.rosterName, "zh-Hant");
+        case "grade-asc":
+          return left.gradeLabel.localeCompare(right.gradeLabel, "zh-Hant");
+        default:
+          return 0;
+      }
+    });
+
+    return nextFiles;
+  }, [cloudFiles, fileSortKey]);
 
   useEffect(() => {
     if (!currentCloudFileId) {
@@ -2260,6 +2286,21 @@ export default function App() {
                 <div className="file-list-head">
                   <h3>我的檔案</h3>
                   <p>登入後才可以在 Firebase 建立並管理自己的雲端檔案。</p>
+                  {currentUser ? (
+                    <label className="file-sort-field">
+                      <span>排序方式</span>
+                      <select
+                        onChange={(event) => setFileSortKey(event.target.value as FileSortKey)}
+                        value={fileSortKey}
+                      >
+                        <option value="created-desc">建立時間（新到舊）</option>
+                        <option value="updated-desc">編輯時間（新到舊）</option>
+                        <option value="name-asc">檔案名稱</option>
+                        <option value="roster-asc">班級名稱</option>
+                        <option value="grade-asc">年級</option>
+                      </select>
+                    </label>
+                  ) : null}
                 </div>
                 {!currentUser ? (
                   <div className="friend-empty-state">
@@ -2280,7 +2321,7 @@ export default function App() {
                       <span>班級人數</span>
                       <span>狀態</span>
                     </div>
-                    {cloudFiles.map((file) => (
+                    {sortedCloudFiles.map((file) => (
                       <div className="file-accordion-item" key={file.id}>
                         <div
                           className={
