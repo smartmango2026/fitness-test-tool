@@ -128,58 +128,94 @@ Representative commits:
 - `581a9c0` Improve shared file collaborator picker
 - `e1cee41` Improve mobile report preview interactions
 
-## Daily Activity Snapshot
+## Daily Estimated Effort
 
-These numbers are commit-span snapshots, not exact working hours.
+These are recommended per-day estimates. They are not based on raw daily commit span alone; they combine commit density, feature complexity, and likely grouped work sessions.
 
 - `2026-04-22`
-  - 6 commits
-  - first commit `15:32`
-  - last commit `17:19`
-  - span `1.79` hours
+  - estimated effort:
+    - `1.5` to `2.5` hours
+  - likely work summary:
+    - initialized the repository
+    - set up GitHub Pages deployment
+    - built the first editable data views
+    - established the first roster / radar / export workflow
 
 - `2026-04-29`
-  - 5 commits
-  - first commit `22:01`
-  - last commit `22:33`
-  - span `0.53` hours
+  - estimated effort:
+    - `1` to `2` hours
+  - likely work summary:
+    - reworked the main menu flow
+    - added the PDF page
+    - tuned summary table behavior
+    - experimented with listbox / embedded-grid interactions
 
 - `2026-04-30`
-  - 30 commits
-  - first commit `00:56`
-  - last commit `23:17`
-  - span `22.35` hours
+  - estimated effort:
+    - `5.5` to `7` hours
+  - likely work summary:
+    - built the roster grid and spreadsheet-style editing workflow
+    - added the A4 canvas and radar report foundation
+    - created the debug settings page
+    - spent significant time on mobile table layout, zoom, viewport, and frozen-column fixes
 
 - `2026-05-20`
-  - 10 commits
-  - first commit `15:16`
-  - last commit `19:12`
-  - span `3.93` hours
+  - estimated effort:
+    - `3.5` to `4.5` hours
+  - likely work summary:
+    - merged the A4 canvas workflow into the PDF tab
+    - made the report template generic
+    - streamlined PDF viewing and class export
+    - added Firebase auth entry points and polished auth placement
 
 - `2026-05-24`
-  - 5 commits
-  - first commit `00:06`
-  - last commit `20:30`
-  - span `20.40` hours
+  - estimated effort:
+    - `3` to `4` hours
+  - likely work summary:
+    - switched authentication flow to usernames
+    - added the file hub
+    - introduced the account tab
+    - expanded file hub details and updated handoff notes
 
 - `2026-05-29`
-  - 1 commit
-  - single timestamp only
+  - estimated effort:
+    - `0.5` to `1` hour
+  - likely work summary:
+    - refined the account tab
+    - small focused UI cleanup pass
 
 - `2026-05-30`
-  - 2 commits
-  - first commit `20:19`
-  - last commit `21:31`
-  - span `1.19` hours
+  - estimated effort:
+    - `1` to `2` hours
+  - likely work summary:
+    - refreshed the Pages workflow actions
+    - improved account management UI
+    - prepared the repository for the next larger Firebase / Firestore work phase
 
 - `2026-05-31`
-  - 19 commits
-  - first commit `00:02`
-  - last commit `21:51`
-  - span `21.81` hours
+  - estimated effort:
+    - `13` to `15` hours
+  - likely work summary:
+    - connected the project to the new Firebase setup
+    - added Firestore friend requests and QR add-friend flow
+    - moved ability settings and files to the cloud
+    - added report score mapping and manual cloud save flow
+    - refined report debug mode, radar layout, and summary alignment
+    - added nickname support and shared editing
+    - improved mobile report preview interactions
+    - updated handoff and project documentation
+
+Recommended total based on the daily range model:
+
+- lower bound:
+  - about `29` hours
+- upper bound:
+  - about `38` hours
+- most practical summary:
+  - about `33` to `34` hours
 
 ## Notes
 
 - Commit gaps do not prove the developer was idle; some work may have happened before a commit was made.
-- A long same-day span does not prove continuous work; it only shows the first and last recorded commit that day.
+- A long same-day span does not prove continuous work; this is why the daily section uses estimated ranges instead of raw first-to-last spans.
 - This document should be treated as a retrospective estimate, not payroll-quality time tracking.
