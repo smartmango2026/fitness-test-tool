@@ -45,6 +45,30 @@ button {
   padding: 24px;
 }
 
+.report-debug-shell {
+  min-height: 100vh;
+  padding: 0;
+  display: grid;
+  place-items: start center;
+  background: #eef3f9;
+}
+
+.report-debug-shell .canvas-stage {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.report-debug-shell .a4-canvas {
+  width: 1240px;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .debug-shell {
   margin: 0 auto;
   width: min(94vw, 1080px);

@@ -73,6 +73,19 @@ git push origin main
 gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 ```
 
+### Report Debug URLs
+
+- Report-only debug mode is enabled by URL params, not by visible UI buttons
+- Use `?debug=report` to force the app into report preview mode
+- Preferred local example: `http://127.0.0.1:4173/?debug=report&seat=1`
+- `seat=1` means the first student in the currently loaded dataset
+- `record=<recordId>` targets one exact student record
+- `file=<cloudFileId>` loads a specific Firebase cloud file before rendering the report
+- Most precise form: `?debug=report&file=<cloudFileId>&record=<recordId>`
+- Practical fallback: `?debug=report&file=<cloudFileId>&seat=1`
+- Legacy `?id=1` is still accepted as a fallback alias for `seat=1`, but new work should prefer `seat`
+- In debug mode, the app renders the report canvas directly so headless Chrome screenshots can be taken without navigating the normal UI
+
 ## Documents
 
 - `docs/product-spec.md`: first-version product scope and feature rules

@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import {
+  generateObservationAndEncouragement,
   getAbilityBandLabel,
   getAbilityScores,
 } from "./ability-scoring";
@@ -22,9 +23,12 @@ const SCORE_COLORS = ["#5b8fd9", "#75bc67", "#f59b43", "#f26b75", "#8c80d8", "#f
 
 export type A4CanvasBoardHandle = {
   downloadCurrentPdf: () => Promise<void>;
+  downloadCurrentPng: () => Promise<void>;
 };
 
 type A4CanvasBoardProps = {
+  abilityProfile: AbilityGradeProfile | null;
+  abilityRulesConfig: AbilityRulesConfig;
   labels: string[];
   record: FitnessRecord | null;
   abilityScores: number[];
@@ -35,6 +39,8 @@ type A4CanvasBoardProps = {
 };
 
 type ReportRenderPayload = {
+  abilityProfile: AbilityGradeProfile | null;
+  abilityRulesConfig: AbilityRulesConfig;
   labels: string[];
   record: FitnessRecord | null;
   abilityScores: number[];
@@ -162,17 +168,43 @@ function getRadarPolygonPoints(
   });
 }
 
-function formatMetricSummary(labels: string[], scores: number[]): string {
-  if (!scores.length) {
-    return "尚未選擇學生，請先從上方名單選擇一位小朋友。";
+function drawWrappedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number,
+): void {
+  const characters = Array.from(text);
+  const lines: string[] = [];
+  let currentLine = "";
+
+  characters.forEach((character) => {
+    const candidate = `${currentLine}${character}`;
+    if (!currentLine || context.measureText(candidate).width <= maxWidth) {
+      currentLine = candidate;
+      return;
+    }
+
+    lines.push(currentLine);
+    currentLine = character;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
   }
 
-  const strongestIndex = scores.indexOf(Math.max(...scores));
-  const supportIndex = scores.indexOf(Math.min(...scores));
+  const visibleLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines && visibleLines.length > 0) {
+    const lastLine = visibleLines[visibleLines.length - 1] ?? "";
+    visibleLines[visibleLines.length - 1] = `${lastLine.slice(0, -1)}…`;
+  }
 
-  return `本次測驗中，${labels[strongestIndex] ?? "表現"}相對突出；${
-    labels[supportIndex] ?? "另一項能力"
-  }則可安排更多遊戲化練習。建議持續透過日常活動維持身體控制、節奏感與協調能力。`;
+  visibleLines.forEach((line, index) => {
+    context.fillText(line, x, y + index * lineHeight);
+  });
 }
 
 function drawBarMeter(
@@ -198,9 +230,23 @@ function renderReportPage(
   context: CanvasRenderingContext2D,
   payload: ReportRenderPayload,
 ): void {
-  const { labels, record, abilityScores, abilityLevelLabels, rosterName, testDate, seatNumber } = payload;
+  const {
+    abilityProfile,
+    abilityRulesConfig,
+    labels,
+    record,
+    abilityScores,
+    abilityLevelLabels,
+    rosterName,
+    testDate,
+    seatNumber,
+  } = payload;
   const values = abilityScores;
-  const metricSummary = formatMetricSummary(labels, abilityScores);
+  const generatedObservation = generateObservationAndEncouragement(
+    record,
+    abilityProfile,
+    abilityRulesConfig,
+  );
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   context.fillStyle = "#ffffff";
@@ -274,11 +320,25 @@ function renderReportPage(
     }
   }
 
-  drawSectionBadge(context, 44, 378, "六項體能表現雷達圖");
+  drawSectionBadge(context, 44, 378, "六項體能表現雷達圖", 320);
+  drawRoundedRect(context, 44, 452, 552, 680, 22);
+  context.fillStyle = SECTION_FILL;
+  context.fill();
+  context.strokeStyle = SECTION_STROKE;
+  context.lineWidth = 3;
+  context.stroke();
 
-  const chartCenterX = 620;
+  drawSectionBadge(context, 642, 378, "六項測驗結果摘要", 300);
+  drawRoundedRect(context, 642, 452, 552, 680, 22);
+  context.fillStyle = SECTION_FILL;
+  context.fill();
+  context.strokeStyle = SECTION_STROKE;
+  context.lineWidth = 3;
+  context.stroke();
+
+  const chartCenterX = 320;
   const chartCenterY = 790;
-  const chartRadius = 260;
+  const chartRadius = 170;
 
   for (let ring = 1; ring <= 5; ring += 1) {
     const currentRadius = (chartRadius / 5) * ring;
@@ -295,7 +355,7 @@ function renderReportPage(
       }
     });
     context.closePath();
-    context.strokeStyle = ring % 2 === 0 ? "#d9e7f8" : "#edf4fc";
+    context.strokeStyle = ring % 2 === 0 ? "#bdd3ec" : "#d7e4f5";
     context.lineWidth = 2;
     context.stroke();
 
@@ -313,7 +373,7 @@ function renderReportPage(
     context.beginPath();
     context.moveTo(chartCenterX, chartCenterY);
     context.lineTo(axisX, axisY);
-    context.strokeStyle = "#c7d8ee";
+    context.strokeStyle = "#afc7e3";
     context.lineWidth = 2;
     context.stroke();
   });
@@ -341,13 +401,61 @@ function renderReportPage(
     context.fill();
   });
 
+  const labelLayouts = [
+    {
+      iconX: 320,
+      iconY: 558,
+      textX: 320,
+      textY: 510,
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "middle" as CanvasTextBaseline,
+    },
+    {
+      iconX: 521,
+      iconY: 674,
+      textX: 521,
+      textY: 620,
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "middle" as CanvasTextBaseline,
+    },
+    {
+      iconX: 521,
+      iconY: 906,
+      textX: 521,
+      textY: 958,
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "middle" as CanvasTextBaseline,
+    },
+    {
+      iconX: 320,
+      iconY: 1022,
+      textX: 320,
+      textY: 1074,
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "middle" as CanvasTextBaseline,
+    },
+    {
+      iconX: 119,
+      iconY: 906,
+      textX: 119,
+      textY: 958,
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "middle" as CanvasTextBaseline,
+    },
+    {
+      iconX: 119,
+      iconY: 674,
+      textX: 119,
+      textY: 622,
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "middle" as CanvasTextBaseline,
+    },
+  ];
+
   labels.forEach((label, index) => {
     const color = SCORE_COLORS[index % SCORE_COLORS.length];
-    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / labels.length;
-    const iconX = chartCenterX + Math.cos(angle) * 372;
-    const iconY = chartCenterY + Math.sin(angle) * 372;
-    const textX = chartCenterX + Math.cos(angle) * 430;
-    const textY = chartCenterY + Math.sin(angle) * 430;
+    const layout = labelLayouts[index] ?? labelLayouts[0];
+    const { iconX, iconY, textX, textY } = layout;
 
     context.beginPath();
     context.arc(iconX, iconY, 26, 0, Math.PI * 2);
@@ -364,81 +472,85 @@ function renderReportPage(
     context.fillText(String(index + 1), iconX, iconY);
 
     context.fillStyle = color;
-    context.font = "700 26px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.textAlign =
-      Math.cos(angle) < -0.1 ? "right" : Math.cos(angle) > 0.1 ? "left" : "center";
+    context.font = "700 20px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.textAlign = layout.textAlign;
+    context.textBaseline = layout.textBaseline;
     context.fillText(label, textX, textY);
   });
 
-  drawSectionBadge(context, 44, 1134, "六項測驗結果摘要");
-  drawRoundedRect(context, 44, 1208, 1150, 290, 22);
-  context.fillStyle = SECTION_FILL;
-  context.fill();
-  context.strokeStyle = SECTION_STROKE;
-  context.lineWidth = 3;
-  context.stroke();
-
   const tableColumns = [
-    { label: "測驗項目", x: 76 },
-    { label: "分數", x: 334 },
-    { label: "表現等級", x: 490 },
-    { label: "表現長條圖", x: 760 },
+    { label: "測驗項目", x: 674 },
+    { label: "表現等級", x: 856 },
+    { label: "表現長條圖", x: 1030 },
   ];
 
   context.strokeStyle = "#d5e4f7";
   context.lineWidth = 1.5;
   context.beginPath();
-  context.moveTo(44, 1262);
-  context.lineTo(1194, 1262);
+  context.moveTo(642, 514);
+  context.lineTo(1194, 514);
   context.stroke();
 
   tableColumns.forEach((column) => {
     context.fillStyle = SUBTITLE_COLOR;
     context.textAlign = "left";
     context.textBaseline = "middle";
-    context.font = "700 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(column.label, column.x, 1235);
+    context.font = "700 20px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    context.fillText(column.label, column.x, 490);
   });
 
   for (let index = 0; index < labels.length; index += 1) {
-    const rowY = 1300 + index * 36;
+    const rowY = 552 + index * 92;
     const score = values[index] ?? 0;
     const color = SCORE_COLORS[index % SCORE_COLORS.length];
 
     if (index < labels.length - 1) {
       context.beginPath();
-      context.moveTo(64, rowY + 24);
-      context.lineTo(1174, rowY + 24);
+      context.moveTo(662, rowY + 44);
+      context.lineTo(1174, rowY + 44);
       context.strokeStyle = "#ecf3fb";
       context.stroke();
     }
 
     context.beginPath();
-    context.arc(92, rowY, 16, 0, Math.PI * 2);
+    context.arc(692, rowY, 16, 0, Math.PI * 2);
     context.fillStyle = color;
     context.fill();
     context.fillStyle = "#ffffff";
     context.textAlign = "center";
     context.font = "700 18px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(String(index + 1), 92, rowY + 1);
+    context.fillText(String(index + 1), 692, rowY + 1);
 
     context.fillStyle = TEXT_COLOR;
     context.textAlign = "left";
     context.font = "500 22px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(labels[index] ?? `項目 ${index + 1}`, 126, rowY + 1);
+    drawWrappedText(
+      context,
+      labels[index] ?? `項目 ${index + 1}`,
+      722,
+      rowY - 18,
+      118,
+      28,
+      2,
+    );
 
-    context.textAlign = "center";
-    context.font = "700 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(String(score), 384, rowY + 1);
+    context.textAlign = "left";
+    context.font = "500 18px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    drawWrappedText(
+      context,
+      abilityLevelLabels[index] ?? "未分級",
+      856,
+      rowY - 16,
+      120,
+      26,
+      2,
+    );
 
-    context.font = "500 20px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(abilityLevelLabels[index] ?? "未分級", 580, rowY + 1);
-
-    drawBarMeter(context, 804, rowY - 10, score, color);
+    drawBarMeter(context, 1026, rowY - 10, score, color);
   }
 
-  drawSectionBadge(context, 44, 1524, "老師觀察與鼓勵", 300);
-  drawRoundedRect(context, 44, 1598, 1150, 118, 20);
+  drawSectionBadge(context, 44, 1158, "老師觀察與鼓勵", 300);
+  drawRoundedRect(context, 44, 1232, 1150, 484, 20);
   context.fillStyle = "#fffdf8";
   context.fill();
   context.strokeStyle = "#e5d1a0";
@@ -449,7 +561,7 @@ function renderReportPage(
   context.textAlign = "left";
   context.textBaseline = "top";
   context.font = "500 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-  context.fillText(record?.comment || metricSummary, 82, 1638, 1060);
+  drawWrappedText(context, generatedObservation, 82, 1272, 1070, 34, 11);
 }
 
 function createReportCanvas(payload: ReportRenderPayload): HTMLCanvasElement {
@@ -470,6 +582,15 @@ function sanitizeFileName(value: string): string {
   return value.replace(/[\\/:*?"<>|]/g, "-").trim() || "fitness-report";
 }
 
+function downloadBlobUrl(href: string, fileName: string): void {
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export async function exportAllReportsPdf(
   payload: ExportAllReportsPayload,
 ): Promise<void> {
@@ -482,6 +603,8 @@ export async function exportAllReportsPdf(
 
   if (records.length === 0) {
     const canvas = createReportCanvas({
+      abilityProfile: null,
+      abilityRulesConfig,
       abilityLevelLabels: ["未分級", "未分級", "未分級", "未分級", "未分級", "未分級"],
       abilityScores: [0, 0, 0, 0, 0, 0],
       labels,
@@ -495,6 +618,8 @@ export async function exportAllReportsPdf(
     records.forEach((record, index) => {
       const abilityScores = getAbilityScores(record, abilityProfile);
       const canvas = createReportCanvas({
+        abilityProfile,
+        abilityRulesConfig,
         abilityLevelLabels: abilityScores.map((score) =>
           getAbilityBandLabel(score, abilityRulesConfig),
         ),
@@ -518,20 +643,45 @@ export async function exportAllReportsPdf(
 }
 
 const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
-  function A4CanvasBoard({ labels, record, abilityScores, abilityLevelLabels, rosterName, testDate, seatNumber }, ref) {
+  function A4CanvasBoard(
+    {
+      abilityProfile,
+      abilityRulesConfig,
+      labels,
+      record,
+      abilityScores,
+      abilityLevelLabels,
+      rosterName,
+      testDate,
+      seatNumber,
+    },
+    ref,
+  ) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const renderPayload = useMemo(
       () => ({
-          labels,
-          record,
-          abilityScores,
-          abilityLevelLabels,
-          rosterName,
-          testDate,
-          seatNumber,
+        abilityProfile,
+        abilityRulesConfig,
+        labels,
+        record,
+        abilityScores,
+        abilityLevelLabels,
+        rosterName,
+        testDate,
+        seatNumber,
       }),
-  [abilityLevelLabels, abilityScores, labels, record, rosterName, testDate, seatNumber],
-);
+      [
+        abilityLevelLabels,
+        abilityProfile,
+        abilityRulesConfig,
+        abilityScores,
+        labels,
+        record,
+        rosterName,
+        seatNumber,
+        testDate,
+      ],
+    );
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -557,6 +707,13 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
             `${rosterName || "班級"}-${record?.studentName || "未選擇學生"}-體能報告`,
           )}.pdf`,
         );
+      },
+      async downloadCurrentPng(): Promise<void> {
+        const canvas = createReportCanvas(renderPayload);
+        const fileName = `${sanitizeFileName(
+          `${rosterName || "班級"}-${record?.studentName || "未選擇學生"}-體能報告`,
+        )}.png`;
+        downloadBlobUrl(canvas.toDataURL("image/png"), fileName);
       },
     }), [renderPayload, record?.studentName, rosterName]);
 

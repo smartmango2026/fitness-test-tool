@@ -272,9 +272,54 @@ function buildAcademicTermValue(
   return `${academicYear}學年度${semester}`;
 }
 
+type ReportDebugParams = {
+  enabled: boolean;
+  fileId: string | null;
+  recordId: string | null;
+  seat: number | null;
+};
+
+function readReportDebugParamsFromUrl(): ReportDebugParams {
+  if (typeof window === "undefined") {
+    return {
+      enabled: false,
+      fileId: null,
+      recordId: null,
+      seat: null,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const debugMode = params.get("debug");
+  const fileId = params.get("file");
+  const recordId = params.get("record");
+  const seatValue = params.get("seat") ?? params.get("id");
+  const parsedSeat = seatValue ? Number(seatValue) : NaN;
+  const seat = Number.isInteger(parsedSeat) && parsedSeat > 0 ? parsedSeat : null;
+  const enabled =
+    debugMode === "report" ||
+    params.has("file") ||
+    params.has("record") ||
+    params.has("seat") ||
+    params.has("id");
+
+  return {
+    enabled,
+    fileId: fileId?.trim() || null,
+    recordId: recordId?.trim() || null,
+    seat,
+  };
+}
+
 export default function App() {
   const [data, setData] = useState<AppData>(defaultAppData);
+  const reportDebugParams = useMemo(() => readReportDebugParamsFromUrl(), []);
+  const isReportDebugMode = reportDebugParams.enabled;
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (readReportDebugParamsFromUrl().enabled) {
+      return "pdf";
+    }
+
     if (
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).has("invite")
@@ -347,6 +392,7 @@ export default function App() {
   const [debugSettings, setDebugSettings] = useState<DebugSettings>(() =>
     loadDebugSettings(),
   );
+  const reportDebugFileLoadedRef = useRef<string | null>(null);
   const rosterViewportRef = useRef<HTMLDivElement | null>(null);
   const tableViewportRef = useRef<HTMLDivElement | null>(null);
   const metricViewportRef = useRef<HTMLDivElement | null>(null);
@@ -362,7 +408,9 @@ export default function App() {
     const unsubscribe = subscribeToAuthState((user) => {
       if (user) {
         void ensureUserProfile(user);
-        setActiveTab((current) => (current === "account" ? "files" : current));
+        setActiveTab((current) =>
+          isReportDebugMode ? "pdf" : current === "account" ? "files" : current,
+        );
       }
       setCurrentUser(user);
       setAuthReady(true);
@@ -370,10 +418,11 @@ export default function App() {
     });
 
     return unsubscribe;
-  }, []);
+  }, [isReportDebugMode]);
 
   useEffect(() => {
     if (!currentUser) {
+      reportDebugFileLoadedRef.current = null;
       setFriendDraft("");
       setFriends([]);
       setIncomingFriendRequests([]);
@@ -417,6 +466,40 @@ export default function App() {
       unsubscribeAbilityRules();
     };
   }, [currentUser]);
+
+  useEffect(() => {
+    if (
+      !isReportDebugMode ||
+      !reportDebugParams.fileId ||
+      !currentUser ||
+      reportDebugFileLoadedRef.current === reportDebugParams.fileId
+    ) {
+      return;
+    }
+
+    void loadCloudFile(currentUser.uid, reportDebugParams.fileId)
+      .then((nextData) => {
+        reportDebugFileLoadedRef.current = reportDebugParams.fileId;
+        skipNextCloudDirtyRef.current = true;
+        setData(nextData);
+        setCurrentCloudFileId(reportDebugParams.fileId);
+        setIsCloudDirty(false);
+        setSelectedId(nextData.records[0]?.id ?? "");
+        setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
+        setRosterDraft(
+          nextData.rosterEntries.length
+            ? nextData.rosterEntries
+            : [makeEmptyRosterEntry()],
+        );
+        setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+        setMessage(`已載入除錯報表檔案：${reportDebugParams.fileId}`);
+      })
+      .catch((error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法載入除錯報表檔案。";
+        setMessage(`除錯報表載入失敗：${nextMessage}`);
+      });
+  }, [currentUser, isReportDebugMode, reportDebugParams.fileId]);
 
   useEffect(() => {
     setCloudFileDrafts((current) => {
@@ -532,6 +615,33 @@ export default function App() {
     return index >= 0 ? index + 1 : null;
   }, [data.records, selectedId]);
   const pdfCanvasRef = useRef<A4CanvasBoardHandle | null>(null);
+
+  useEffect(() => {
+    if (!isReportDebugMode || data.records.length === 0) {
+      return;
+    }
+
+    const nextRecord =
+      (reportDebugParams.recordId
+        ? data.records.find((record) => record.id === reportDebugParams.recordId) ?? null
+        : null) ??
+      (reportDebugParams.seat
+        ? data.records[reportDebugParams.seat - 1] ?? null
+        : null) ??
+      data.records[0] ??
+      null;
+    if (!nextRecord || nextRecord.id === selectedId) {
+      return;
+    }
+
+    setSelectedId(nextRecord.id);
+  }, [
+    data.records,
+    isReportDebugMode,
+    reportDebugParams.recordId,
+    reportDebugParams.seat,
+    selectedId,
+  ]);
 
   useEffect(() => {
     if (selectedRecord) {
@@ -1970,6 +2080,25 @@ export default function App() {
     return `${headerHeight + rowsHeight}px`;
   }
 
+  if (isReportDebugMode) {
+    return (
+      <div className="report-debug-shell">
+        <A4CanvasBoard
+          ref={pdfCanvasRef}
+          abilityProfile={currentAbilityProfile}
+          abilityRulesConfig={abilityRulesConfig}
+          abilityLevelLabels={selectedAbilityLevelLabels}
+          abilityScores={selectedAbilityScores}
+          labels={resolvedItemLabels}
+          record={selectedRecord}
+          rosterName={data.rosterName}
+          seatNumber={selectedSeatNumber}
+          testDate={data.testDate}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="app-shell"
@@ -3312,6 +3441,8 @@ export default function App() {
               </div>
               <A4CanvasBoard
                 ref={pdfCanvasRef}
+                abilityProfile={currentAbilityProfile}
+                abilityRulesConfig={abilityRulesConfig}
                 abilityLevelLabels={selectedAbilityLevelLabels}
                 abilityScores={selectedAbilityScores}
                 labels={resolvedItemLabels}

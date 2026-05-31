@@ -45,6 +45,18 @@ export default function RadarChart({
             color: ["rgba(249, 250, 251, 0.85)", "rgba(229, 231, 235, 0.3)"],
           },
         },
+        splitLine: {
+          lineStyle: {
+            color: ["#d7e4f5", "#bdd3ec"],
+            width: 1.5,
+          },
+        },
+        axisLine: {
+          lineStyle: {
+            color: "#afc7e3",
+            width: 1.5,
+          },
+        },
       },
       series: [
         {
