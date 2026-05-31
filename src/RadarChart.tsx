@@ -5,11 +5,13 @@ import type { FitnessRecord } from "./types";
 type RadarChartProps = {
   labels: string[];
   record: FitnessRecord | null;
+  scores: number[];
 };
 
 export default function RadarChart({
   labels,
   record,
+  scores,
 }: RadarChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -19,18 +21,8 @@ export default function RadarChart({
     }
 
     const chart = echarts.init(containerRef.current);
-    const values = record
-      ? [
-          record.item1,
-          record.item2,
-          record.item3,
-          record.item4,
-          record.item5,
-          record.item6,
-        ]
-      : [0, 0, 0, 0, 0, 0];
-    const percentageValues = values.map((value) =>
-      Math.max(0, Math.min(100, Math.round((value / 5) * 100))),
+    const percentageValues = scores.map((value) =>
+      Math.max(0, Math.min(100, value)),
     );
 
     chart.setOption({
@@ -89,7 +81,7 @@ export default function RadarChart({
       resizeObserver.disconnect();
       chart.dispose();
     };
-  }, [labels, record]);
+  }, [labels, record, scores]);
 
   return <div className="chart-shell" ref={containerRef} />;
 }

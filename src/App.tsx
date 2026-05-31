@@ -9,6 +9,22 @@ import A4CanvasBoard, {
   type A4CanvasBoardHandle,
 } from "./A4CanvasBoard";
 import {
+  ensureAbilityRulesConfig,
+  subscribeToAbilityRulesConfig,
+} from "./ability-cloud";
+import {
+  findAbilityGradeProfile,
+  getAbilityBandLabel,
+  getAbilityRuleForField,
+  getAbilityScores,
+  getDisplayValueForField,
+  getRubricOptions,
+} from "./ability-scoring";
+import {
+  defaultAbilityRulesConfig,
+  type AbilityRulesConfig,
+} from "./ability-settings";
+import {
   loadDebugSettings,
   type DebugSettings,
 } from "./debug-settings";
@@ -290,7 +306,11 @@ export default function App() {
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
+  const [abilityRulesConfig, setAbilityRulesConfig] = useState<AbilityRulesConfig>(
+    defaultAbilityRulesConfig,
+  );
   const [currentCloudFileId, setCurrentCloudFileId] = useState<string | null>(null);
+  const [isCloudDirty, setIsCloudDirty] = useState(false);
   const [expandedCloudFileId, setExpandedCloudFileId] = useState<string | null>(null);
   const [cloudFileDrafts, setCloudFileDrafts] = useState<
     Record<string, { rosterName: string; gradeLabel: string; academicTerm: string }>
@@ -334,7 +354,7 @@ export default function App() {
   const previousRosterScaleRef = useRef(1);
   const previousTableScaleRef = useRef(1);
   const previousMetricScaleRef = useRef(1);
-  const skipNextCloudSaveRef = useRef(false);
+  const skipNextCloudDirtyRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToAuthState((user) => {
@@ -356,7 +376,9 @@ export default function App() {
       setIncomingFriendRequests([]);
       setOutgoingFriendRequests([]);
       setCloudFiles([]);
+      setAbilityRulesConfig(defaultAbilityRulesConfig);
       setCurrentCloudFileId(null);
+      setIsCloudDirty(false);
       return;
     }
 
@@ -373,12 +395,23 @@ export default function App() {
       currentUser.uid,
       setCloudFiles,
     );
+    const unsubscribeAbilityRules = subscribeToAbilityRulesConfig(
+      currentUser.uid,
+      setAbilityRulesConfig,
+    );
+
+    void ensureAbilityRulesConfig(currentUser.uid).catch((error) => {
+      const nextMessage =
+        error instanceof Error ? error.message : "無法載入能力值對應表。";
+      setMessage(`能力值對應表載入失敗：${nextMessage}`);
+    });
 
     return () => {
       unsubscribeFriends();
       unsubscribeIncoming();
       unsubscribeOutgoing();
       unsubscribeCloudFiles();
+      unsubscribeAbilityRules();
     };
   }, [currentUser]);
 
@@ -405,34 +438,17 @@ export default function App() {
   }, [cloudFiles]);
 
   useEffect(() => {
-    if (!currentUser || !currentCloudFileId) {
+    if (!currentCloudFileId) {
       return;
     }
 
-    if (skipNextCloudSaveRef.current) {
-      skipNextCloudSaveRef.current = false;
+    if (skipNextCloudDirtyRef.current) {
+      skipNextCloudDirtyRef.current = false;
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      const syncUsername =
-        currentUser.displayName || emailToUsername(currentUser.email) || "";
-      void saveCloudFileData({
-        uid: currentUser.uid,
-        fileId: currentCloudFileId,
-        username: syncUsername,
-        data,
-      }).catch((error) => {
-        const nextMessage =
-          error instanceof Error ? error.message : "雲端同步失敗。";
-        setMessage(`雲端同步失敗：${nextMessage}`);
-      });
-    }, 600);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [currentCloudFileId, currentUser, data]);
+    setIsCloudDirty(true);
+  }, [currentCloudFileId, data]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -460,6 +476,31 @@ export default function App() {
     () => data.records.find((record) => record.id === selectedId) ?? null,
     [data.records, selectedId],
   );
+  const currentAbilityProfile = useMemo(
+    () => findAbilityGradeProfile(abilityRulesConfig, data.gradeLabel),
+    [abilityRulesConfig, data.gradeLabel],
+  );
+  const resolvedItemLabels = useMemo(
+    () =>
+      scoreFields.map(
+        (field, index) =>
+          getAbilityRuleForField(currentAbilityProfile, field)?.metricLabel ??
+          data.itemLabels[index] ??
+          field,
+      ),
+    [currentAbilityProfile, data.itemLabels],
+  );
+  const selectedAbilityScores = useMemo(
+    () => getAbilityScores(selectedRecord, currentAbilityProfile),
+    [currentAbilityProfile, selectedRecord],
+  );
+  const selectedAbilityLevelLabels = useMemo(
+    () =>
+      selectedAbilityScores.map((score) =>
+        getAbilityBandLabel(score, abilityRulesConfig),
+      ),
+    [abilityRulesConfig, selectedAbilityScores],
+  );
   const selectedSeatNumber = useMemo(() => {
     const index = data.records.findIndex((record) => record.id === selectedId);
     return index >= 0 ? index + 1 : null;
@@ -479,7 +520,7 @@ export default function App() {
   }, [data.records, showIncompleteOnly]);
 
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
-  const activeMetricLabel = data.itemLabels[activeMetricIndex] ?? activeMetric;
+  const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
   const currentUsername =
     currentUser?.displayName || emailToUsername(currentUser?.email) || "未登入";
   const inviteIdFromUrl = useMemo(() => {
@@ -996,7 +1037,9 @@ export default function App() {
 
   async function handleDownloadAllPdfs(): Promise<void> {
     await exportAllReportsPdf({
-      labels: data.itemLabels,
+      abilityProfile: currentAbilityProfile,
+      abilityRulesConfig,
+      labels: resolvedItemLabels,
       records: data.records,
       rosterName: data.rosterName,
       testDate: data.testDate,
@@ -1302,9 +1345,23 @@ export default function App() {
     setShowAccountMenu(false);
   }
 
+  function confirmDiscardCloudChanges(): boolean {
+    if (!currentCloudFileId || !isCloudDirty) {
+      return true;
+    }
+
+    return window.confirm(
+      "目前檔案還有未儲存變更。確定要繼續嗎？未儲存內容不會上傳到雲端。",
+    );
+  }
+
   async function handleCreateCloudFile(): Promise<void> {
     if (!currentUser) {
       setMessage("請先註冊並登入，才能在 Firebase 建立自己的檔案。");
+      return;
+    }
+
+    if (!confirmDiscardCloudChanges()) {
       return;
     }
 
@@ -1315,11 +1372,34 @@ export default function App() {
         data,
       });
       setCurrentCloudFileId(fileId);
+      setIsCloudDirty(false);
       setMessage("已在你的帳號下建立新的雲端檔案。");
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "建立雲端檔案失敗。";
       setMessage(`建立雲端檔案失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleSaveCurrentCloudFile(): Promise<void> {
+    if (!currentUser || !currentCloudFileId) {
+      setMessage("請先開啟一份雲端檔案，再儲存。");
+      return;
+    }
+
+    try {
+      await saveCloudFileData({
+        uid: currentUser.uid,
+        fileId: currentCloudFileId,
+        username: currentUsername,
+        data,
+      });
+      setIsCloudDirty(false);
+      setMessage("目前檔案已儲存到雲端。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "儲存雲端檔案失敗。";
+      setMessage(`儲存雲端檔案失敗：${nextMessage}`);
     }
   }
 
@@ -1329,11 +1409,16 @@ export default function App() {
       return;
     }
 
+    if (!confirmDiscardCloudChanges()) {
+      return;
+    }
+
     try {
       const nextData = await loadCloudFile(currentUser.uid, file.id);
-      skipNextCloudSaveRef.current = true;
+      skipNextCloudDirtyRef.current = true;
       setData(nextData);
       setCurrentCloudFileId(file.id);
+      setIsCloudDirty(false);
       setSelectedId(nextData.records[0]?.id ?? "");
       setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
       setRosterDraft(
@@ -1434,6 +1519,7 @@ export default function App() {
       });
       if (currentCloudFileId === file.id) {
         setCurrentCloudFileId(null);
+        setIsCloudDirty(false);
       }
       if (expandedCloudFileId === file.id) {
         setExpandedCloudFileId(null);
@@ -1471,18 +1557,55 @@ export default function App() {
     updateDraftField(field, normalizeNumber(value));
   }
 
+  function getMetricRule(field: FitnessField) {
+    return getAbilityRuleForField(currentAbilityProfile, field);
+  }
+
+  function getMetricDisplayValue(record: FitnessRecord, field: FitnessField): string {
+    return getDisplayValueForField(record[field], getMetricRule(field));
+  }
+
+  function getMetricSelectOptions(field: FitnessField) {
+    return getRubricOptions(getMetricRule(field));
+  }
+
+  function getMetricRangeHint(field: FitnessField): string {
+    const rule = getMetricRule(field);
+    if (!rule) {
+      return "";
+    }
+
+    if (rule.kind === "rubric") {
+      return "等級選項";
+    }
+
+    const firstBand = rule.bands[0];
+    const lastBand = rule.bands[rule.bands.length - 1];
+    const highLabel =
+      typeof firstBand?.min === "number"
+        ? `${firstBand.min}↑`
+        : typeof firstBand?.max === "number"
+          ? `${firstBand.max}↓`
+          : "";
+    const lowLabel =
+      typeof lastBand?.max === "number"
+        ? `${lastBand.max}↓`
+        : typeof lastBand?.min === "number"
+          ? `${lastBand.min}↑`
+          : "";
+
+    if (highLabel && lowLabel) {
+      return `${lowLabel} ~ ${highLabel}`;
+    }
+
+    return highLabel || lowLabel;
+  }
+
   function getTopLabel(record: FitnessRecord): string {
-    const values = [
-      record.item1,
-      record.item2,
-      record.item3,
-      record.item4,
-      record.item5,
-      record.item6,
-    ];
+    const values = getAbilityScores(record, currentAbilityProfile);
     const maxValue = Math.max(...values);
     const maxIndex = values.indexOf(maxValue);
-    return data.itemLabels[maxIndex] ?? "未設定";
+    return resolvedItemLabels[maxIndex] ?? "未設定";
   }
 
   function renderTableCell(
@@ -1491,10 +1614,12 @@ export default function App() {
     value: string | number,
     options?: {
       navigationFields?: EditableField[];
-      inputType?: "text" | "number";
+      inputType?: "text" | "number" | "select";
       min?: number;
       step?: number;
       className?: string;
+      displayValue?: string;
+      selectOptions?: Array<{ value: number; label: string }>;
     },
   ) {
     const isEditing =
@@ -1503,6 +1628,44 @@ export default function App() {
     const navigationFields = options?.navigationFields ?? tableEditableFields;
 
     if (isEditing) {
+      if (options?.inputType === "select") {
+        return (
+          <select
+            autoFocus
+            className={options?.className}
+            onBlur={stopCellEdit}
+            onChange={(event) =>
+              updateTableField(record.id, field, event.target.value)
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                moveTableActiveCell(
+                  record.id,
+                  field,
+                  event.shiftKey ? -1 : 1,
+                  0,
+                  navigationFields,
+                );
+                return;
+              }
+
+              if (event.key === "Escape") {
+                stopCellEdit();
+              }
+            }}
+            value={String(value)}
+          >
+            <option value="0">未填寫</option>
+            {options.selectOptions?.map((option) => (
+              <option key={`${field}-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+      }
+
       return (
         <input
           autoFocus
@@ -1567,7 +1730,7 @@ export default function App() {
         onClick={() => beginCellEdit(record.id, field)}
         type="button"
       >
-        {String(value || "") || "—"}
+        {options?.displayValue ?? (String(value || "") || "—")}
       </button>
     );
   }
@@ -2009,12 +2172,16 @@ export default function App() {
                           <th className="is-frozen-column">學生姓名</th>
                           <th>身高</th>
                           <th>體重</th>
-                          <th>{data.itemLabels[0]}</th>
-                          <th>{data.itemLabels[1]}</th>
-                          <th>{data.itemLabels[2]}</th>
-                          <th>{data.itemLabels[3]}</th>
-                          <th>{data.itemLabels[4]}</th>
-                          <th>{data.itemLabels[5]}</th>
+                          {scoreFields.map((field, index) => (
+                            <th key={field}>
+                              <span className="metric-header-title">
+                                {resolvedItemLabels[index]}
+                              </span>
+                              <small className="metric-header-range">
+                                {getMetricRangeHint(field)}
+                              </small>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
@@ -2032,10 +2199,15 @@ export default function App() {
                             {scoreFields.map((field) => (
                               <td key={field}>
                                 {renderTableCell(record, field, record[field], {
-                                  inputType: "number",
+                                  inputType:
+                                    getMetricRule(field)?.kind === "rubric"
+                                      ? "select"
+                                      : "number",
                                   min: 0,
                                   step: 1,
                                   className: "cell-input-number",
+                                  displayValue: getMetricDisplayValue(record, field),
+                                  selectOptions: getMetricSelectOptions(field),
                                 })}
                               </td>
                             ))}
@@ -2059,6 +2231,18 @@ export default function App() {
                   <p>所有檔案都會放在 Firebase，登入後才能在自己的帳號下建立與管理檔案。</p>
                 </div>
                 <div className="button-row">
+                  {currentCloudFileId ? (
+                    <button
+                      className="secondary-button"
+                      disabled={!isCloudDirty}
+                      onClick={() => {
+                        void handleSaveCurrentCloudFile();
+                      }}
+                      type="button"
+                    >
+                      {isCloudDirty ? "儲存目前檔案" : "已儲存"}
+                    </button>
+                  ) : null}
                   <button
                     className="primary-button"
                     disabled={!currentUser}
@@ -2219,7 +2403,9 @@ export default function App() {
                                   </label>
                                 </div>
                                 <div className="file-status-row">
-                                  <span className="status-chip is-active">目前使用中</span>
+                                  <span className="status-chip is-active">
+                                    {isCloudDirty ? "目前使用中・尚未儲存" : "目前使用中"}
+                                  </span>
                                   <span>
                                     最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
                                   </span>
@@ -2227,6 +2413,16 @@ export default function App() {
                                 <div className="file-accordion-actions">
                                   <button
                                     className="primary-button"
+                                    disabled={!isCloudDirty}
+                                    onClick={() => {
+                                      void handleSaveCurrentCloudFile();
+                                    }}
+                                    type="button"
+                                  >
+                                    儲存目前檔案
+                                  </button>
+                                  <button
+                                    className="secondary-button"
                                     onClick={() => openFileWorkspace("roster")}
                                     type="button"
                                   >
@@ -2637,7 +2833,7 @@ export default function App() {
                     onClick={() => setActiveMetric(field)}
                     type="button"
                   >
-                    {data.itemLabels[index]}
+                    {resolvedItemLabels[index]}
                   </button>
                 ))}
               </div>
@@ -2694,11 +2890,16 @@ export default function App() {
                             <td className="is-frozen-column">{record.studentName}</td>
                             <td>
                               {renderTableCell(record, activeMetric, record[activeMetric], {
-                                inputType: "number",
+                                inputType:
+                                  getMetricRule(activeMetric)?.kind === "rubric"
+                                    ? "select"
+                                    : "number",
                                 min: 0,
                                 navigationFields: [activeMetric],
                                 step: 1,
                                 className: "cell-input-number",
+                                displayValue: getMetricDisplayValue(record, activeMetric),
+                                selectOptions: getMetricSelectOptions(activeMetric),
                               })}
                             </td>
                           </tr>
@@ -2747,14 +2948,28 @@ export default function App() {
                 </label>
                 {scoreFields.map((field, index) => (
                   <label key={field}>
-                    {data.itemLabels[index]}
-                    <input
-                      min="0"
-                      onChange={(event) => updateScore(field, event.target.value)}
-                      step="1"
-                      type="number"
-                      value={draftRecord[field]}
-                    />
+                    {resolvedItemLabels[index]}
+                    {getMetricRule(field)?.kind === "rubric" ? (
+                      <select
+                        onChange={(event) => updateScore(field, event.target.value)}
+                        value={draftRecord[field]}
+                      >
+                        <option value="0">未填寫</option>
+                        {getMetricSelectOptions(field).map((option) => (
+                          <option key={`${field}-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        min="0"
+                        onChange={(event) => updateScore(field, event.target.value)}
+                        step="1"
+                        type="number"
+                        value={draftRecord[field]}
+                      />
+                    )}
                   </label>
                 ))}
                 <label className="full-span">
@@ -3015,7 +3230,11 @@ export default function App() {
                   </select>
                 </label>
               </div>
-              <RadarChart labels={data.itemLabels} record={selectedRecord} />
+              <RadarChart
+                labels={resolvedItemLabels}
+                record={selectedRecord}
+                scores={selectedAbilityScores}
+              />
             </section>
           </>
         ) : null}
@@ -3052,7 +3271,9 @@ export default function App() {
               </div>
               <A4CanvasBoard
                 ref={pdfCanvasRef}
-                labels={data.itemLabels}
+                abilityLevelLabels={selectedAbilityLevelLabels}
+                abilityScores={selectedAbilityScores}
+                labels={resolvedItemLabels}
                 record={selectedRecord}
                 rosterName={data.rosterName}
                 seatNumber={selectedSeatNumber}

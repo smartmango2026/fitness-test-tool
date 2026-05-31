@@ -1,5 +1,10 @@
 import { jsPDF } from "jspdf";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import {
+  getAbilityBandLabel,
+  getAbilityScores,
+} from "./ability-scoring";
+import type { AbilityGradeProfile, AbilityRulesConfig } from "./ability-settings";
 import type { FitnessRecord } from "./types";
 
 const CANVAS_WIDTH = 1240;
@@ -22,6 +27,8 @@ export type A4CanvasBoardHandle = {
 type A4CanvasBoardProps = {
   labels: string[];
   record: FitnessRecord | null;
+  abilityScores: number[];
+  abilityLevelLabels: string[];
   rosterName: string;
   testDate: string;
   seatNumber: number | null;
@@ -30,12 +37,16 @@ type A4CanvasBoardProps = {
 type ReportRenderPayload = {
   labels: string[];
   record: FitnessRecord | null;
+  abilityScores: number[];
+  abilityLevelLabels: string[];
   rosterName: string;
   testDate: string;
   seatNumber: number | null;
 };
 
 type ExportAllReportsPayload = {
+  abilityProfile: AbilityGradeProfile | null;
+  abilityRulesConfig: AbilityRulesConfig;
   labels: string[];
   records: FitnessRecord[];
   rosterName: string;
@@ -142,8 +153,7 @@ function getRadarPolygonPoints(
 ): Array<{ x: number; y: number }> {
   return values.map((value, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / values.length;
-    const percentage = Math.max(0, Math.min(100, (value / 5) * 100));
-    const normalized = percentage / 100;
+    const normalized = Math.max(0, Math.min(100, value)) / 100;
 
     return {
       x: centerX + Math.cos(angle) * radius * normalized,
@@ -152,30 +162,13 @@ function getRadarPolygonPoints(
   });
 }
 
-function scoreToLevel(score: number): string {
-  if (score >= 5) {
-    return "優良";
-  }
-  if (score >= 4) {
-    return "良好";
-  }
-  if (score >= 3) {
-    return "穩定發展中";
-  }
-  if (score >= 2) {
-    return "可再加強";
-  }
-  return "需要多練習";
-}
-
-function formatMetricSummary(labels: string[], record: FitnessRecord | null): string {
-  if (!record) {
+function formatMetricSummary(labels: string[], scores: number[]): string {
+  if (!scores.length) {
     return "尚未選擇學生，請先從上方名單選擇一位小朋友。";
   }
 
-  const values = [record.item1, record.item2, record.item3, record.item4, record.item5, record.item6];
-  const strongestIndex = values.indexOf(Math.max(...values));
-  const supportIndex = values.indexOf(Math.min(...values));
+  const strongestIndex = scores.indexOf(Math.max(...scores));
+  const supportIndex = scores.indexOf(Math.min(...scores));
 
   return `本次測驗中，${labels[strongestIndex] ?? "表現"}相對突出；${
     labels[supportIndex] ?? "另一項能力"
@@ -190,11 +183,12 @@ function drawBarMeter(
   color: string,
 ): void {
   const total = 5;
+  const filledBars = Math.max(0, Math.min(total, Math.ceil(score / 20)));
   for (let index = 0; index < total; index += 1) {
     drawRoundedRect(context, x + index * 34, y, 24, 16, 6);
-    context.fillStyle = index < score ? color : "#eef4fb";
+    context.fillStyle = index < filledBars ? color : "#eef4fb";
     context.fill();
-    context.strokeStyle = index < score ? color : "#d8e6f7";
+    context.strokeStyle = index < filledBars ? color : "#d8e6f7";
     context.lineWidth = 1;
     context.stroke();
   }
@@ -204,11 +198,9 @@ function renderReportPage(
   context: CanvasRenderingContext2D,
   payload: ReportRenderPayload,
 ): void {
-  const { labels, record, rosterName, testDate, seatNumber } = payload;
-  const values = record
-    ? [record.item1, record.item2, record.item3, record.item4, record.item5, record.item6]
-    : [0, 0, 0, 0, 0, 0];
-  const metricSummary = formatMetricSummary(labels, record);
+  const { labels, record, abilityScores, abilityLevelLabels, rosterName, testDate, seatNumber } = payload;
+  const values = abilityScores;
+  const metricSummary = formatMetricSummary(labels, abilityScores);
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   context.fillStyle = "#ffffff";
@@ -440,7 +432,7 @@ function renderReportPage(
     context.fillText(String(score), 384, rowY + 1);
 
     context.font = "500 20px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(scoreToLevel(score), 580, rowY + 1);
+    context.fillText(abilityLevelLabels[index] ?? "未分級", 580, rowY + 1);
 
     drawBarMeter(context, 804, rowY - 10, score, color);
   }
@@ -481,7 +473,7 @@ function sanitizeFileName(value: string): string {
 export async function exportAllReportsPdf(
   payload: ExportAllReportsPayload,
 ): Promise<void> {
-  const { labels, records, rosterName, testDate } = payload;
+  const { abilityProfile, abilityRulesConfig, labels, records, rosterName, testDate } = payload;
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -490,6 +482,8 @@ export async function exportAllReportsPdf(
 
   if (records.length === 0) {
     const canvas = createReportCanvas({
+      abilityLevelLabels: ["未分級", "未分級", "未分級", "未分級", "未分級", "未分級"],
+      abilityScores: [0, 0, 0, 0, 0, 0],
       labels,
       record: null,
       rosterName,
@@ -499,7 +493,12 @@ export async function exportAllReportsPdf(
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
   } else {
     records.forEach((record, index) => {
+      const abilityScores = getAbilityScores(record, abilityProfile);
       const canvas = createReportCanvas({
+        abilityLevelLabels: abilityScores.map((score) =>
+          getAbilityBandLabel(score, abilityRulesConfig),
+        ),
+        abilityScores,
         labels,
         record,
         rosterName,
@@ -519,18 +518,20 @@ export async function exportAllReportsPdf(
 }
 
 const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
-  function A4CanvasBoard({ labels, record, rosterName, testDate, seatNumber }, ref) {
+  function A4CanvasBoard({ labels, record, abilityScores, abilityLevelLabels, rosterName, testDate, seatNumber }, ref) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const renderPayload = useMemo(
       () => ({
-        labels,
-        record,
-        rosterName,
-        testDate,
-        seatNumber,
+          labels,
+          record,
+          abilityScores,
+          abilityLevelLabels,
+          rosterName,
+          testDate,
+          seatNumber,
       }),
-      [labels, record, rosterName, testDate, seatNumber],
-    );
+  [abilityLevelLabels, abilityScores, labels, record, rosterName, testDate, seatNumber],
+);
 
     useEffect(() => {
       const canvas = canvasRef.current;

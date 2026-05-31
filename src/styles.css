@@ -1066,6 +1066,22 @@ tbody tr.is-selected {
   border-bottom: 1px solid #dbe4ee;
 }
 
+.metric-header-title {
+  display: block;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.metric-header-range {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+}
+
 .summary-sheet tbody tr.is-selected .is-frozen-column {
   background: #ecfeff;
 }
