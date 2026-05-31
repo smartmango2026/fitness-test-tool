@@ -582,18 +582,30 @@ export default function App() {
     }
 
     const lastFileId = readLastCloudFileId(currentUser.uid);
-    if (!lastFileId || autoOpenedLastCloudFileRef.current === lastFileId) {
+    if (lastFileId && autoOpenedLastCloudFileRef.current === lastFileId) {
       return;
     }
 
-    const targetFile = cloudFiles.find((file) => file.id === lastFileId);
+    const newestFile = [...cloudFiles].sort((left, right) =>
+      (right.createdAt ?? "").localeCompare(left.createdAt ?? ""),
+    )[0];
+    const targetFile = lastFileId
+      ? cloudFiles.find((file) => file.id === lastFileId) ?? newestFile
+      : newestFile;
+
     if (!targetFile) {
-      writeLastCloudFileId(currentUser.uid, null);
-      autoOpenedLastCloudFileRef.current = lastFileId;
+      if (lastFileId) {
+        writeLastCloudFileId(currentUser.uid, null);
+        autoOpenedLastCloudFileRef.current = lastFileId;
+      }
       return;
     }
 
-    autoOpenedLastCloudFileRef.current = lastFileId;
+    if (lastFileId && !cloudFiles.some((file) => file.id === lastFileId)) {
+      writeLastCloudFileId(currentUser.uid, null);
+    }
+
+    autoOpenedLastCloudFileRef.current = targetFile.id;
     void loadCloudFile(currentUser.uid, targetFile.id)
       .then((nextData) => {
         skipNextCloudDirtyRef.current = true;
@@ -609,12 +621,16 @@ export default function App() {
         );
         setRosterSizeInput(String(nextData.rosterEntries.length || 1));
         setExpandedCloudFileId(targetFile.id);
-        setMessage(`已自動開啟上次使用的檔案：${targetFile.fileName}`);
+        setMessage(
+          lastFileId && targetFile.id === lastFileId
+            ? `已自動開啟上次使用的檔案：${targetFile.fileName}`
+            : `已自動開啟最新建立的檔案：${targetFile.fileName}`,
+        );
       })
       .catch((error) => {
         const nextMessage =
           error instanceof Error ? error.message : "無法開啟上次使用的檔案。";
-        setMessage(`自動開啟上次檔案失敗：${nextMessage}`);
+        setMessage(`自動開啟檔案失敗：${nextMessage}`);
       });
   }, [cloudFiles, currentCloudFileId, currentUser, isReportDebugMode]);
 
@@ -633,6 +649,10 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) {
+      return;
+    }
+
+    if (!currentCloudFileId) {
       return;
     }
 
