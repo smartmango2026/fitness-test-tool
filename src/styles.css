@@ -737,11 +737,23 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
   padding: 14px 16px;
   border: 1px solid #d6dbe5;
   border-radius: 18px;
   background: #fff;
+}
+
+.friend-row-main {
+  display: grid;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-identity {
+  display: grid;
+  gap: 4px;
 }
 
 .friend-row strong {
@@ -759,6 +771,20 @@ button {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.friend-alias-form {
+  display: grid;
+  gap: 10px;
+}
+
+.friend-alias-form input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
 }
 
 .button-row {

@@ -23,15 +23,26 @@ import { emailToUsername, normalizeUsername } from "./firebase-auth";
 export type FriendRecord = {
   friendUid: string;
   username: string;
+  profileNickname: string | null;
+  customNickname: string | null;
+  displayName: string;
   addedAt: string | null;
+};
+
+export type UserProfileRecord = {
+  uid: string;
+  username: string;
+  displayNickname: string | null;
 };
 
 export type FriendRequestRecord = {
   id: string;
   fromUid: string;
   fromUsername: string;
+  fromDisplayName: string | null;
   toUid: string;
   toUsername: string;
+  toDisplayName: string | null;
   status: "pending" | "accepted" | "rejected" | "cancelled";
   createdAt: string | null;
   updatedAt: string | null;
@@ -41,6 +52,7 @@ export type FriendInviteRecord = {
   id: string;
   issuedByUid: string;
   issuedByUsername: string;
+  issuedByDisplayName: string | null;
   status: "active" | "expired" | "revoked";
   createdAt: string | null;
   expiresAt: string | null;
@@ -61,13 +73,40 @@ function timestampToIso(value: unknown): string | null {
 function mapFriendSnapshot(snapshot: QuerySnapshot<DocumentData>): FriendRecord[] {
   return snapshot.docs.map((entry) => {
     const data = entry.data();
+    const username =
+      typeof data.friendUsername === "string" ? data.friendUsername : entry.id;
+    const profileNickname =
+      typeof data.friendDisplayName === "string" && data.friendDisplayName.trim()
+        ? data.friendDisplayName.trim()
+        : null;
+    const customNickname =
+      typeof data.customNickname === "string" && data.customNickname.trim()
+        ? data.customNickname.trim()
+        : null;
     return {
       friendUid: entry.id,
-      username:
-        typeof data.friendUsername === "string" ? data.friendUsername : entry.id,
+      username,
+      profileNickname,
+      customNickname,
+      displayName: customNickname || profileNickname || username,
       addedAt: timestampToIso(data.addedAt),
     };
   });
+}
+
+function mapUserProfileDocument(
+  uid: string,
+  data: DocumentData,
+): UserProfileRecord {
+  return {
+    uid,
+    username:
+      typeof data.username === "string" ? normalizeUsername(data.username) : uid,
+    displayNickname:
+      typeof data.displayNickname === "string" && data.displayNickname.trim()
+        ? data.displayNickname.trim()
+        : null,
+  };
 }
 
 function mapRequestSnapshot(snapshot: QuerySnapshot<DocumentData>): FriendRequestRecord[] {
@@ -78,8 +117,16 @@ function mapRequestSnapshot(snapshot: QuerySnapshot<DocumentData>): FriendReques
       fromUid: typeof data.fromUid === "string" ? data.fromUid : "",
       fromUsername:
         typeof data.fromUsername === "string" ? data.fromUsername : "",
+      fromDisplayName:
+        typeof data.fromDisplayName === "string" && data.fromDisplayName.trim()
+          ? data.fromDisplayName.trim()
+          : null,
       toUid: typeof data.toUid === "string" ? data.toUid : "",
       toUsername: typeof data.toUsername === "string" ? data.toUsername : "",
+      toDisplayName:
+        typeof data.toDisplayName === "string" && data.toDisplayName.trim()
+          ? data.toDisplayName.trim()
+          : null,
       status:
         data.status === "accepted" ||
         data.status === "rejected" ||
@@ -101,6 +148,10 @@ function mapInviteDocument(
     issuedByUid: typeof data.issuedByUid === "string" ? data.issuedByUid : "",
     issuedByUsername:
       typeof data.issuedByUsername === "string" ? data.issuedByUsername : "",
+    issuedByDisplayName:
+      typeof data.issuedByDisplayName === "string" && data.issuedByDisplayName.trim()
+        ? data.issuedByDisplayName.trim()
+        : null,
     status:
       data.status === "expired" || data.status === "revoked"
         ? data.status
@@ -119,6 +170,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
   if (!profileSnapshot.exists()) {
     await setDoc(profileRef, {
       username: normalizeUsername(username),
+      displayNickname: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status: "active",
@@ -133,6 +185,56 @@ export async function ensureUserProfile(user: User): Promise<void> {
   });
 }
 
+export function subscribeToUserProfile(
+  uid: string,
+  callback: (profile: UserProfileRecord | null) => void,
+): () => void {
+  return onSnapshot(doc(db, "users", uid), (snapshot) => {
+    if (!snapshot.exists()) {
+      callback(null);
+      return;
+    }
+
+    callback(mapUserProfileDocument(snapshot.id, snapshot.data()));
+  });
+}
+
+export async function updateOwnDisplayNickname(options: {
+  uid: string;
+  username: string;
+  displayNickname: string | null;
+}): Promise<void> {
+  const nextDisplayNickname =
+    options.displayNickname && options.displayNickname.trim()
+      ? options.displayNickname.trim()
+      : null;
+  const profileRef = doc(db, "users", options.uid);
+
+  await updateDoc(profileRef, {
+    username: normalizeUsername(options.username),
+    displayNickname: nextDisplayNickname,
+    updatedAt: serverTimestamp(),
+  });
+
+  const friendsSnapshot = await getDocs(collection(db, "users", options.uid, "friends"));
+  if (friendsSnapshot.empty) {
+    return;
+  }
+
+  const batch = writeBatch(db);
+  friendsSnapshot.docs.forEach((friendDoc) => {
+    const reciprocalRef = doc(db, "users", friendDoc.id, "friends", options.uid);
+    batch.set(
+      reciprocalRef,
+      {
+        friendDisplayName: nextDisplayNickname,
+      },
+      { merge: true },
+    );
+  });
+  await batch.commit();
+}
+
 export function subscribeToFriends(
   uid: string,
   callback: (friends: FriendRecord[]) => void,
@@ -141,7 +243,7 @@ export function subscribeToFriends(
   return onSnapshot(friendsQuery, (snapshot) => {
     callback(
       mapFriendSnapshot(snapshot).sort((a, b) =>
-        a.username.localeCompare(b.username, "zh-Hant"),
+        a.displayName.localeCompare(b.displayName, "zh-Hant"),
       ),
     );
   });
@@ -178,6 +280,7 @@ export function subscribeToOutgoingFriendRequests(
 export async function sendFriendRequest(options: {
   fromUid: string;
   fromUsername: string;
+  fromDisplayName?: string | null;
   targetUsername: string;
 }): Promise<void> {
   const normalizedTarget = normalizeUsername(options.targetUsername);
@@ -228,8 +331,14 @@ export async function sendFriendRequest(options: {
     {
       fromUid: options.fromUid,
       fromUsername: normalizeUsername(options.fromUsername),
+      fromDisplayName: null,
       toUid: targetUid,
       toUsername: normalizeUsername(targetUsername),
+      toDisplayName:
+        typeof targetDoc.data().displayNickname === "string" &&
+        targetDoc.data().displayNickname.trim()
+          ? targetDoc.data().displayNickname.trim()
+          : null,
       status: "pending",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -241,6 +350,7 @@ export async function sendFriendRequest(options: {
 export async function createFriendInvite(options: {
   issuedByUid: string;
   issuedByUsername: string;
+  issuedByDisplayName?: string | null;
 }): Promise<FriendInviteRecord> {
   const inviteRef = doc(collection(db, "friendInvites"));
   const now = new Date();
@@ -249,6 +359,10 @@ export async function createFriendInvite(options: {
   await setDoc(inviteRef, {
     issuedByUid: options.issuedByUid,
     issuedByUsername: normalizeUsername(options.issuedByUsername),
+    issuedByDisplayName:
+      options.issuedByDisplayName && options.issuedByDisplayName.trim()
+        ? options.issuedByDisplayName.trim()
+        : null,
     status: "active",
     createdAt: now,
     expiresAt,
@@ -258,6 +372,10 @@ export async function createFriendInvite(options: {
     id: inviteRef.id,
     issuedByUid: options.issuedByUid,
     issuedByUsername: normalizeUsername(options.issuedByUsername),
+    issuedByDisplayName:
+      options.issuedByDisplayName && options.issuedByDisplayName.trim()
+        ? options.issuedByDisplayName.trim()
+        : null,
     status: "active",
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -279,6 +397,7 @@ export async function sendFriendRequestFromInvite(options: {
   inviteId: string;
   fromUid: string;
   fromUsername: string;
+  fromDisplayName?: string | null;
 }): Promise<void> {
   const invite = await getFriendInvite(options.inviteId);
   if (!invite) {
@@ -325,8 +444,13 @@ export async function sendFriendRequestFromInvite(options: {
     {
       fromUid: options.fromUid,
       fromUsername: normalizeUsername(options.fromUsername),
+      fromDisplayName:
+        options.fromDisplayName && options.fromDisplayName.trim()
+          ? options.fromDisplayName.trim()
+          : null,
       toUid: invite.issuedByUid,
       toUsername: normalizeUsername(invite.issuedByUsername),
+      toDisplayName: invite.issuedByDisplayName,
       status: "pending",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -348,6 +472,10 @@ export async function acceptFriendRequest(
     {
       friendUid: request.toUid,
       friendUsername: request.toUsername,
+      friendDisplayName:
+        "toDisplayName" in request && typeof request.toDisplayName === "string"
+          ? request.toDisplayName
+          : null,
       addedAt: serverTimestamp(),
       source: "friend-request",
     },
@@ -358,6 +486,10 @@ export async function acceptFriendRequest(
     {
       friendUid: request.fromUid,
       friendUsername: request.fromUsername,
+      friendDisplayName:
+        "fromDisplayName" in request && typeof request.fromDisplayName === "string"
+          ? request.fromDisplayName
+          : null,
       addedAt: serverTimestamp(),
       source: "friend-request",
     },
@@ -388,4 +520,18 @@ export async function removeFriend(options: {
   batch.delete(doc(db, "users", options.currentUid, "friends", options.friendUid));
   batch.delete(doc(db, "users", options.friendUid, "friends", options.currentUid));
   await batch.commit();
+}
+
+export async function updateFriendCustomNickname(options: {
+  currentUid: string;
+  friendUid: string;
+  customNickname: string | null;
+}): Promise<void> {
+  const friendRef = doc(db, "users", options.currentUid, "friends", options.friendUid);
+  await updateDoc(friendRef, {
+    customNickname:
+      options.customNickname && options.customNickname.trim()
+        ? options.customNickname.trim()
+        : null,
+  });
 }

@@ -59,12 +59,16 @@ import {
   removeFriend,
   sendFriendRequest,
   sendFriendRequestFromInvite,
+  subscribeToUserProfile,
   subscribeToFriends,
   subscribeToIncomingFriendRequests,
   subscribeToOutgoingFriendRequests,
   type FriendRecord,
   type FriendInviteRecord,
   type FriendRequestRecord,
+  type UserProfileRecord,
+  updateFriendCustomNickname,
+  updateOwnDisplayNickname,
 } from "./friendships";
 import RadarChart from "./RadarChart";
 import { defaultAppData } from "./sample-data";
@@ -359,6 +363,7 @@ export default function App() {
   });
   const [selectedId, setSelectedId] = useState<string>(data.records[0]?.id ?? "");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<UserProfileRecord | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -366,6 +371,8 @@ export default function App() {
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [friendNicknameDrafts, setFriendNicknameDrafts] = useState<Record<string, string>>({});
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [incomingFriendRequests, setIncomingFriendRequests] = useState<
     FriendRequestRecord[]
@@ -453,6 +460,9 @@ export default function App() {
     if (!currentUser) {
       reportDebugFileLoadedRef.current = null;
       autoOpenedLastCloudFileRef.current = null;
+      setCurrentProfile(null);
+      setNicknameDraft("");
+      setFriendNicknameDrafts({});
       setFriendDraft("");
       setFriends([]);
       setIncomingFriendRequests([]);
@@ -465,6 +475,10 @@ export default function App() {
     }
 
     const unsubscribeFriends = subscribeToFriends(currentUser.uid, setFriends);
+    const unsubscribeProfile = subscribeToUserProfile(currentUser.uid, (profile) => {
+      setCurrentProfile(profile);
+      setNicknameDraft(profile?.displayNickname ?? "");
+    });
     const unsubscribeIncoming = subscribeToIncomingFriendRequests(
       currentUser.uid,
       setIncomingFriendRequests,
@@ -490,12 +504,23 @@ export default function App() {
 
     return () => {
       unsubscribeFriends();
+      unsubscribeProfile();
       unsubscribeIncoming();
       unsubscribeOutgoing();
       unsubscribeCloudFiles();
       unsubscribeAbilityRules();
     };
   }, [currentUser]);
+
+  useEffect(() => {
+    setFriendNicknameDrafts((current) => {
+      const next: Record<string, string> = {};
+      friends.forEach((friend) => {
+        next[friend.friendUid] = current[friend.friendUid] ?? friend.customNickname ?? "";
+      });
+      return next;
+    });
+  }, [friends]);
 
   useEffect(() => {
     if (
@@ -758,7 +783,12 @@ export default function App() {
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
   const currentUsername =
-    currentUser?.displayName || emailToUsername(currentUser?.email) || "未登入";
+    currentProfile?.username ||
+    currentUser?.displayName ||
+    emailToUsername(currentUser?.email) ||
+    "未登入";
+  const currentDisplayName =
+    currentProfile?.displayNickname?.trim() || currentUsername;
   const inviteIdFromUrl = useMemo(() => {
     if (typeof window === "undefined") {
       return "";
@@ -1443,6 +1473,7 @@ export default function App() {
       await sendFriendRequest({
         fromUid: currentUser.uid,
         fromUsername: currentUsername,
+        fromDisplayName: currentProfile?.displayNickname ?? null,
         targetUsername: nextUsername,
       });
       setFriendDraft("");
@@ -1509,6 +1540,7 @@ export default function App() {
       const invite = await createFriendInvite({
         issuedByUid: currentUser.uid,
         issuedByUsername: currentUsername,
+        issuedByDisplayName: currentProfile?.displayNickname ?? null,
       });
       setActiveFriendInvite(invite);
       setMessage("已產生新的加好友 QR Code。");
@@ -1565,6 +1597,7 @@ export default function App() {
         inviteId: scannedFriendInvite.id,
         fromUid: currentUser.uid,
         fromUsername: currentUsername,
+        fromDisplayName: currentProfile?.displayNickname ?? null,
       });
       setMessage(
         `已透過 QR Code 對 ${scannedFriendInvite.issuedByUsername} 送出好友邀請。`,
@@ -1579,6 +1612,85 @@ export default function App() {
   function openAccountPanel(): void {
     setActiveTab("account");
     setShowAccountMenu(false);
+  }
+
+  async function handleSaveOwnNickname(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再設定暱稱。");
+      return;
+    }
+
+    try {
+      await updateOwnDisplayNickname({
+        uid: currentUser.uid,
+        username: currentUsername,
+        displayNickname: nicknameDraft,
+      });
+      setMessage(
+        nicknameDraft.trim()
+          ? `已更新你的暱稱：${nicknameDraft.trim()}`
+          : "已恢復為使用帳號名稱顯示。",
+      );
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "更新暱稱失敗。";
+      setMessage(`更新暱稱失敗：${nextMessage}`);
+    }
+  }
+
+  function updateFriendNicknameDraft(friendUid: string, value: string): void {
+    setFriendNicknameDrafts((current) => ({
+      ...current,
+      [friendUid]: value,
+    }));
+  }
+
+  async function handleSaveFriendNickname(friend: FriendRecord): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再更新好友暱稱。");
+      return;
+    }
+
+    try {
+      await updateFriendCustomNickname({
+        currentUid: currentUser.uid,
+        friendUid: friend.friendUid,
+        customNickname: friendNicknameDrafts[friend.friendUid] ?? "",
+      });
+      setMessage(
+        (friendNicknameDrafts[friend.friendUid] ?? "").trim()
+          ? `已更新 ${friend.username} 的好友備註暱稱。`
+          : `已清除 ${friend.username} 的好友備註暱稱。`,
+      );
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "更新好友暱稱失敗。";
+      setMessage(`更新好友暱稱失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleResetFriendNickname(friend: FriendRecord): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再更新好友暱稱。");
+      return;
+    }
+
+    try {
+      await updateFriendCustomNickname({
+        currentUid: currentUser.uid,
+        friendUid: friend.friendUid,
+        customNickname: null,
+      });
+      setFriendNicknameDrafts((current) => ({
+        ...current,
+        [friend.friendUid]: "",
+      }));
+      setMessage(`已恢復顯示 ${friend.username} 自己設定的暱稱。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "恢復好友暱稱失敗。";
+      setMessage(`恢復好友暱稱失敗：${nextMessage}`);
+    }
   }
 
   function confirmDiscardCloudChanges(): boolean {
@@ -2265,7 +2377,7 @@ export default function App() {
                       onClick={() => setShowAccountMenu((current) => !current)}
                       type="button"
                     >
-                      {currentUser.displayName || emailToUsername(currentUser.email) || "未命名使用者"}
+                      {currentDisplayName || "未命名使用者"}
                     </button>
                     {showAccountMenu ? (
                       <div className="account-dropdown">
@@ -2872,8 +2984,41 @@ export default function App() {
                       <div>{currentUser ? currentUsername : "尚未登入"}</div>
                     </div>
                     <div>
+                      <strong>我的暱稱</strong>
+                      {currentUser ? (
+                        <div className="friend-alias-form">
+                          <input
+                            onChange={(event) => setNicknameDraft(event.target.value)}
+                            placeholder="例如 王老師、小熊教練"
+                            type="text"
+                            value={nicknameDraft}
+                          />
+                          <div className="friend-row-actions">
+                            <button
+                              className="primary-button"
+                              onClick={() => {
+                                void handleSaveOwnNickname();
+                              }}
+                              type="button"
+                            >
+                              儲存暱稱
+                            </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() => setNicknameDraft("")}
+                              type="button"
+                            >
+                              清空
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>尚未登入</div>
+                      )}
+                    </div>
+                    <div>
                       <strong>說明</strong>
-                      <div>這裡顯示的是老師登入時輸入的那組帳號。</div>
+                      <div>帳號是登入用名稱；暱稱會顯示在好友列表與好友邀請中。</div>
                     </div>
                   </div>
                 </article>
@@ -2890,7 +3035,10 @@ export default function App() {
                     <div className="friend-section friend-qr-panel">
                       <h4>掃描到的加好友邀請</h4>
                       <div className="friend-empty-state friend-invite-state">
-                        <strong>{scannedFriendInvite.issuedByUsername}</strong>
+                        <strong>
+                          {scannedFriendInvite.issuedByDisplayName ||
+                            scannedFriendInvite.issuedByUsername}
+                        </strong>
                         <p>{formatInviteExpiry(scannedFriendInvite.expiresAt)}</p>
                         {!currentUser ? (
                           <p>請先登入，再把這位老師加入好友。</p>
@@ -2962,7 +3110,10 @@ export default function App() {
                           src={friendInviteQrDataUrl}
                         />
                         <div className="friend-qr-copy">
-                          <strong>{activeFriendInvite.issuedByUsername}</strong>
+                          <strong>
+                            {activeFriendInvite.issuedByDisplayName ||
+                              activeFriendInvite.issuedByUsername}
+                          </strong>
                           <small>{formatInviteExpiry(activeFriendInvite.expiresAt)}</small>
                           <p>讓對方掃描後登入自己的帳號，就能送出好友邀請給你。</p>
                           {activeFriendInviteUrl ? (
@@ -2999,7 +3150,7 @@ export default function App() {
                             {incomingFriendRequests.map((request) => (
                               <div className="friend-row" key={request.id}>
                                 <div>
-                                  <strong>{request.fromUsername}</strong>
+                                  <strong>{request.fromDisplayName || request.fromUsername}</strong>
                                   <small>
                                     送出時間 {formatActivityDate(request.createdAt)}
                                   </small>
@@ -3042,7 +3193,7 @@ export default function App() {
                             {outgoingFriendRequests.map((request) => (
                               <div className="friend-row" key={request.id}>
                                 <div>
-                                  <strong>{request.toUsername}</strong>
+                                  <strong>{request.toDisplayName || request.toUsername}</strong>
                                   <small>
                                     送出時間 {formatActivityDate(request.createdAt)}
                                   </small>
@@ -3065,8 +3216,54 @@ export default function App() {
                           <div className="friend-list">
                             {friends.map((friend) => (
                               <div className="friend-row" key={friend.friendUid}>
-                                <div>
-                                  <strong>{friend.username}</strong>
+                                <div className="friend-row-main">
+                                  <div className="friend-identity">
+                                    <strong>{friend.displayName}</strong>
+                                    <small>帳號：{friend.username}</small>
+                                    {friend.customNickname ? (
+                                      <small>
+                                        好友原本暱稱：
+                                        {friend.profileNickname || friend.username}
+                                      </small>
+                                    ) : null}
+                                  </div>
+                                  <div className="friend-alias-form">
+                                    <input
+                                      onChange={(event) =>
+                                        updateFriendNicknameDraft(
+                                          friend.friendUid,
+                                          event.target.value,
+                                        )
+                                      }
+                                      placeholder={
+                                        friend.profileNickname || friend.username
+                                      }
+                                      type="text"
+                                      value={
+                                        friendNicknameDrafts[friend.friendUid] ?? ""
+                                      }
+                                    />
+                                    <div className="friend-row-actions">
+                                      <button
+                                        className="primary-button"
+                                        onClick={() => {
+                                          void handleSaveFriendNickname(friend);
+                                        }}
+                                        type="button"
+                                      >
+                                        儲存備註
+                                      </button>
+                                      <button
+                                        className="secondary-button"
+                                        onClick={() => {
+                                          void handleResetFriendNickname(friend);
+                                        }}
+                                        type="button"
+                                      >
+                                        恢復好友暱稱
+                                      </button>
+                                    </div>
+                                  </div>
                                   <small>
                                     成為好友時間 {formatActivityDate(friend.addedAt)}
                                   </small>

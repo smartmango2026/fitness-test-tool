@@ -30,7 +30,7 @@ service cloud.firestore {
             isSelf(friendId) &&
             resource.data.friendUid == friendId
           );
-        allow update: if false;
+        allow update: if isSelf(userId);
       }
 
       match /files/{fileId} {
