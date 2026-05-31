@@ -86,33 +86,6 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 - Legacy `?id=1` is still accepted as a fallback alias for `seat=1`, but new work should prefer `seat`
 - In debug mode, the app renders the report canvas directly so headless Chrome screenshots can be taken without navigating the normal UI
 
-### Recent Development History
-
-- `v0.3.0` (`9107e9d`)
-  - Moved deployment and active maintenance to `smartmango2026/fitness-test-tool`
-  - Switched GitHub Pages to GitHub Actions deployment
-  - Connected the app to the new Firebase project `fitness-test-tool-42789`
-  - Added account management basics, friend list UI groundwork, and report/debug cleanup
-  - Adjusted landing flow and file sorting defaults
-
-- `v0.4.0` (`a5c043a`)
-  - Added report score mapping based on configurable ability rules
-  - Hid the old analysis tab and consolidated report viewing into `檢視報表`
-  - Refined radar chart rendering, report debug URL workflow, and report summary layout
-  - Added auto-generated `老師觀察與鼓勵` content and improved its readability
-
-- `v0.5.0` (`974533d`)
-  - Moved files to Firebase cloud storage and removed the local-file editing path
-  - Added manual save mode for cloud files instead of auto-uploading every edit
-  - Restored the last opened cloud file after login or page reload, with fallback to the newest created file
-  - Added the association logo to the app header
-
-- `main` after `v0.5.0`
-  - Added self nickname and per-friend custom nickname support
-  - Added file ownership and shared editing through Firestore-backed sharing metadata
-  - Simplified collaborator management to `select friend -> share`, showing nickname-only recipients
-  - Improved mobile report interactions: normal page scroll over the report canvas, plus tap-to-open image preview with pinch zoom and pan
-
 ### Current Architecture Snapshot
 
 - Authentication
@@ -143,6 +116,7 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 - `docs/excel-import-export.md`: Excel import/export contract and hidden JSON strategy
 - `docs/implementation-notes.md`: suggested technical direction and phased rollout
 - `docs/project-handoff.md`: current architecture, feature status, and handoff notes for continuing development on another machine
+- `docs/development-history.md`: staged release history and major feature milestones
 
 ## Current App Scope
 
