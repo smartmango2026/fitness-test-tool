@@ -71,6 +71,7 @@ import { defaultAppData } from "./sample-data";
 import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types";
 import type { User } from "firebase/auth";
 import QRCode from "qrcode";
+import associationLogo from "./assets/sgpea-logo.png";
 
 type TabKey =
   | "files"
@@ -168,6 +169,7 @@ const CURRENT_ROC_YEAR = new Date().getFullYear() - 1911;
 const ACADEMIC_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) =>
   String(CURRENT_ROC_YEAR - 2 + index),
 );
+const LAST_CLOUD_FILE_STORAGE_PREFIX = "fitness-test-tool:last-cloud-file:";
 
 function hasIncompleteScore(record: FitnessRecord): boolean {
   return scoreFields.some(
@@ -270,6 +272,32 @@ function buildAcademicTermValue(
   }
 
   return `${academicYear}學年度${semester}`;
+}
+
+function getLastCloudFileStorageKey(uid: string): string {
+  return `${LAST_CLOUD_FILE_STORAGE_PREFIX}${uid}`;
+}
+
+function readLastCloudFileId(uid: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(getLastCloudFileStorageKey(uid));
+}
+
+function writeLastCloudFileId(uid: string, fileId: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const storageKey = getLastCloudFileStorageKey(uid);
+  if (!fileId) {
+    window.localStorage.removeItem(storageKey);
+    return;
+  }
+
+  window.localStorage.setItem(storageKey, fileId);
 }
 
 type ReportDebugParams = {
@@ -393,6 +421,7 @@ export default function App() {
     loadDebugSettings(),
   );
   const reportDebugFileLoadedRef = useRef<string | null>(null);
+  const autoOpenedLastCloudFileRef = useRef<string | null>(null);
   const rosterViewportRef = useRef<HTMLDivElement | null>(null);
   const tableViewportRef = useRef<HTMLDivElement | null>(null);
   const metricViewportRef = useRef<HTMLDivElement | null>(null);
@@ -423,6 +452,7 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) {
       reportDebugFileLoadedRef.current = null;
+      autoOpenedLastCloudFileRef.current = null;
       setFriendDraft("");
       setFriends([]);
       setIncomingFriendRequests([]);
@@ -547,6 +577,48 @@ export default function App() {
   }, [cloudFiles, fileSortKey]);
 
   useEffect(() => {
+    if (!currentUser || isReportDebugMode || currentCloudFileId || cloudFiles.length === 0) {
+      return;
+    }
+
+    const lastFileId = readLastCloudFileId(currentUser.uid);
+    if (!lastFileId || autoOpenedLastCloudFileRef.current === lastFileId) {
+      return;
+    }
+
+    const targetFile = cloudFiles.find((file) => file.id === lastFileId);
+    if (!targetFile) {
+      writeLastCloudFileId(currentUser.uid, null);
+      autoOpenedLastCloudFileRef.current = lastFileId;
+      return;
+    }
+
+    autoOpenedLastCloudFileRef.current = lastFileId;
+    void loadCloudFile(currentUser.uid, targetFile.id)
+      .then((nextData) => {
+        skipNextCloudDirtyRef.current = true;
+        setData(nextData);
+        setCurrentCloudFileId(targetFile.id);
+        setIsCloudDirty(false);
+        setSelectedId(nextData.records[0]?.id ?? "");
+        setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
+        setRosterDraft(
+          nextData.rosterEntries.length
+            ? nextData.rosterEntries
+            : [makeEmptyRosterEntry()],
+        );
+        setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+        setExpandedCloudFileId(targetFile.id);
+        setMessage(`已自動開啟上次使用的檔案：${targetFile.fileName}`);
+      })
+      .catch((error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法開啟上次使用的檔案。";
+        setMessage(`自動開啟上次檔案失敗：${nextMessage}`);
+      });
+  }, [cloudFiles, currentCloudFileId, currentUser, isReportDebugMode]);
+
+  useEffect(() => {
     if (!currentCloudFileId) {
       return;
     }
@@ -558,6 +630,14 @@ export default function App() {
 
     setIsCloudDirty(true);
   }, [currentCloudFileId, data]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    writeLastCloudFileId(currentUser.uid, currentCloudFileId);
+  }, [currentCloudFileId, currentUser]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -1508,6 +1588,7 @@ export default function App() {
         data,
       });
       setCurrentCloudFileId(fileId);
+      setExpandedCloudFileId(fileId);
       setIsCloudDirty(false);
       setMessage("已在你的帳號下建立新的雲端檔案。");
     } catch (error) {
@@ -1554,6 +1635,7 @@ export default function App() {
       skipNextCloudDirtyRef.current = true;
       setData(nextData);
       setCurrentCloudFileId(file.id);
+      setExpandedCloudFileId(file.id);
       setIsCloudDirty(false);
       setSelectedId(nextData.records[0]?.id ?? "");
       setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
@@ -1656,6 +1738,7 @@ export default function App() {
       if (currentCloudFileId === file.id) {
         setCurrentCloudFileId(null);
         setIsCloudDirty(false);
+        writeLastCloudFileId(currentUser.uid, null);
       }
       if (expandedCloudFileId === file.id) {
         setExpandedCloudFileId(null);
@@ -2112,6 +2195,11 @@ export default function App() {
         <div>
           <div className="hero-top">
             <div>
+              <img
+                alt="新北市運動遊戲體育協會 SGPEA 標誌"
+                className="hero-logo"
+                src={associationLogo}
+              />
               <p className="eyebrow">新北市運動遊戲體育協會</p>
               <h1>體適能測驗管理工具</h1>
               <p className="hero-copy">

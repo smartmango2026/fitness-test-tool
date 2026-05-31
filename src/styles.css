@@ -252,6 +252,13 @@ button {
   width: 100%;
 }
 
+.hero-logo {
+  display: block;
+  width: min(420px, 100%);
+  height: auto;
+  margin: 0 0 12px;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: #b45309;
@@ -1427,6 +1434,10 @@ tbody tr.is-selected {
   .debug-hero {
     padding: 18px;
     border-radius: 20px;
+  }
+
+  .hero-logo {
+    width: min(300px, 100%);
   }
 
   .form-grid {
