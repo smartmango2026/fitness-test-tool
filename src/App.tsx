@@ -24,6 +24,7 @@ import {
   defaultAbilityRulesConfig,
   type AbilityRulesConfig,
 } from "./ability-settings";
+import { schoolGradeOptions } from "./ability-rules";
 import {
   loadDebugSettings,
   type DebugSettings,
@@ -169,7 +170,7 @@ const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
   { label: "110%", value: 1.1 },
 ];
 
-const GRADE_OPTIONS = ["中大班", "小幼班"];
+const GRADE_OPTIONS = schoolGradeOptions;
 const TERM_OPTIONS = ["上學期", "下學期"] as const;
 const CURRENT_ROC_YEAR = new Date().getFullYear() - 1911;
 const ACADEMIC_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) =>
@@ -413,6 +414,8 @@ export default function App() {
   const [activeFriendInviteUrl, setActiveFriendInviteUrl] = useState("");
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
+  const [showScannedFriendInviteModal, setShowScannedFriendInviteModal] =
+    useState(false);
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
   const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
   const [abilityRulesConfig, setAbilityRulesConfig] = useState<AbilityRulesConfig>(
@@ -2394,6 +2397,7 @@ export default function App() {
   useEffect(() => {
     if (!inviteIdFromUrl) {
       setScannedFriendInvite(null);
+      setShowScannedFriendInviteModal(false);
       return;
     }
 
@@ -2403,11 +2407,13 @@ export default function App() {
       .then((invite) => {
         if (!isCancelled) {
           setScannedFriendInvite(invite);
+          setShowScannedFriendInviteModal(Boolean(invite));
         }
       })
       .catch(() => {
         if (!isCancelled) {
           setScannedFriendInvite(null);
+          setShowScannedFriendInviteModal(false);
         }
       });
 
@@ -2443,6 +2449,18 @@ export default function App() {
       isCancelled = true;
     };
   }, [activeFriendInvite]);
+
+  useEffect(() => {
+    if (!showScannedFriendInviteModal) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showScannedFriendInviteModal]);
 
   function renderSheetZoomToolbar(
     currentMode: SheetZoomMode,
@@ -2521,6 +2539,52 @@ export default function App() {
         } as CSSProperties
       }
     >
+      {scannedFriendInvite && showScannedFriendInviteModal ? (
+        <div
+          className="friend-invite-modal"
+          onClick={() => setShowScannedFriendInviteModal(false)}
+          role="dialog"
+          aria-label="加入好友邀請"
+        >
+          <div
+            className="friend-invite-modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="secondary-button friend-invite-modal-close"
+              onClick={() => setShowScannedFriendInviteModal(false)}
+              type="button"
+            >
+              關閉
+            </button>
+            <div className="friend-empty-state friend-invite-state">
+              <h3>加入好友</h3>
+              <strong>
+                {scannedFriendInvite.issuedByDisplayName ||
+                  scannedFriendInvite.issuedByUsername}
+              </strong>
+              <p>{formatInviteExpiry(scannedFriendInvite.expiresAt)}</p>
+              {!currentUser ? (
+                <p>請先登入，再把這位老師加入好友。</p>
+              ) : scannedFriendInvite.issuedByUid === currentUser.uid ? (
+                <p>這是你自己的加好友 QR Code。</p>
+              ) : (
+                <div className="friend-row-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      void handleSendFriendRequestFromQr();
+                    }}
+                    type="button"
+                  >
+                    送出好友邀請
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <header className="hero">
         <div>
           <div className="hero-top">
@@ -3342,36 +3406,6 @@ export default function App() {
                       <p>現在會把好友與好友邀請同步到 Firestore，也支援用 QR Code 快速送出好友邀請。</p>
                     </div>
                   </div>
-
-                  {scannedFriendInvite ? (
-                    <div className="friend-section friend-qr-panel">
-                      <h4>掃描到的加好友邀請</h4>
-                      <div className="friend-empty-state friend-invite-state">
-                        <strong>
-                          {scannedFriendInvite.issuedByDisplayName ||
-                            scannedFriendInvite.issuedByUsername}
-                        </strong>
-                        <p>{formatInviteExpiry(scannedFriendInvite.expiresAt)}</p>
-                        {!currentUser ? (
-                          <p>請先登入，再把這位老師加入好友。</p>
-                        ) : scannedFriendInvite.issuedByUid === currentUser.uid ? (
-                          <p>這是你自己的加好友 QR Code。</p>
-                        ) : (
-                          <div className="friend-row-actions">
-                            <button
-                              className="primary-button"
-                              onClick={() => {
-                                void handleSendFriendRequestFromQr();
-                              }}
-                              type="button"
-                            >
-                              送出好友邀請
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
 
                   <div className="friend-section">
                     <div className="friend-section-header">
