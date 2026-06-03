@@ -525,6 +525,11 @@ export default function App() {
     const unsubscribeCloudFiles = subscribeToCloudFiles(
       currentUser.uid,
       setCloudFiles,
+      (error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法載入雲端檔案列表。";
+        setMessage(`雲端檔案列表載入失敗：${nextMessage}`);
+      },
     );
     const unsubscribeAbilityRules = subscribeToAbilityRulesConfig(
       currentUser.uid,

@@ -3,14 +3,17 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles.css";
 
+function formatRuntimeError(error: unknown): string {
+  return error instanceof Error ? error.stack || error.message : String(error);
+}
+
 function renderRuntimeError(error: unknown): void {
   const root = document.getElementById("root");
   if (!root) {
     return;
   }
 
-  const details =
-    error instanceof Error ? error.stack || error.message : String(error);
+  const details = formatRuntimeError(error);
 
   root.innerHTML = `
     <section class="boot-error">
@@ -20,6 +23,14 @@ function renderRuntimeError(error: unknown): void {
     </section>
   `;
 }
+
+window.addEventListener("error", (event) => {
+  renderRuntimeError(event.error ?? event.message);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  renderRuntimeError(event.reason);
+});
 
 try {
   ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -264,6 +264,7 @@ function dedupeFileSummaries(files: CloudFileSummary[]): CloudFileSummary[] {
 export function subscribeToCloudFiles(
   uid: string,
   callback: (files: CloudFileSummary[]) => void,
+  onError?: (error: unknown) => void,
 ): () => void {
   let ownedFiles: CloudFileSummary[] = [];
   let sharedFiles: CloudFileSummary[] = [];
@@ -273,26 +274,44 @@ export function subscribeToCloudFiles(
   };
 
   const ownedQuery = query(collection(db, "users", uid, "files"));
-  const unsubscribeOwned = onSnapshot(ownedQuery, (snapshot) => {
-    ownedFiles = snapshot.docs
-      .map((entry) => mapOwnedFileSummary(entry.id, entry.data()))
-      .filter((file) => file.status !== "archived");
-    emit();
-  });
+  const unsubscribeOwned = onSnapshot(
+    ownedQuery,
+    (snapshot) => {
+      ownedFiles = snapshot.docs
+        .map((entry) => mapOwnedFileSummary(entry.id, entry.data()))
+        .filter((file) => file.status !== "archived");
+      emit();
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 
   const sharesQuery = query(
     collection(db, "fileShares"),
     where("recipientUid", "==", uid),
     where("status", "==", "active"),
   );
-  const unsubscribeShared = onSnapshot(sharesQuery, async (snapshot) => {
-    const shareRecords = snapshot.docs.map((entry) =>
-      mapShareRecord(entry.id, entry.data()),
-    );
-    const resolved = await Promise.all(shareRecords.map(mapSharedFileSummary));
-    sharedFiles = resolved.filter((file): file is CloudFileSummary => Boolean(file));
-    emit();
-  });
+  const unsubscribeShared = onSnapshot(
+    sharesQuery,
+    (snapshot) => {
+      void (async () => {
+        try {
+          const shareRecords = snapshot.docs.map((entry) =>
+            mapShareRecord(entry.id, entry.data()),
+          );
+          const resolved = await Promise.all(shareRecords.map(mapSharedFileSummary));
+          sharedFiles = resolved.filter((file): file is CloudFileSummary => Boolean(file));
+          emit();
+        } catch (error) {
+          onError?.(error);
+        }
+      })();
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 
   return () => {
     unsubscribeOwned();
