@@ -33,7 +33,16 @@ export function findAbilityGradeProfile(
   }
 
   return (
+    config.gradeProfiles.find((profile) =>
+      profile.appliesTo.some((grade) => grade.trim() === normalizedGradeLabel),
+    ) ??
     config.gradeProfiles.find((profile) => profile.label.trim() === normalizedGradeLabel) ??
+    (normalizedGradeLabel === "小幼班"
+      ? config.gradeProfiles.find((profile) => profile.id === "junior")
+      : null) ??
+    (normalizedGradeLabel === "中大班"
+      ? config.gradeProfiles.find((profile) => profile.id === "middleSenior")
+      : null) ??
     config.gradeProfiles[0] ??
     null
   );

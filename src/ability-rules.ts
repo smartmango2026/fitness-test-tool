@@ -27,6 +27,7 @@ export type RubricAbilityRule = {
 };
 
 export type AbilityRule = NumericAbilityRule | RubricAbilityRule;
+export type SchoolGradeLabel = "幼幼班" | "小班" | "中班" | "大班" | "混齡班";
 
 export type GradeGroupKey = "middleSenior" | "junior";
 
@@ -62,8 +63,21 @@ const commonRubricBands: RubricAbilityBand[] = [
 ];
 
 export const gradeGroupLabels: Record<GradeGroupKey, string> = {
-  middleSenior: "中大班",
-  junior: "小幼班",
+  middleSenior: "中班、大班",
+  junior: "幼幼班、小班",
+};
+
+export const schoolGradeOptions: SchoolGradeLabel[] = [
+  "幼幼班",
+  "小班",
+  "中班",
+  "大班",
+  "混齡班",
+];
+
+export const gradeGroupAppliesTo: Record<GradeGroupKey, SchoolGradeLabel[]> = {
+  junior: ["幼幼班", "小班"],
+  middleSenior: ["中班", "大班", "混齡班"],
 };
 
 export const abilityRulesByGradeGroup: Record<

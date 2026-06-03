@@ -1,5 +1,6 @@
 import {
   LOW_ABILITY_THRESHOLD,
+  gradeGroupAppliesTo,
   abilityReportBands,
   abilityRulesByGradeGroup,
   gradeGroupLabels,
@@ -8,11 +9,13 @@ import {
   type AbilityReportBand,
   type AbilityRule,
   type GradeGroupKey,
+  type SchoolGradeLabel,
 } from "./ability-rules";
 
 export type AbilityGradeProfile = {
   id: string;
   label: string;
+  appliesTo: SchoolGradeLabel[];
   rules: Record<AbilityMetricKey, AbilityRule>;
 };
 
@@ -32,6 +35,7 @@ function createDefaultProfiles(): AbilityGradeProfile[] {
   return (Object.keys(abilityRulesByGradeGroup) as GradeGroupKey[]).map((gradeKey) => ({
     id: gradeKey,
     label: gradeGroupLabels[gradeKey],
+    appliesTo: deepClone(gradeGroupAppliesTo[gradeKey]),
     rules: deepClone(abilityRulesByGradeGroup[gradeKey]),
   }));
 }
@@ -53,6 +57,54 @@ function normalizeReportBand(band: AbilityReportBand): AbilityReportBand {
 
 function isAbilityMetricKey(value: string): value is AbilityMetricKey {
   return ["item1", "item2", "item3", "item4", "item5", "item6"].includes(value);
+}
+
+function isSchoolGradeLabel(value: string): value is SchoolGradeLabel {
+  return ["幼幼班", "小班", "中班", "大班", "混齡班"].includes(value);
+}
+
+function inferAppliesToForProfile(
+  candidate: Partial<AbilityGradeProfile>,
+  fallback: AbilityGradeProfile,
+): SchoolGradeLabel[] {
+  if (Array.isArray(candidate.appliesTo)) {
+    const nextAppliesTo = candidate.appliesTo.filter(
+      (grade): grade is SchoolGradeLabel => typeof grade === "string" && isSchoolGradeLabel(grade),
+    );
+    if (nextAppliesTo.length > 0) {
+      return nextAppliesTo;
+    }
+  }
+
+  if (candidate.id === "junior" || candidate.label === "小幼班") {
+    return deepClone(gradeGroupAppliesTo.junior);
+  }
+
+  if (candidate.id === "middleSenior" || candidate.label === "中大班") {
+    return deepClone(gradeGroupAppliesTo.middleSenior);
+  }
+
+  return deepClone(fallback.appliesTo);
+}
+
+function normalizeProfileLabel(
+  label: string,
+  fallback: AbilityGradeProfile,
+): string {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    return fallback.label;
+  }
+
+  if (trimmed === "小幼班") {
+    return gradeGroupLabels.junior;
+  }
+
+  if (trimmed === "中大班") {
+    return gradeGroupLabels.middleSenior;
+  }
+
+  return trimmed;
 }
 
 function normalizeAbilityRule(value: unknown, fallback: AbilityRule): AbilityRule {
@@ -81,8 +133,10 @@ function normalizeGradeProfile(value: unknown, fallback: AbilityGradeProfile): A
   }
 
   if (typeof candidate.label === "string" && candidate.label.trim()) {
-    nextProfile.label = candidate.label;
+    nextProfile.label = normalizeProfileLabel(candidate.label, fallback);
   }
+
+  nextProfile.appliesTo = inferAppliesToForProfile(candidate, fallback);
 
   if (candidate.rules && typeof candidate.rules === "object") {
     Object.entries(candidate.rules).forEach(([metricKey, rule]) => {
@@ -133,11 +187,13 @@ export function normalizeAbilityRulesConfig(value: unknown): AbilityRulesConfig 
         {
           id: gradeKey,
           label: gradeGroupLabels[gradeKey] ?? gradeKey,
+          appliesTo: gradeGroupAppliesTo[gradeKey],
           rules: candidate.gradeRules?.[gradeKey],
         },
         {
           id: gradeKey,
           label: gradeGroupLabels[gradeKey] ?? gradeKey,
+          appliesTo: gradeGroupAppliesTo[gradeKey],
           rules: abilityRulesByGradeGroup[gradeKey],
         },
       ),
@@ -169,4 +225,3 @@ export function resetAbilityRulesConfig(): void {
 }
 
 export { lowAbilityAdviceByKey };
-

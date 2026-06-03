@@ -15,7 +15,9 @@ import type {
   AbilityMetricKey,
   NumericAbilityBand,
   RubricAbilityBand,
+  SchoolGradeLabel,
 } from "./ability-rules";
+import { schoolGradeOptions } from "./ability-rules";
 import { subscribeToAuthState } from "./firebase-auth";
 import type { User } from "firebase/auth";
 
@@ -42,6 +44,7 @@ function createProfileCopy(profile: AbilityGradeProfile): AbilityGradeProfile {
   return {
     id: crypto.randomUUID(),
     label: `${profile.label} 副本`,
+    appliesTo: [...profile.appliesTo],
     rules: JSON.parse(JSON.stringify(profile.rules)) as AbilityGradeProfile["rules"],
   };
 }
@@ -118,6 +121,30 @@ export default function DebugPage() {
   function updateProfileLabel(rawValue: string): void {
     withSelectedProfile((profile) => {
       profile.label = rawValue;
+    });
+  }
+
+  function toggleProfileGrade(grade: SchoolGradeLabel): void {
+    setDraft((current) => {
+      const next = cloneConfig(current);
+      const profile = next.gradeProfiles.find((item) => item.id === (selectedProfile?.id ?? ""));
+      if (!profile) {
+        return current;
+      }
+
+      if (profile.appliesTo.includes(grade)) {
+        if (profile.appliesTo.length <= 1) {
+          return current;
+        }
+        profile.appliesTo = profile.appliesTo.filter((item) => item !== grade);
+        return next;
+      }
+
+      next.gradeProfiles.forEach((item) => {
+        item.appliesTo = item.appliesTo.filter((assignedGrade) => assignedGrade !== grade);
+      });
+      profile.appliesTo = [...profile.appliesTo, grade];
+      return next;
     });
   }
 
@@ -426,6 +453,22 @@ export default function DebugPage() {
               <label>
                 設定檔名稱
                 <input onChange={(event) => updateProfileLabel(event.target.value)} type="text" value={selectedProfile.label} />
+              </label>
+
+              <label>
+                適用年級
+                <div className="file-share-current-list">
+                  {schoolGradeOptions.map((grade) => (
+                    <label className="file-share-current-item" key={grade}>
+                      <span>{grade}</span>
+                      <input
+                        checked={selectedProfile.appliesTo.includes(grade)}
+                        onChange={() => toggleProfileGrade(grade)}
+                        type="checkbox"
+                      />
+                    </label>
+                  ))}
+                </div>
               </label>
 
               <label>
