@@ -444,7 +444,7 @@ button {
 
 .file-table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) minmax(180px, 1.4fr) minmax(120px, 1fr) minmax(130px, 0.9fr);
+  grid-template-columns: minmax(220px, 1.8fr) minmax(180px, 1.4fr) minmax(130px, 0.9fr);
   gap: 12px;
   align-items: center;
   padding: 14px 16px;

@@ -3968,9 +3968,8 @@ export default function App() {
                 ) : (
                   <div className="file-table">
                     <div className="file-table-row file-table-row-header">
-                      <span>檔案名稱</span>
-                      <span>學年度／學期</span>
                       <span>班級</span>
+                      <span>學年度／學期</span>
                       <span>狀態</span>
                     </div>
                     {sortedCloudFiles.map((file) => (
@@ -3995,10 +3994,9 @@ export default function App() {
                             >
                               ▾
                             </span>
-                            {file.fileName}
+                            <span>{file.rosterName}</span>
                           </span>
                           <span>{file.academicTerm}</span>
-                          <span>{file.rosterName}</span>
                           {file.id === currentCloudFileId &&
                           file.ownerUid === currentCloudFileOwnerUid ? (
                             <span>目前使用中</span>
