@@ -22,6 +22,7 @@ export type CloudFileSummary = {
   rosterName: string;
   gradeLabel: string;
   academicTerm: string;
+  testDate: string;
   rosterCount: number;
   recordCount: number;
   status: "active" | "archived";
@@ -184,6 +185,10 @@ function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
       typeof data.academicTerm === "string" && data.academicTerm.trim()
         ? data.academicTerm
         : "尚未設定",
+    testDate:
+      typeof data.testDate === "string" && data.testDate
+        ? data.testDate
+        : defaultAppData.testDate,
     rosterCount: typeof data.rosterCount === "number" ? data.rosterCount : 0,
     recordCount: typeof data.recordCount === "number" ? data.recordCount : 0,
     status: data.status === "archived" ? "archived" : "active",
@@ -239,6 +244,10 @@ function mapRecipientSharedFileSummary(id: string, data: DocumentData): CloudFil
       typeof data.academicTerm === "string" && data.academicTerm.trim()
         ? data.academicTerm
         : "尚未設定",
+    testDate:
+      typeof data.testDate === "string" && data.testDate
+        ? data.testDate
+        : defaultAppData.testDate,
     rosterCount: typeof data.rosterCount === "number" ? data.rosterCount : 0,
     recordCount: typeof data.recordCount === "number" ? data.recordCount : 0,
     status: data.status === "archived" ? "archived" : "active",
@@ -260,6 +269,7 @@ async function syncShareMetadata(options: {
   rosterName: string;
   gradeLabel: string;
   academicTerm: string;
+  testDate: string;
   rosterCount: number;
   recordCount: number;
   status?: "active" | "archived";
@@ -294,6 +304,7 @@ async function syncShareMetadata(options: {
         rosterName: options.rosterName,
         gradeLabel: options.gradeLabel,
         academicTerm: options.academicTerm,
+        testDate: options.testDate,
         rosterCount: options.rosterCount,
         recordCount: options.recordCount,
         recipientUid,
@@ -420,6 +431,7 @@ export async function saveCloudFile(options: {
     rosterName: options.data.rosterName,
     gradeLabel: options.data.gradeLabel,
     academicTerm: options.data.academicTerm,
+    testDate: options.data.testDate,
     rosterCount: options.data.rosterEntries.length,
     recordCount: options.data.records.length,
     ownerUsername: options.username,
@@ -433,6 +445,7 @@ export async function updateCloudFileInfo(options: {
   rosterName: string;
   gradeLabel: string;
   academicTerm: string;
+  testDate: string;
 }): Promise<void> {
   const fileRef = doc(db, "users", options.ownerUid, "files", options.fileId);
   const rosterName = options.rosterName.trim() || "未命名班級";
@@ -445,6 +458,7 @@ export async function updateCloudFileInfo(options: {
       rosterName,
       gradeLabel: options.gradeLabel,
       academicTerm,
+      testDate: options.testDate,
       fileName,
       updatedAt: serverTimestamp(),
     },
@@ -460,6 +474,7 @@ export async function updateCloudFileInfo(options: {
     rosterName,
     gradeLabel: options.gradeLabel,
     academicTerm,
+    testDate: options.testDate,
     rosterCount: typeof data?.rosterCount === "number" ? data.rosterCount : 0,
     recordCount: typeof data?.recordCount === "number" ? data.recordCount : 0,
     ownerUsername: typeof data?.ownerUsername === "string" ? data.ownerUsername : "",

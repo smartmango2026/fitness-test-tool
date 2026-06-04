@@ -141,6 +141,7 @@ type ActiveCell = {
 
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 type FileSortKey = "created-desc" | "updated-desc" | "name-asc" | "roster-asc" | "grade-asc";
+type MobileTabVariant = "wrap" | "scroll" | "compact";
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "account", label: "帳號管理" },
@@ -499,9 +500,23 @@ function readReportDebugParamsFromUrl(): ReportDebugParams {
   };
 }
 
+function readMobileTabVariantFromUrl(): MobileTabVariant {
+  if (typeof window === "undefined") {
+    return "wrap";
+  }
+
+  const variant = new URLSearchParams(window.location.search).get("mobileTabs");
+  if (variant === "scroll" || variant === "compact") {
+    return variant;
+  }
+
+  return "wrap";
+}
+
 export default function App() {
   const [data, setData] = useState<AppData>(defaultAppData);
   const reportDebugParams = useMemo(() => readReportDebugParamsFromUrl(), []);
+  const mobileTabVariant = useMemo(() => readMobileTabVariantFromUrl(), []);
   const isReportDebugMode = reportDebugParams.enabled;
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (readReportDebugParamsFromUrl().enabled) {
@@ -556,7 +571,10 @@ export default function App() {
   const [shareEditorUids, setShareEditorUids] = useState<string[]>([]);
   const [selectedShareFriendUid, setSelectedShareFriendUid] = useState("");
   const [cloudFileDrafts, setCloudFileDrafts] = useState<
-    Record<string, { rosterName: string; gradeLabel: string; academicTerm: string }>
+    Record<
+      string,
+      { rosterName: string; gradeLabel: string; academicTerm: string; testDate: string }
+    >
   >({});
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
@@ -873,6 +891,7 @@ export default function App() {
           rosterName: current[file.id]?.rosterName ?? file.rosterName,
           gradeLabel: current[file.id]?.gradeLabel ?? file.gradeLabel,
           academicTerm: current[file.id]?.academicTerm ?? file.academicTerm,
+          testDate: current[file.id]?.testDate ?? file.testDate,
         };
       }
 
@@ -1249,28 +1268,6 @@ export default function App() {
         (friend) => !effectiveSharedEditorUids.includes(friend.friendUid),
       ),
     [effectiveSharedEditorUids, shareableFriends],
-  );
-  const shareDebugInfo = useMemo(
-    () => ({
-      summarySharedEditorUids: shareTargetFileSummary?.sharedEditorUids ?? [],
-      stateShareEditorUids: shareEditorUids,
-      effectiveSharedEditorUids,
-      shareableFriendUids: shareableFriends.map((friend) => ({
-        uid: friend.friendUid,
-        name: friend.displayName,
-      })),
-      sharedEditorFriendUids: sharedEditorFriends.map((friend) => ({
-        uid: friend.friendUid,
-        name: friend.displayName,
-      })),
-    }),
-    [
-      shareTargetFileSummary,
-      effectiveSharedEditorUids,
-      shareEditorUids,
-      shareableFriends,
-      sharedEditorFriends,
-    ],
   );
   useEffect(() => {
     if (
@@ -2762,7 +2759,7 @@ export default function App() {
 
   function updateCloudFileDraft(
     fileId: string,
-    field: "rosterName" | "gradeLabel" | "academicTerm",
+    field: "rosterName" | "gradeLabel" | "academicTerm" | "testDate",
     value: string,
   ): void {
     setCloudFileDrafts((current) => ({
@@ -2771,6 +2768,7 @@ export default function App() {
         rosterName: current[fileId]?.rosterName ?? "",
         gradeLabel: current[fileId]?.gradeLabel ?? "",
         academicTerm: current[fileId]?.academicTerm ?? "",
+        testDate: current[fileId]?.testDate ?? "",
         [field]: value,
       },
     }));
@@ -2822,6 +2820,7 @@ export default function App() {
           rosterName: draft.rosterName,
           gradeLabel: draft.gradeLabel,
           academicTerm: draft.academicTerm,
+          testDate: draft.testDate,
         },
       });
       await updateCloudFileInfo({
@@ -2830,6 +2829,7 @@ export default function App() {
         rosterName: draft.rosterName,
         gradeLabel: draft.gradeLabel,
         academicTerm: draft.academicTerm,
+        testDate: draft.testDate,
       });
       await writeAppSystemLog({
         operationId,
@@ -2843,6 +2843,7 @@ export default function App() {
           rosterName: draft.rosterName,
           gradeLabel: draft.gradeLabel,
           academicTerm: draft.academicTerm,
+          testDate: draft.testDate,
         },
       });
       setMessage(`已更新檔案資訊：${file.fileName}`);
@@ -3608,7 +3609,7 @@ export default function App() {
               <p className="eyebrow">新北市運動遊戲體育協會</p>
               <h1>體適能測驗管理工具</h1>
               <p className="hero-copy">
-                第一版以網頁為唯一正式編輯來源，Excel 僅用於檢視、備份、列印與攜帶。
+                正式資料以網頁為主，檔案、好友與報表都集中在這裡管理。
               </p>
             </div>
             <div className="hero-auth">
@@ -3674,24 +3675,6 @@ export default function App() {
                 )}
               </div>
             </div>
-          </div>
-
-          <div className="hero-meta">
-            <label className="shared-date-field">
-              班級名稱
-              <input
-                onChange={(event) => updateRosterName(event.target.value)}
-                value={data.rosterName}
-              />
-            </label>
-            <label className="shared-date-field">
-              本次測驗日期
-              <input
-                onChange={(event) => updateSharedTestDate(event.target.value)}
-                type="date"
-                value={data.testDate}
-              />
-            </label>
           </div>
           {!currentUser && showLoginPanel ? (
             <section className="auth-panel">
@@ -3770,7 +3753,7 @@ export default function App() {
         </section>
       ) : null}
 
-      <nav className="tab-bar" aria-label="主要功能">
+      <nav className={`tab-bar tab-bar--${mobileTabVariant}`} aria-label="主要功能">
         {tabs.map((tab) => (
           <button
             className={tab.key === activeTab ? "tab is-active" : "tab"}
@@ -3986,10 +3969,8 @@ export default function App() {
                   <div className="file-table">
                     <div className="file-table-row file-table-row-header">
                       <span>檔案名稱</span>
-                      <span>班級名稱</span>
-                      <span>年級</span>
-                      <span>學期</span>
-                      <span>班級人數</span>
+                      <span>學年度／學期</span>
+                      <span>班級</span>
                       <span>狀態</span>
                     </div>
                     {sortedCloudFiles.map((file) => (
@@ -4016,10 +3997,8 @@ export default function App() {
                             </span>
                             {file.fileName}
                           </span>
-                          <span>{file.rosterName}</span>
-                          <span>{file.gradeLabel}</span>
                           <span>{file.academicTerm}</span>
-                          <span>{file.rosterCount} 人</span>
+                          <span>{file.rosterName}</span>
                           {file.id === currentCloudFileId &&
                           file.ownerUid === currentCloudFileOwnerUid ? (
                             <span>目前使用中</span>
@@ -4110,6 +4089,16 @@ export default function App() {
                                         </option>
                                       ))}
                                     </select>
+                                  </label>
+                                  <label>
+                                    <strong>測驗日期</strong>
+                                    <input
+                                      onChange={(event) =>
+                                        updateSharedTestDate(event.target.value)
+                                      }
+                                      type="date"
+                                      value={data.testDate}
+                                    />
                                   </label>
                                   <label className="file-size-field">
                                     <strong>班級人數</strong>
@@ -4203,12 +4192,6 @@ export default function App() {
                                             目前沒有其他好友可再分享。
                                           </p>
                                         ) : null}
-                                        <details className="file-share-debug">
-                                          <summary>共同編輯除錯資訊</summary>
-                                          <pre>
-                                            {JSON.stringify(shareDebugInfo, null, 2)}
-                                          </pre>
-                                        </details>
                                       </div>
                                     )}
                                   </div>
@@ -4231,34 +4214,6 @@ export default function App() {
                                     type="button"
                                   >
                                     儲存目前檔案
-                                  </button>
-                                  <button
-                                    className="secondary-button"
-                                    onClick={() => openFileWorkspace("roster")}
-                                    type="button"
-                                  >
-                                    編輯名冊資訊
-                                  </button>
-                                  <button
-                                    className="secondary-button"
-                                    onClick={() => openFileWorkspace("metric")}
-                                    type="button"
-                                  >
-                                    開啟測驗項目
-                                  </button>
-                                  <button
-                                    className="secondary-button"
-                                    onClick={() => openFileWorkspace("table")}
-                                    type="button"
-                                  >
-                                    開啟總表
-                                  </button>
-                                  <button
-                                    className="secondary-button"
-                                    onClick={() => openFileWorkspace("pdf")}
-                                    type="button"
-                                  >
-                                    檢視報表
                                   </button>
                                   {file.accessRole === "owner" ? (
                                     <button
@@ -4361,6 +4316,20 @@ export default function App() {
                                       ))}
                                     </select>
                                   </label>
+                                  <label>
+                                    <strong>測驗日期</strong>
+                                    <input
+                                      onChange={(event) =>
+                                        updateCloudFileDraft(
+                                          file.id,
+                                          "testDate",
+                                          event.target.value,
+                                        )
+                                      }
+                                      type="date"
+                                      value={cloudFileDrafts[file.id]?.testDate ?? file.testDate}
+                                    />
+                                  </label>
                                   <label className="file-size-field">
                                     <strong>班級人數</strong>
                                     <div className="static-field">
@@ -4441,12 +4410,6 @@ export default function App() {
                                             目前沒有其他好友可再分享。
                                           </p>
                                         ) : null}
-                                        <details className="file-share-debug">
-                                          <summary>共同編輯除錯資訊</summary>
-                                          <pre>
-                                            {JSON.stringify(shareDebugInfo, null, 2)}
-                                          </pre>
-                                        </details>
                                       </div>
                                     )}
                                   </div>
