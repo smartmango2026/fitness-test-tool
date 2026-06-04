@@ -1242,6 +1242,28 @@ export default function App() {
       ),
     [effectiveSharedEditorUids, shareableFriends],
   );
+  const shareDebugInfo = useMemo(
+    () => ({
+      summarySharedEditorUids: currentCloudFileSummary?.sharedEditorUids ?? [],
+      stateShareEditorUids: shareEditorUids,
+      effectiveSharedEditorUids,
+      shareableFriendUids: shareableFriends.map((friend) => ({
+        uid: friend.friendUid,
+        name: friend.displayName,
+      })),
+      sharedEditorFriendUids: sharedEditorFriends.map((friend) => ({
+        uid: friend.friendUid,
+        name: friend.displayName,
+      })),
+    }),
+    [
+      currentCloudFileSummary,
+      effectiveSharedEditorUids,
+      shareEditorUids,
+      shareableFriends,
+      sharedEditorFriends,
+    ],
+  );
   useEffect(() => {
     if (
       selectedShareFriendUid &&
@@ -4173,6 +4195,12 @@ export default function App() {
                                             目前沒有其他好友可再分享。
                                           </p>
                                         ) : null}
+                                        <details className="file-share-debug">
+                                          <summary>共同編輯除錯資訊</summary>
+                                          <pre>
+                                            {JSON.stringify(shareDebugInfo, null, 2)}
+                                          </pre>
+                                        </details>
                                       </div>
                                     )}
                                   </div>
