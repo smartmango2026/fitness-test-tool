@@ -4361,10 +4361,99 @@ export default function App() {
                                       ))}
                                     </select>
                                   </label>
+                                  <label className="file-size-field">
+                                    <strong>班級人數</strong>
+                                    <div className="static-field">
+                                      {file.rosterCount} 人
+                                    </div>
+                                  </label>
                                 </div>
+                                {file.accessRole === "owner" ? (
+                                  <div className="file-share-section">
+                                    <div className="friend-section-header">
+                                      <h4>共同編輯好友</h4>
+                                    </div>
+                                    {shareableFriends.length === 0 ? (
+                                      <div className="friend-empty-state">
+                                        <strong>目前還沒有可分享的好友</strong>
+                                        <p>先到帳號管理加入好友，之後就能把檔案分享給對方共同編輯。</p>
+                                      </div>
+                                    ) : (
+                                      <div className="file-share-controls">
+                                        {sharedEditorFriends.length > 0 ? (
+                                          <div className="file-share-current-list">
+                                            {sharedEditorFriends.map((friend) => (
+                                              <div
+                                                className="file-share-current-item"
+                                                key={friend.friendUid}
+                                              >
+                                                <span>{friend.displayName}</span>
+                                                <button
+                                                  className="secondary-button"
+                                                  onClick={() => {
+                                                    void handleRemoveFileEditor(
+                                                      file,
+                                                      friend.friendUid,
+                                                    );
+                                                  }}
+                                                  type="button"
+                                                >
+                                                  取消分享
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="file-share-hint">
+                                            目前還沒有共同編輯好友。
+                                          </p>
+                                        )}
+                                        <div className="file-share-row">
+                                          <select
+                                            onChange={(event) =>
+                                              setSelectedShareFriendUid(event.target.value)
+                                            }
+                                            value={selectedShareFriendUid}
+                                          >
+                                            <option value="">選擇好友暱稱</option>
+                                            {availableShareFriends.map((friend) => (
+                                              <option
+                                                key={friend.friendUid}
+                                                value={friend.friendUid}
+                                              >
+                                                {friend.displayName}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <button
+                                            className="secondary-button"
+                                            disabled={!selectedShareFriendUid}
+                                            onClick={() => {
+                                              void handleShareFileWithFriend(file);
+                                            }}
+                                            type="button"
+                                          >
+                                            分享
+                                          </button>
+                                        </div>
+                                        {availableShareFriends.length === 0 ? (
+                                          <p className="file-share-hint">
+                                            目前沒有其他好友可再分享。
+                                          </p>
+                                        ) : null}
+                                        <details className="file-share-debug">
+                                          <summary>共同編輯除錯資訊</summary>
+                                          <pre>
+                                            {JSON.stringify(shareDebugInfo, null, 2)}
+                                          </pre>
+                                        </details>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : null}
                                 <div className="file-status-row">
                                   <span className="status-chip">
-                                    {file.accessRole === "owner" ? "尚未切換" : "由好友分享"}
+                                    {file.accessRole === "owner" ? "未使用中" : "由好友分享"}
                                   </span>
                                   <span>
                                     最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
