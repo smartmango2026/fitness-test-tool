@@ -50,6 +50,13 @@ export type FileShareRecord = {
   updatedAt: string | null;
 };
 
+type SharedWithEntry = {
+  username: string;
+  displayName: string | null;
+  sharedAt: string | null;
+  status: "active" | "revoked";
+};
+
 function isPermissionDeniedError(error: unknown): boolean {
   return (
     !!error &&
@@ -85,6 +92,10 @@ function buildFileShareDocumentId(
   return `${ownerUid}__${fileId}__${recipientUid}`;
 }
 
+function normalizeDisplayName(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function buildStoredFileData(
   ownerUid: string,
   ownerUsername: string,
@@ -96,6 +107,7 @@ function buildStoredFileData(
     ownerUsername,
     ownerDisplayName,
     editorUids: [],
+    sharedWith: {},
     status: "active",
     fileName: buildFileName(data),
     rosterName: data.rosterName,
@@ -197,10 +209,7 @@ function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
     ownerUid: typeof data.ownerUid === "string" ? data.ownerUid : "",
     ownerUsername:
       typeof data.ownerUsername === "string" ? data.ownerUsername : "未命名使用者",
-    ownerDisplayName:
-      typeof data.ownerDisplayName === "string" && data.ownerDisplayName.trim()
-        ? data.ownerDisplayName.trim()
-        : null,
+    ownerDisplayName: normalizeDisplayName(data.ownerDisplayName),
     accessRole: "owner",
   };
 }
@@ -212,10 +221,7 @@ function mapShareRecord(id: string, data: DocumentData): FileShareRecord {
     ownerUid: typeof data.ownerUid === "string" ? data.ownerUid : "",
     ownerUsername:
       typeof data.ownerUsername === "string" ? data.ownerUsername : "未命名使用者",
-    ownerDisplayName:
-      typeof data.ownerDisplayName === "string" && data.ownerDisplayName.trim()
-        ? data.ownerDisplayName.trim()
-        : null,
+    ownerDisplayName: normalizeDisplayName(data.ownerDisplayName),
     ownerFileName:
       typeof data.fileName === "string" && data.fileName.trim()
         ? data.fileName
@@ -223,13 +229,64 @@ function mapShareRecord(id: string, data: DocumentData): FileShareRecord {
     recipientUid: typeof data.recipientUid === "string" ? data.recipientUid : "",
     recipientUsername:
       typeof data.recipientUsername === "string" ? data.recipientUsername : "",
-    recipientDisplayName:
-      typeof data.recipientDisplayName === "string" && data.recipientDisplayName.trim()
-        ? data.recipientDisplayName.trim()
-        : null,
+    recipientDisplayName: normalizeDisplayName(data.recipientDisplayName),
     status: data.status === "revoked" ? "revoked" : "active",
     createdAt: timestampToIso(data.createdAt),
     updatedAt: timestampToIso(data.updatedAt),
+  };
+}
+
+function readSharedWith(data: DocumentData | undefined): Record<string, SharedWithEntry> {
+  const raw = data?.sharedWith;
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+
+  const next: Record<string, SharedWithEntry> = {};
+  Object.entries(raw as Record<string, unknown>).forEach(([uid, value]) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    const entry = value as Record<string, unknown>;
+    next[uid] = {
+      username: typeof entry.username === "string" ? entry.username : "",
+      displayName: normalizeDisplayName(entry.displayName),
+      sharedAt: timestampToIso(entry.sharedAt) ?? null,
+      status: entry.status === "revoked" ? "revoked" : "active",
+    };
+  });
+  return next;
+}
+
+function mapRecipientSharedFileSummary(id: string, data: DocumentData): CloudFileSummary {
+  return {
+    id: typeof data.fileId === "string" && data.fileId ? data.fileId : id,
+    fileName:
+      typeof data.fileName === "string" && data.fileName.trim()
+        ? data.fileName
+        : "未命名檔案",
+    rosterName:
+      typeof data.rosterName === "string" && data.rosterName.trim()
+        ? data.rosterName
+        : "未命名班級",
+    gradeLabel:
+      typeof data.gradeLabel === "string" && data.gradeLabel.trim()
+        ? data.gradeLabel
+        : "未設定",
+    academicTerm:
+      typeof data.academicTerm === "string" && data.academicTerm.trim()
+        ? data.academicTerm
+        : "尚未設定",
+    rosterCount: typeof data.rosterCount === "number" ? data.rosterCount : 0,
+    recordCount: typeof data.recordCount === "number" ? data.recordCount : 0,
+    status: data.status === "archived" ? "archived" : "active",
+    createdAt: timestampToIso(data.createdAt),
+    updatedAt: timestampToIso(data.updatedAt),
+    ownerUid: typeof data.ownerUid === "string" ? data.ownerUid : "",
+    ownerUsername:
+      typeof data.ownerUsername === "string" ? data.ownerUsername : "未命名使用者",
+    ownerDisplayName: normalizeDisplayName(data.ownerDisplayName),
+    accessRole: "editor",
   };
 }
 
@@ -246,6 +303,49 @@ async function syncShareMetadata(options: {
   ownerUsername?: string;
   ownerDisplayName?: string | null;
 }): Promise<void> {
+  const fileSnapshot = await getDoc(doc(db, "users", options.ownerUid, "files", options.fileId));
+  const fileData = fileSnapshot.data();
+  const editorUids = Array.isArray(fileData?.editorUids)
+    ? fileData.editorUids.filter((value): value is string => typeof value === "string")
+    : [];
+  const sharedWith = readSharedWith(fileData);
+
+  const recipientBatch = writeBatch(db);
+  editorUids.forEach((recipientUid) => {
+    const sharedEntry = sharedWith[recipientUid];
+    const sharedFileRef = doc(
+      db,
+      "users",
+      recipientUid,
+      "sharedFiles",
+      buildFileShareDocumentId(options.ownerUid, options.fileId, recipientUid),
+    );
+    recipientBatch.set(
+      sharedFileRef,
+      {
+        ownerUid: options.ownerUid,
+        fileId: options.fileId,
+        ownerUsername: options.ownerUsername,
+        ownerDisplayName: options.ownerDisplayName,
+        fileName: options.fileName,
+        rosterName: options.rosterName,
+        gradeLabel: options.gradeLabel,
+        academicTerm: options.academicTerm,
+        rosterCount: options.rosterCount,
+        recordCount: options.recordCount,
+        recipientUid,
+        recipientUsername: sharedEntry?.username ?? "",
+        recipientDisplayName: sharedEntry?.displayName ?? null,
+        fileStatus: options.status ?? "active",
+        status: "active",
+        sharedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+  await recipientBatch.commit();
+
   const sharesQuery = query(
     collection(db, "fileShares"),
     where("ownerUid", "==", options.ownerUid),
@@ -342,7 +442,11 @@ async function mapSharedFileSummary(share: FileShareRecord): Promise<CloudFileSu
 function dedupeFileSummaries(files: CloudFileSummary[]): CloudFileSummary[] {
   const next = new Map<string, CloudFileSummary>();
   files.forEach((file) => {
-    next.set(`${file.ownerUid}:${file.id}`, file);
+    const key = `${file.ownerUid}:${file.id}`;
+    const existing = next.get(key);
+    if (!existing || (existing.accessRole === "editor" && file.accessRole === "owner")) {
+      next.set(key, file);
+    }
   });
   return [...next.values()];
 }
@@ -354,9 +458,10 @@ export function subscribeToCloudFiles(
 ): () => void {
   let ownedFiles: CloudFileSummary[] = [];
   let sharedFiles: CloudFileSummary[] = [];
+  let legacySharedFiles: CloudFileSummary[] = [];
 
   const emit = () => {
-    callback(dedupeFileSummaries([...ownedFiles, ...sharedFiles]));
+    callback(dedupeFileSummaries([...ownedFiles, ...sharedFiles, ...legacySharedFiles]));
   };
 
   const ownedQuery = query(collection(db, "users", uid, "files"));
@@ -365,6 +470,23 @@ export function subscribeToCloudFiles(
     (snapshot) => {
       ownedFiles = snapshot.docs
         .map((entry) => mapOwnedFileSummary(entry.id, entry.data()))
+        .filter((file) => file.status !== "archived");
+      emit();
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
+
+  const recipientSharedQuery = query(
+    collection(db, "users", uid, "sharedFiles"),
+    where("status", "==", "active"),
+  );
+  const unsubscribeRecipientShared = onSnapshot(
+    recipientSharedQuery,
+    (snapshot) => {
+      sharedFiles = snapshot.docs
+        .map((entry) => mapRecipientSharedFileSummary(entry.id, entry.data()))
         .filter((file) => file.status !== "archived");
       emit();
     },
@@ -404,7 +526,7 @@ export function subscribeToCloudFiles(
           failedShares.push(reason || `共享檔案讀取失敗：${fallbackName}`);
         });
 
-        sharedFiles = nextSharedFiles;
+        legacySharedFiles = nextSharedFiles;
         emit();
 
         if (failedShares.length > 0) {
@@ -425,6 +547,7 @@ export function subscribeToCloudFiles(
 
   return () => {
     unsubscribeOwned();
+    unsubscribeRecipientShared();
     unsubscribeShared();
   };
 }
@@ -551,6 +674,7 @@ export async function archiveCloudFile(options: {
   if (!snapshot.empty) {
     const batch = writeBatch(db);
     snapshot.docs.forEach((shareDoc) => {
+      const shareData = shareDoc.data();
       batch.set(
         shareDoc.ref,
         {
@@ -559,6 +683,23 @@ export async function archiveCloudFile(options: {
         },
         { merge: true },
       );
+      if (typeof shareData.recipientUid === "string" && shareData.recipientUid) {
+        batch.set(
+          doc(
+            db,
+            "users",
+            shareData.recipientUid,
+            "sharedFiles",
+            buildFileShareDocumentId(options.ownerUid, options.fileId, shareData.recipientUid),
+          ),
+          {
+            status: "revoked",
+            fileStatus: "archived",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
     });
     await batch.commit();
   }
@@ -614,15 +755,62 @@ export async function setCloudFileEditors(options: {
 }): Promise<void> {
   const fileRef = doc(db, "users", options.ownerUid, "files", options.file.id);
   const editorUids = options.editorTargets.map((target) => target.uid);
-  await updateDoc(fileRef, {
-    editorUids,
-    ownerUsername: options.ownerUsername,
-    ownerDisplayName: options.ownerDisplayName?.trim() || null,
-    updatedAt: serverTimestamp(),
-  });
-
   const batch = writeBatch(db);
+  const sharedWith = Object.fromEntries(
+    options.editorTargets.map((target) => [
+      target.uid,
+      {
+        username: target.username,
+        displayName: target.displayName,
+        sharedAt: serverTimestamp(),
+        status: "active",
+      },
+    ]),
+  );
+  batch.set(
+    fileRef,
+    {
+      editorUids,
+      sharedWith,
+      ownerUsername: options.ownerUsername,
+      ownerDisplayName: options.ownerDisplayName?.trim() || null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
   options.editorTargets.forEach((target) => {
+    const sharedFileRef = doc(
+      db,
+      "users",
+      target.uid,
+      "sharedFiles",
+      buildFileShareDocumentId(options.ownerUid, options.file.id, target.uid),
+    );
+    batch.set(
+      sharedFileRef,
+      {
+        ownerUid: options.ownerUid,
+        fileId: options.file.id,
+        ownerUsername: options.ownerUsername,
+        ownerDisplayName: options.ownerDisplayName?.trim() || null,
+        fileName: options.file.fileName,
+        rosterName: options.file.rosterName,
+        gradeLabel: options.file.gradeLabel,
+        academicTerm: options.file.academicTerm,
+        rosterCount: options.file.rosterCount,
+        recordCount: options.file.recordCount,
+        recipientUid: target.uid,
+        recipientUsername: target.username,
+        recipientDisplayName: target.displayName,
+        status: "active",
+        fileStatus: "active",
+        sharedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
     const shareRef = doc(
       db,
       "fileShares",
@@ -655,6 +843,25 @@ export async function setCloudFileEditors(options: {
   const previousEditorUids = options.previousEditorUids ?? [];
   previousEditorUids.forEach((recipientUid) => {
     if (!editorUids.includes(recipientUid)) {
+      const recipientSharedFileRef = doc(
+        db,
+        "users",
+        recipientUid,
+        "sharedFiles",
+        buildFileShareDocumentId(options.ownerUid, options.file.id, recipientUid),
+      );
+      batch.set(
+        recipientSharedFileRef,
+        {
+          ownerUid: options.ownerUid,
+          fileId: options.file.id,
+          recipientUid,
+          status: "revoked",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
       const shareRef = doc(
         db,
         "fileShares",
