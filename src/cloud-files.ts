@@ -2,16 +2,13 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
   writeBatch,
   type DocumentData,
-  type QuerySnapshot,
   type Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -35,36 +32,12 @@ export type CloudFileSummary = {
   accessRole: "owner" | "editor";
 };
 
-export type FileShareRecord = {
-  id: string;
-  fileId: string;
-  ownerUid: string;
-  ownerUsername: string;
-  ownerDisplayName: string | null;
-  ownerFileName: string;
-  recipientUid: string;
-  recipientUsername: string;
-  recipientDisplayName: string | null;
-  status: "active" | "revoked";
-  createdAt: string | null;
-  updatedAt: string | null;
-};
-
 type SharedWithEntry = {
   username: string;
   displayName: string | null;
   sharedAt: string | null;
   status: "active" | "revoked";
 };
-
-function isPermissionDeniedError(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === "object" &&
-    "code" in error &&
-    error.code === "permission-denied"
-  );
-}
 
 function timestampToIso(value: unknown): string | null {
   if (!value || typeof value !== "object") {
@@ -214,28 +187,6 @@ function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
   };
 }
 
-function mapShareRecord(id: string, data: DocumentData): FileShareRecord {
-  return {
-    id,
-    fileId: typeof data.fileId === "string" ? data.fileId : "",
-    ownerUid: typeof data.ownerUid === "string" ? data.ownerUid : "",
-    ownerUsername:
-      typeof data.ownerUsername === "string" ? data.ownerUsername : "未命名使用者",
-    ownerDisplayName: normalizeDisplayName(data.ownerDisplayName),
-    ownerFileName:
-      typeof data.fileName === "string" && data.fileName.trim()
-        ? data.fileName
-        : "未命名檔案",
-    recipientUid: typeof data.recipientUid === "string" ? data.recipientUid : "",
-    recipientUsername:
-      typeof data.recipientUsername === "string" ? data.recipientUsername : "",
-    recipientDisplayName: normalizeDisplayName(data.recipientDisplayName),
-    status: data.status === "revoked" ? "revoked" : "active",
-    createdAt: timestampToIso(data.createdAt),
-    updatedAt: timestampToIso(data.updatedAt),
-  };
-}
-
 function readSharedWith(data: DocumentData | undefined): Record<string, SharedWithEntry> {
   const raw = data?.sharedWith;
   if (!raw || typeof raw !== "object") {
@@ -347,66 +298,6 @@ async function syncShareMetadata(options: {
   await recipientBatch.commit();
 }
 
-async function mapSharedFileSummary(share: FileShareRecord): Promise<CloudFileSummary | null> {
-  if (!share.ownerUid || !share.fileId || share.status !== "active") {
-    return null;
-  }
-
-  let snapshot;
-  try {
-    snapshot = await getDoc(doc(db, "users", share.ownerUid, "files", share.fileId));
-  } catch (error) {
-    if (isPermissionDeniedError(error)) {
-      throw new Error(
-        `共享檔案權限不同步：${share.ownerFileName}（分享者 ${share.ownerDisplayName || share.ownerUsername}）。`,
-      );
-    }
-    throw error;
-  }
-
-  if (!snapshot.exists()) {
-    return null;
-  }
-
-  const data = snapshot.data();
-  if (data.status === "archived") {
-    return null;
-  }
-
-  return {
-    id: share.fileId,
-    fileName:
-      typeof data.fileName === "string" && data.fileName.trim()
-        ? data.fileName
-        : share.ownerFileName,
-    rosterName:
-      typeof data.rosterName === "string" && data.rosterName.trim()
-        ? data.rosterName
-        : "未命名班級",
-    gradeLabel:
-      typeof data.gradeLabel === "string" && data.gradeLabel.trim()
-        ? data.gradeLabel
-        : "未設定",
-    academicTerm:
-      typeof data.academicTerm === "string" && data.academicTerm.trim()
-        ? data.academicTerm
-        : "尚未設定",
-    rosterCount: typeof data.rosterCount === "number" ? data.rosterCount : 0,
-    recordCount: typeof data.recordCount === "number" ? data.recordCount : 0,
-    status: "active",
-    createdAt: timestampToIso(data.createdAt),
-    updatedAt: timestampToIso(data.updatedAt),
-    ownerUid: share.ownerUid,
-    ownerUsername:
-      typeof data.ownerUsername === "string" ? data.ownerUsername : share.ownerUsername,
-    ownerDisplayName:
-      typeof data.ownerDisplayName === "string" && data.ownerDisplayName.trim()
-        ? data.ownerDisplayName.trim()
-        : share.ownerDisplayName,
-    accessRole: "editor",
-  };
-}
-
 function dedupeFileSummaries(files: CloudFileSummary[]): CloudFileSummary[] {
   const next = new Map<string, CloudFileSummary>();
   files.forEach((file) => {
@@ -426,10 +317,9 @@ export function subscribeToCloudFiles(
 ): () => void {
   let ownedFiles: CloudFileSummary[] = [];
   let sharedFiles: CloudFileSummary[] = [];
-  let legacySharedFiles: CloudFileSummary[] = [];
 
   const emit = () => {
-    callback(dedupeFileSummaries([...ownedFiles, ...sharedFiles, ...legacySharedFiles]));
+    callback(dedupeFileSummaries([...ownedFiles, ...sharedFiles]));
   };
 
   const ownedQuery = query(collection(db, "users", uid, "files"));
@@ -463,60 +353,9 @@ export function subscribeToCloudFiles(
     },
   );
 
-  const sharesQuery = query(
-    collection(db, "fileShares"),
-    where("recipientUid", "==", uid),
-    where("status", "==", "active"),
-  );
-  const unsubscribeShared = onSnapshot(
-    sharesQuery,
-    (snapshot) => {
-      void (async () => {
-        const shareRecords = snapshot.docs.map((entry) =>
-          mapShareRecord(entry.id, entry.data()),
-        );
-        const resolved = await Promise.allSettled(shareRecords.map(mapSharedFileSummary));
-        const nextSharedFiles: CloudFileSummary[] = [];
-        const failedShares: string[] = [];
-
-        resolved.forEach((result, index) => {
-          if (result.status === "fulfilled") {
-            if (result.value) {
-              nextSharedFiles.push(result.value);
-            }
-            return;
-          }
-
-          const fallbackName =
-            shareRecords[index]?.ownerFileName || `檔案 ${shareRecords[index]?.fileId || ""}`.trim();
-          const reason =
-            result.reason instanceof Error ? result.reason.message : String(result.reason);
-          failedShares.push(reason || `共享檔案讀取失敗：${fallbackName}`);
-        });
-
-        legacySharedFiles = nextSharedFiles;
-        emit();
-
-        if (failedShares.length > 0) {
-          onError?.(
-            new Error(
-              failedShares.length === 1
-                ? failedShares[0]
-                : `共有 ${failedShares.length} 份共享檔案讀取失敗：${failedShares.join("；")}`,
-            ),
-          );
-        }
-      })();
-    },
-    (error) => {
-      onError?.(error);
-    },
-  );
-
   return () => {
     unsubscribeOwned();
     unsubscribeRecipientShared();
-    unsubscribeShared();
   };
 }
 
@@ -632,45 +471,34 @@ export async function archiveCloudFile(options: {
     { merge: true },
   );
 
-  const sharesQuery = query(
-    collection(db, "fileShares"),
-    where("ownerUid", "==", options.ownerUid),
-    where("fileId", "==", options.fileId),
-    where("status", "==", "active"),
-  );
-  const snapshot = await getDocs(sharesQuery);
-  if (!snapshot.empty) {
-    const batch = writeBatch(db);
-    snapshot.docs.forEach((shareDoc) => {
-      const shareData = shareDoc.data();
-      batch.set(
-        shareDoc.ref,
-        {
-          status: "revoked",
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      if (typeof shareData.recipientUid === "string" && shareData.recipientUid) {
-        batch.set(
-          doc(
-            db,
-            "users",
-            shareData.recipientUid,
-            "sharedFiles",
-            buildFileShareDocumentId(options.ownerUid, options.fileId, shareData.recipientUid),
-          ),
-          {
-            status: "revoked",
-            fileStatus: "archived",
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
-    });
-    await batch.commit();
+  const snapshot = await getDoc(fileRef);
+  const data = snapshot.data();
+  const editorUids = Array.isArray(data?.editorUids)
+    ? data.editorUids.filter((value): value is string => typeof value === "string")
+    : [];
+  if (editorUids.length === 0) {
+    return;
   }
+
+  const batch = writeBatch(db);
+  editorUids.forEach((recipientUid) => {
+    batch.set(
+      doc(
+        db,
+        "users",
+        recipientUid,
+        "sharedFiles",
+        buildFileShareDocumentId(options.ownerUid, options.fileId, recipientUid),
+      ),
+      {
+        status: "revoked",
+        fileStatus: "archived",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+  await batch.commit();
 }
 
 export async function loadCloudFile(
