@@ -94,7 +94,9 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 
 - Files
   - Owned files stored under `users/{ownerUid}/files/{fileId}`
-  - Shared access tracked through top-level `fileShares`
+  - Shared access tracked through:
+    - owner file field `sharedWith`
+    - recipient index `users/{recipientUid}/sharedFiles/{ownerUid__fileId}`
   - Last opened file persisted per user in local storage as `{ fileId, ownerUid }`
 
 - Friends
@@ -110,6 +112,11 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
   - Report radar chart and summary convert raw values through ability rule ranges
   - Observation text is auto-generated from scored abilities
 
+- System Logs
+  - Important user actions are appended to top-level `systemLogs`
+  - Logs use phased entries such as `started`, `completed`, and `failed`
+  - Client-side failures before authentication or before Firestore is usable may still only exist in frontend diagnostics
+
 ## Documents
 
 - `docs/product-spec.md`: first-version product scope and feature rules
@@ -118,6 +125,7 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 - `docs/project-handoff.md`: current architecture, feature status, and handoff notes for continuing development on another machine
 - `docs/development-history.md`: staged release history and major feature milestones
 - `docs/time-estimate.md`: effort estimate and phased time breakdown based on commit history
+- `docs/system-logs.md`: current `systemLogs` structure, event types, and limitations
 
 ## Current App Scope
 

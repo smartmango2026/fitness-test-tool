@@ -128,6 +128,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /systemLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if
+        isSignedIn() &&
+        (
+          request.resource.data.phase == "started" ||
+          request.resource.data.phase == "completed" ||
+          request.resource.data.phase == "failed"
+        );
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

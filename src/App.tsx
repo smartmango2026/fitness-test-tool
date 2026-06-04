@@ -79,6 +79,11 @@ import type { AppData, FitnessField, FitnessRecord, RosterEntry, StudentGradeLab
 import type { User } from "firebase/auth";
 import QRCode from "qrcode";
 import associationLogo from "./assets/sgpea-logo.png";
+import {
+  createSystemLogOperationId,
+  writeSystemLog,
+  type SystemLogEntry,
+} from "./system-logs";
 
 type TabKey =
   | "files"
@@ -620,6 +625,21 @@ export default function App() {
   const pushFrontendIssue = (issue: string) => {
     setFrontendIssues((current) => (current.includes(issue) ? current : [...current, issue]));
   };
+
+  async function writeAppSystemLog(
+    entry: Omit<SystemLogEntry, "actorUid" | "actorUsername" | "actorDisplayName"> & {
+      actorUid?: string | null;
+      actorUsername?: string | null;
+      actorDisplayName?: string | null;
+    },
+  ): Promise<void> {
+    await writeSystemLog({
+      actorUid: entry.actorUid ?? currentUser?.uid ?? null,
+      actorUsername: entry.actorUsername ?? currentUsername ?? null,
+      actorDisplayName: entry.actorDisplayName ?? currentProfile?.displayNickname ?? null,
+      ...entry,
+    });
+  }
 
   useEffect(() => {
     updateLoadCheckpoint("auth", "loading", "正在確認目前是否已登入。");
@@ -1879,10 +1899,22 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
       const user = await signInWithUsername(loginUsername.trim(), loginPassword);
       setShowLoginPanel(false);
       setLoginPassword("");
       setLoginUsername("");
+      await writeAppSystemLog({
+        operationId,
+        actionType: "user_signed_in",
+        phase: "completed",
+        actorUid: user.uid,
+        actorUsername: normalizeUsername(loginUsername.trim()),
+        actorDisplayName: user.displayName || normalizeUsername(loginUsername.trim()),
+        targetUid: user.uid,
+        targetUsername: normalizeUsername(loginUsername.trim()),
+        message: "已登入帳號。",
+      });
       setMessage(`已登入 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "帳號登入失敗。");
@@ -1907,10 +1939,22 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
       const user = await registerWithUsername(loginUsername.trim(), loginPassword);
       setShowLoginPanel(false);
       setLoginPassword("");
       setLoginUsername("");
+      await writeAppSystemLog({
+        operationId,
+        actionType: "user_registered",
+        phase: "completed",
+        actorUid: user.uid,
+        actorUsername: normalizeUsername(loginUsername.trim()),
+        actorDisplayName: normalizeUsername(loginUsername.trim()),
+        targetUid: user.uid,
+        targetUsername: normalizeUsername(loginUsername.trim()),
+        message: "已建立使用者帳號。",
+      });
       setMessage(`已建立帳號 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "註冊失敗。");
@@ -1920,13 +1964,31 @@ export default function App() {
 
   async function handleSignOut(): Promise<void> {
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "user_signed_out",
+        phase: "started",
+        message: "開始登出帳號。",
+      });
       await signOutCurrentUser();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "user_signed_out",
+        phase: "completed",
+        message: "已登出帳號。",
+      });
       setShowLoginPanel(false);
       setShowAccountMenu(false);
       setMessage("已登出。");
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "登出失敗。";
+      await writeAppSystemLog({
+        actionType: "user_signed_out",
+        phase: "failed",
+        message: nextMessage,
+      });
       setMessage(`登出失敗：${nextMessage}`);
     }
   }
@@ -1990,17 +2052,41 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_created",
+        phase: "started",
+        targetUsername: nextUsername,
+        message: "開始送出好友邀請。",
+        payload: { source: "manual" },
+      });
       await sendFriendRequest({
         fromUid: currentUser.uid,
         fromUsername: currentUsername,
         fromDisplayName: currentProfile?.displayNickname ?? null,
         targetUsername: nextUsername,
       });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_created",
+        phase: "completed",
+        targetUsername: nextUsername,
+        message: "已送出好友邀請。",
+        payload: { source: "manual" },
+      });
       setFriendDraft("");
       setMessage(`已送出給 ${nextUsername} 的好友邀請。`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "送出好友邀請失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_request_created",
+        phase: "failed",
+        targetUsername: nextUsername,
+        message: nextMessage,
+        payload: { source: "manual" },
+      });
       setMessage(nextMessage);
     }
   }
@@ -2009,11 +2095,38 @@ export default function App() {
     request: FriendRequestRecord,
   ): Promise<void> {
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_accepted",
+        phase: "started",
+        targetUid: request.fromUid,
+        targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: "開始同意好友邀請。",
+      });
       await acceptFriendRequest(request);
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_accepted",
+        phase: "completed",
+        targetUid: request.fromUid,
+        targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: "已同意好友邀請。",
+      });
       setMessage(`已和 ${request.fromUsername} 成為好友。`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "同意好友邀請失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_request_accepted",
+        phase: "failed",
+        targetUid: request.fromUid,
+        targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: nextMessage,
+      });
       setMessage(nextMessage);
     }
   }
@@ -2022,11 +2135,38 @@ export default function App() {
     request: FriendRequestRecord,
   ): Promise<void> {
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_rejected",
+        phase: "started",
+        targetUid: request.fromUid,
+        targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: "開始拒絕好友邀請。",
+      });
       await rejectFriendRequest(request.id);
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_rejected",
+        phase: "completed",
+        targetUid: request.fromUid,
+        targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: "已拒絕好友邀請。",
+      });
       setMessage(`已拒絕 ${request.fromUsername} 的好友邀請。`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "拒絕好友邀請失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_request_rejected",
+        phase: "failed",
+        targetUid: request.fromUid,
+        targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: nextMessage,
+      });
       setMessage(nextMessage);
     }
   }
@@ -2038,14 +2178,38 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_removed",
+        phase: "started",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: "開始移除好友。",
+      });
       await removeFriend({
         currentUid: currentUser.uid,
         friendUid: friend.friendUid,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_removed",
+        phase: "completed",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: "已移除好友。",
       });
       setMessage(`已移除好友 ${friend.username}。`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "移除好友失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_removed",
+        phase: "failed",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: nextMessage,
+      });
       setMessage(nextMessage);
     }
   }
@@ -2057,16 +2221,35 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_invite_created",
+        phase: "started",
+        message: "開始建立加好友邀請。",
+      });
       const invite = await createFriendInvite({
         issuedByUid: currentUser.uid,
         issuedByUsername: currentUsername,
         issuedByDisplayName: currentProfile?.displayNickname ?? null,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_invite_created",
+        phase: "completed",
+        inviteId: invite.id,
+        message: "已建立加好友邀請。",
       });
       setActiveFriendInvite(invite);
       setMessage("已產生新的加好友 QR Code。");
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "產生加好友 QR Code 失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_invite_created",
+        phase: "failed",
+        message: nextMessage,
+      });
       setMessage(nextMessage);
     }
   }
@@ -2113,11 +2296,32 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_created",
+        phase: "started",
+        targetUid: scannedFriendInvite.issuedByUid,
+        targetUsername: scannedFriendInvite.issuedByUsername,
+        inviteId: scannedFriendInvite.id,
+        message: "開始透過 QR Code 送出好友邀請。",
+        payload: { source: "invite" },
+      });
       await sendFriendRequestFromInvite({
         inviteId: scannedFriendInvite.id,
         fromUid: currentUser.uid,
         fromUsername: currentUsername,
         fromDisplayName: currentProfile?.displayNickname ?? null,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_created",
+        phase: "completed",
+        targetUid: scannedFriendInvite.issuedByUid,
+        targetUsername: scannedFriendInvite.issuedByUsername,
+        inviteId: scannedFriendInvite.id,
+        message: "已透過 QR Code 送出好友邀請。",
+        payload: { source: "invite" },
       });
       setMessage(
         `已透過 QR Code 對 ${scannedFriendInvite.issuedByUsername} 送出好友邀請。`,
@@ -2125,6 +2329,15 @@ export default function App() {
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "送出好友邀請失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_request_created",
+        phase: "failed",
+        targetUid: scannedFriendInvite.issuedByUid,
+        targetUsername: scannedFriendInvite.issuedByUsername,
+        inviteId: scannedFriendInvite.id,
+        message: nextMessage,
+        payload: { source: "invite" },
+      });
       setMessage(nextMessage);
     }
   }
@@ -2141,10 +2354,31 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "profile_nickname_updated",
+        phase: "started",
+        message: "開始更新自己的暱稱。",
+        payload: {
+          displayNickname: nicknameDraft.trim() || null,
+        },
+      });
       await updateOwnDisplayNickname({
         uid: currentUser.uid,
         username: currentUsername,
         displayNickname: nicknameDraft,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "profile_nickname_updated",
+        phase: "completed",
+        message: nicknameDraft.trim()
+          ? "已更新自己的暱稱。"
+          : "已清除自己的暱稱。",
+        payload: {
+          displayNickname: nicknameDraft.trim() || null,
+        },
       });
       setMessage(
         nicknameDraft.trim()
@@ -2154,6 +2388,14 @@ export default function App() {
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "更新暱稱失敗。";
+      await writeAppSystemLog({
+        actionType: "profile_nickname_updated",
+        phase: "failed",
+        message: nextMessage,
+        payload: {
+          displayNickname: nicknameDraft.trim() || null,
+        },
+      });
       setMessage(`更新暱稱失敗：${nextMessage}`);
     }
   }
@@ -2172,19 +2414,52 @@ export default function App() {
     }
 
     try {
+      const nextNickname = friendNicknameDrafts[friend.friendUid] ?? "";
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_nickname_updated",
+        phase: "started",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: "開始更新好友備註暱稱。",
+        payload: {
+          customNickname: nextNickname.trim() || null,
+        },
+      });
       await updateFriendCustomNickname({
         currentUid: currentUser.uid,
         friendUid: friend.friendUid,
-        customNickname: friendNicknameDrafts[friend.friendUid] ?? "",
+        customNickname: nextNickname,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_nickname_updated",
+        phase: "completed",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: nextNickname.trim()
+          ? "已更新好友備註暱稱。"
+          : "已清除好友備註暱稱。",
+        payload: {
+          customNickname: nextNickname.trim() || null,
+        },
       });
       setMessage(
-        (friendNicknameDrafts[friend.friendUid] ?? "").trim()
+        nextNickname.trim()
           ? `已更新 ${friend.username} 的好友備註暱稱。`
           : `已清除 ${friend.username} 的好友備註暱稱。`,
       );
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "更新好友暱稱失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_nickname_updated",
+        phase: "failed",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: nextMessage,
+      });
       setMessage(`更新好友暱稱失敗：${nextMessage}`);
     }
   }
@@ -2196,6 +2471,15 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_nickname_reset",
+        phase: "started",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: "開始恢復好友自己的暱稱。",
+      });
       await updateFriendCustomNickname({
         currentUid: currentUser.uid,
         friendUid: friend.friendUid,
@@ -2205,10 +2489,25 @@ export default function App() {
         ...current,
         [friend.friendUid]: "",
       }));
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_nickname_reset",
+        phase: "completed",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: "已恢復顯示好友自己的暱稱。",
+      });
       setMessage(`已恢復顯示 ${friend.username} 自己設定的暱稱。`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "恢復好友暱稱失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_nickname_reset",
+        phase: "failed",
+        targetUid: friend.friendUid,
+        targetUsername: friend.username,
+        message: nextMessage,
+      });
       setMessage(`恢復好友暱稱失敗：${nextMessage}`);
     }
   }
@@ -2234,11 +2533,34 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_created",
+        phase: "started",
+        message: "開始建立雲端檔案。",
+        payload: {
+          rosterName: data.rosterName,
+          gradeLabel: data.gradeLabel,
+          academicTerm: data.academicTerm,
+        },
+      });
       const fileId = await createCloudFile({
         uid: currentUser.uid,
         username: currentUsername,
         displayName: currentProfile?.displayNickname ?? null,
         data,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_created",
+        phase: "completed",
+        ownerUid: currentUser.uid,
+        fileId,
+        fileName: data.academicTerm
+          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
+          : data.rosterName || "未命名班級",
+        message: "已建立雲端檔案。",
       });
       setCurrentCloudFileId(fileId);
       setCurrentCloudFileOwnerUid(currentUser.uid);
@@ -2249,6 +2571,16 @@ export default function App() {
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "建立雲端檔案失敗。";
+      await writeAppSystemLog({
+        actionType: "file_created",
+        phase: "failed",
+        message: nextMessage,
+        payload: {
+          rosterName: data.rosterName,
+          gradeLabel: data.gradeLabel,
+          academicTerm: data.academicTerm,
+        },
+      });
       setMessage(`建立雲端檔案失敗：${nextMessage}`);
     }
   }
@@ -2260,6 +2592,18 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_saved",
+        phase: "started",
+        ownerUid: currentCloudFileOwnerUid,
+        fileId: currentCloudFileId,
+        fileName: data.academicTerm
+          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
+          : data.rosterName || "未命名班級",
+        message: "開始儲存雲端檔案。",
+      });
       await saveCloudFileData({
         ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
@@ -2267,11 +2611,32 @@ export default function App() {
         displayName: currentProfile?.displayNickname ?? null,
         data,
       });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_saved",
+        phase: "completed",
+        ownerUid: currentCloudFileOwnerUid,
+        fileId: currentCloudFileId,
+        fileName: data.academicTerm
+          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
+          : data.rosterName || "未命名班級",
+        message: "已儲存雲端檔案。",
+      });
       setIsCloudDirty(false);
       setMessage("目前檔案已儲存到雲端。");
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "儲存雲端檔案失敗。";
+      await writeAppSystemLog({
+        actionType: "file_saved",
+        phase: "failed",
+        ownerUid: currentCloudFileOwnerUid,
+        fileId: currentCloudFileId,
+        fileName: data.academicTerm
+          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
+          : data.rosterName || "未命名班級",
+        message: nextMessage,
+      });
       setMessage(`儲存雲端檔案失敗：${nextMessage}`);
     }
   }
@@ -2287,6 +2652,16 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_opened",
+        phase: "started",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: "開始開啟雲端檔案。",
+      });
       const nextData = await loadCloudFile(file.ownerUid, file.id);
       skipNextCloudDirtyRef.current = true;
       setData(nextData);
@@ -2303,10 +2678,27 @@ export default function App() {
           : [makeEmptyRosterEntry()],
       );
       setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_opened",
+        phase: "completed",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: "已開啟雲端檔案。",
+      });
       setMessage(`已切換到檔案：${file.fileName}`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "開啟雲端檔案失敗。";
+      await writeAppSystemLog({
+        actionType: "file_opened",
+        phase: "failed",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: nextMessage,
+      });
       setMessage(`開啟雲端檔案失敗：${nextMessage}`);
     }
   }
@@ -2360,6 +2752,21 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_info_updated",
+        phase: "started",
+        ownerUid: currentUser.uid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: "開始更新檔案資訊。",
+        payload: {
+          rosterName: draft.rosterName,
+          gradeLabel: draft.gradeLabel,
+          academicTerm: draft.academicTerm,
+        },
+      });
       await updateCloudFileInfo({
         ownerUid: currentUser.uid,
         fileId: file.id,
@@ -2367,10 +2774,32 @@ export default function App() {
         gradeLabel: draft.gradeLabel,
         academicTerm: draft.academicTerm,
       });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_info_updated",
+        phase: "completed",
+        ownerUid: currentUser.uid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: "已更新檔案資訊。",
+        payload: {
+          rosterName: draft.rosterName,
+          gradeLabel: draft.gradeLabel,
+          academicTerm: draft.academicTerm,
+        },
+      });
       setMessage(`已更新檔案資訊：${file.fileName}`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "更新檔案資訊失敗。";
+      await writeAppSystemLog({
+        actionType: "file_info_updated",
+        phase: "failed",
+        ownerUid: currentUser.uid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: nextMessage,
+      });
       setMessage(`更新檔案資訊失敗：${nextMessage}`);
     }
   }
@@ -2389,9 +2818,28 @@ export default function App() {
     }
 
     try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_archived",
+        phase: "started",
+        ownerUid: currentUser.uid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: "開始封存檔案。",
+      });
       await archiveCloudFile({
         ownerUid: currentUser.uid,
         fileId: file.id,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_archived",
+        phase: "completed",
+        ownerUid: currentUser.uid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: "已封存檔案。",
       });
       if (currentCloudFileId === file.id) {
         setCurrentCloudFileId(null);
@@ -2407,6 +2855,14 @@ export default function App() {
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "封存檔案失敗。";
+      await writeAppSystemLog({
+        actionType: "file_archived",
+        phase: "failed",
+        ownerUid: currentUser.uid,
+        fileId: file.id,
+        fileName: file.fileName,
+        message: nextMessage,
+      });
       setMessage(`封存檔案失敗：${nextMessage}`);
     }
   }
@@ -2449,6 +2905,7 @@ export default function App() {
       const nextMessage =
         error instanceof Error ? error.message : "更新共同編輯好友失敗。";
       setMessage(`更新共同編輯好友失敗：${nextMessage}`);
+      throw error instanceof Error ? error : new Error(nextMessage);
     }
   }
 
@@ -2472,12 +2929,51 @@ export default function App() {
     }
 
     const nextEditorUids = [...shareEditorUids, targetFriend.friendUid];
-    await persistFileEditors(
-      file,
-      nextEditorUids,
-      `已將「${targetFriend.displayName}」加入「${file.fileName}」的共同編輯。`,
-    );
-    setSelectedShareFriendUid("");
+    const operationId = createSystemLogOperationId();
+    await writeAppSystemLog({
+      operationId,
+      actionType: "file_shared",
+      phase: "started",
+      ownerUid: file.ownerUid,
+      fileId: file.id,
+      fileName: file.fileName,
+      targetUid: targetFriend.friendUid,
+      targetUsername: targetFriend.username,
+      message: "開始分享檔案。",
+    });
+    try {
+      await persistFileEditors(
+        file,
+        nextEditorUids,
+        `已將「${targetFriend.displayName}」加入「${file.fileName}」的共同編輯。`,
+      );
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_shared",
+        phase: "completed",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        targetUid: targetFriend.friendUid,
+        targetUsername: targetFriend.username,
+        message: "已分享檔案。",
+      });
+      setSelectedShareFriendUid("");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "分享檔案失敗。";
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_shared",
+        phase: "failed",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        targetUid: targetFriend.friendUid,
+        targetUsername: targetFriend.username,
+        message: nextMessage,
+      });
+    }
   }
 
   async function handleRemoveFileEditor(
@@ -2486,13 +2982,52 @@ export default function App() {
   ): Promise<void> {
     const targetFriend = shareableFriends.find((friend) => friend.friendUid === friendUid);
     const nextEditorUids = shareEditorUids.filter((uid) => uid !== friendUid);
-    await persistFileEditors(
-      file,
-      nextEditorUids,
-      targetFriend
-        ? `已移除「${targetFriend.displayName}」的共同編輯權限。`
-        : `已更新「${file.fileName}」的共同編輯名單。`,
-    );
+    const operationId = createSystemLogOperationId();
+    await writeAppSystemLog({
+      operationId,
+      actionType: "file_share_revoked",
+      phase: "started",
+      ownerUid: file.ownerUid,
+      fileId: file.id,
+      fileName: file.fileName,
+      targetUid: friendUid,
+      targetUsername: targetFriend?.username ?? null,
+      message: "開始取消檔案分享。",
+    });
+    try {
+      await persistFileEditors(
+        file,
+        nextEditorUids,
+        targetFriend
+          ? `已移除「${targetFriend.displayName}」的共同編輯權限。`
+          : `已更新「${file.fileName}」的共同編輯名單。`,
+      );
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_share_revoked",
+        phase: "completed",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        targetUid: friendUid,
+        targetUsername: targetFriend?.username ?? null,
+        message: "已取消檔案分享。",
+      });
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "取消分享失敗。";
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_share_revoked",
+        phase: "failed",
+        ownerUid: file.ownerUid,
+        fileId: file.id,
+        fileName: file.fileName,
+        targetUid: friendUid,
+        targetUsername: targetFriend?.username ?? null,
+        message: nextMessage,
+      });
+    }
   }
 
   function openFileWorkspace(nextTab: Exclude<TabKey, "files" | "account" | "editor">): void {
