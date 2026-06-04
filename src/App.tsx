@@ -1240,6 +1240,11 @@ export default function App() {
       return;
     }
 
+    if (shareEditorUids.length === 0) {
+      shareRepairSignatureRef.current = null;
+      return;
+    }
+
     const activeTargets = shareableFriends
       .filter((friend) => shareEditorUids.includes(friend.friendUid))
       .map((friend) => ({
