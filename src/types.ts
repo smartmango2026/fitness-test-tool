@@ -6,11 +6,14 @@ export type FitnessField =
   | "item5"
   | "item6";
 
+export type StudentGradeLabel = "幼幼班" | "小班" | "中班" | "大班";
+
 export type RosterEntry = {
   id: string;
   studentName: string;
   height: string;
   weight: string;
+  studentGradeLabel: StudentGradeLabel;
 };
 
 export type FitnessRecord = {
@@ -18,6 +21,7 @@ export type FitnessRecord = {
   studentName: string;
   height: string;
   weight: string;
+  studentGradeLabel: StudentGradeLabel;
   testDate: string;
   item1: number;
   item2: number;

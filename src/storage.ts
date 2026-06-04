@@ -1,4 +1,4 @@
-import type { AppData, FitnessRecord, RosterEntry } from "./types";
+import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
 import { defaultAppData } from "./sample-data";
 
 const STORAGE_KEY = "fitness-test-tool.app-data.v1";
@@ -9,13 +9,30 @@ type LegacyAppData = Partial<AppData> & {
   records?: Array<Partial<FitnessRecord>>;
 };
 
-function buildRosterEntries(data: LegacyAppData): RosterEntry[] {
+function isStudentGradeLabel(value: unknown): value is StudentGradeLabel {
+  return value === "幼幼班" || value === "小班" || value === "中班" || value === "大班";
+}
+
+function inferStudentGradeLabel(fileGradeLabel: string, value: unknown): StudentGradeLabel {
+  if (isStudentGradeLabel(value)) {
+    return value;
+  }
+
+  if (fileGradeLabel === "幼幼班" || fileGradeLabel === "小班" || fileGradeLabel === "中班" || fileGradeLabel === "大班") {
+    return fileGradeLabel;
+  }
+
+  return "中班";
+}
+
+function buildRosterEntries(data: LegacyAppData, gradeLabel: string): RosterEntry[] {
   if (Array.isArray(data.rosterEntries)) {
     return data.rosterEntries.map((entry, index) => ({
       id: entry.id || `roster_${index + 1}`,
       studentName: entry.studentName || "",
       height: entry.height || "",
       weight: entry.weight || "",
+      studentGradeLabel: inferStudentGradeLabel(gradeLabel, entry.studentGradeLabel),
     }));
   }
 
@@ -25,13 +42,14 @@ function buildRosterEntries(data: LegacyAppData): RosterEntry[] {
       studentName,
       height: "",
       weight: "",
+      studentGradeLabel: inferStudentGradeLabel(gradeLabel, undefined),
     }));
   }
 
   return defaultAppData.rosterEntries;
 }
 
-function migrateRecords(data: LegacyAppData, testDate: string): FitnessRecord[] {
+function migrateRecords(data: LegacyAppData, testDate: string, gradeLabel: string): FitnessRecord[] {
   const records = Array.isArray(data.records) ? data.records : defaultAppData.records;
 
   return records.map((record, index) => ({
@@ -39,6 +57,7 @@ function migrateRecords(data: LegacyAppData, testDate: string): FitnessRecord[] 
     studentName: record.studentName || "",
     height: record.height || "",
     weight: record.weight || "",
+    studentGradeLabel: inferStudentGradeLabel(gradeLabel, record.studentGradeLabel),
     testDate: record.testDate || testDate,
     item1: typeof record.item1 === "number" ? record.item1 : 0,
     item2: typeof record.item2 === "number" ? record.item2 : 0,
@@ -51,12 +70,16 @@ function migrateRecords(data: LegacyAppData, testDate: string): FitnessRecord[] 
 }
 
 function migrateAppData(data: LegacyAppData): AppData {
+  const gradeLabel =
+    "gradeLabel" in data && typeof data.gradeLabel === "string"
+      ? data.gradeLabel
+      : defaultAppData.gradeLabel;
   const testDate =
     data.testDate ??
     data.records?.[0]?.testDate ??
     defaultAppData.testDate;
-  const rosterEntries = buildRosterEntries(data);
-  const records = migrateRecords(data, testDate).map((record) => {
+  const rosterEntries = buildRosterEntries(data, gradeLabel);
+  const records = migrateRecords(data, testDate, gradeLabel).map((record) => {
     const matchingRosterEntry = rosterEntries.find(
       (entry) => entry.studentName === record.studentName,
     );
@@ -66,6 +89,7 @@ function migrateAppData(data: LegacyAppData): AppData {
           ...record,
           height: record.height || matchingRosterEntry.height,
           weight: record.weight || matchingRosterEntry.weight,
+          studentGradeLabel: matchingRosterEntry.studentGradeLabel || record.studentGradeLabel,
         }
       : record;
   });
@@ -88,10 +112,7 @@ function migrateAppData(data: LegacyAppData): AppData {
       ("rosterName" in data && typeof data.rosterName === "string"
         ? data.rosterName
         : defaultAppData.rosterName),
-    gradeLabel:
-      ("gradeLabel" in data && typeof data.gradeLabel === "string"
-        ? data.gradeLabel
-        : defaultAppData.gradeLabel),
+    gradeLabel,
     rosterEntries,
     records,
   };

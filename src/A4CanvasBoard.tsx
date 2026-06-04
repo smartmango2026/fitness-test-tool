@@ -9,8 +9,10 @@ import {
   type TouchEvent,
 } from "react";
 import {
+  findAbilityGradeProfile,
   generateObservationAndEncouragement,
   getAbilityBandLabel,
+  getAbilityRuleForField,
   getAbilityScores,
 } from "./ability-scoring";
 import type { AbilityGradeProfile, AbilityRulesConfig } from "./ability-settings";
@@ -61,11 +63,23 @@ type ReportRenderPayload = {
 type ExportAllReportsPayload = {
   abilityProfile: AbilityGradeProfile | null;
   abilityRulesConfig: AbilityRulesConfig;
-  labels: string[];
+  fileGradeLabel: string;
   records: FitnessRecord[];
   rosterName: string;
   testDate: string;
 };
+
+function resolveStudentGradeLabel(fileGradeLabel: string, studentGradeLabel: string): string {
+  if (studentGradeLabel === "幼幼班" || studentGradeLabel === "小班" || studentGradeLabel === "中班" || studentGradeLabel === "大班") {
+    return studentGradeLabel;
+  }
+
+  if (fileGradeLabel === "幼幼班" || fileGradeLabel === "小班" || fileGradeLabel === "中班" || fileGradeLabel === "大班") {
+    return fileGradeLabel;
+  }
+
+  return "中班";
+}
 
 type TouchPointLike = {
   clientX: number;
@@ -697,7 +711,7 @@ function downloadBlobUrl(href: string, fileName: string): void {
 export async function exportAllReportsPdf(
   payload: ExportAllReportsPayload,
 ): Promise<void> {
-  const { abilityProfile, abilityRulesConfig, labels, records, rosterName, testDate } = payload;
+  const { abilityProfile, abilityRulesConfig, fileGradeLabel, records, rosterName, testDate } = payload;
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -705,6 +719,9 @@ export async function exportAllReportsPdf(
   });
 
   if (records.length === 0) {
+    const labels = (["item1", "item2", "item3", "item4", "item5", "item6"] as const).map(
+      (field) => getAbilityRuleForField(abilityProfile, field)?.metricLabel ?? field,
+    );
     const canvas = createReportCanvas({
       abilityProfile: null,
       abilityRulesConfig,
@@ -720,13 +737,23 @@ export async function exportAllReportsPdf(
   } else {
     records.forEach((record, index) => {
       const abilityScores = getAbilityScores(record, abilityProfile);
+      const nextAbilityProfile =
+        findAbilityGradeProfile(
+          abilityRulesConfig,
+          resolveStudentGradeLabel(fileGradeLabel, record.studentGradeLabel),
+        ) ?? abilityProfile;
+      const labels = (["item1", "item2", "item3", "item4", "item5", "item6"] as const).map(
+        (field) =>
+          getAbilityRuleForField(nextAbilityProfile, field)?.metricLabel ?? field,
+      );
+      const nextAbilityScores = getAbilityScores(record, nextAbilityProfile);
       const canvas = createReportCanvas({
-        abilityProfile,
+        abilityProfile: nextAbilityProfile,
         abilityRulesConfig,
-        abilityLevelLabels: abilityScores.map((score) =>
+        abilityLevelLabels: nextAbilityScores.map((score) =>
           getAbilityBandLabel(score, abilityRulesConfig),
         ),
-        abilityScores,
+        abilityScores: nextAbilityScores,
         labels,
         record,
         rosterName,

@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { defaultAppData } from "./sample-data";
-import type { AppData } from "./types";
+import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
 
 export type CloudFileSummary = {
   id: string;
@@ -93,6 +93,64 @@ function buildStoredFileData(
     records: data.records,
     updatedAt: serverTimestamp(),
   };
+}
+
+function isStudentGradeLabel(value: unknown): value is StudentGradeLabel {
+  return value === "幼幼班" || value === "小班" || value === "中班" || value === "大班";
+}
+
+function inferStudentGradeLabel(fileGradeLabel: string, value: unknown): StudentGradeLabel {
+  if (isStudentGradeLabel(value)) {
+    return value;
+  }
+
+  if (isStudentGradeLabel(fileGradeLabel)) {
+    return fileGradeLabel;
+  }
+
+  return "中班";
+}
+
+function normalizeRosterEntries(raw: unknown, fileGradeLabel: string): RosterEntry[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw.map((entry, index) => {
+    const data = entry && typeof entry === "object" ? (entry as Partial<RosterEntry>) : {};
+    return {
+      id: typeof data.id === "string" && data.id ? data.id : `roster_${index + 1}`,
+      studentName: typeof data.studentName === "string" ? data.studentName : "",
+      height: typeof data.height === "string" ? data.height : "",
+      weight: typeof data.weight === "string" ? data.weight : "",
+      studentGradeLabel: inferStudentGradeLabel(fileGradeLabel, data.studentGradeLabel),
+    };
+  });
+}
+
+function normalizeRecords(raw: unknown, fileGradeLabel: string, testDate: string): FitnessRecord[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw.map((record, index) => {
+    const data = record && typeof record === "object" ? (record as Partial<FitnessRecord>) : {};
+    return {
+      id: typeof data.id === "string" && data.id ? data.id : `rec_${index + 1}`,
+      studentName: typeof data.studentName === "string" ? data.studentName : "",
+      height: typeof data.height === "string" ? data.height : "",
+      weight: typeof data.weight === "string" ? data.weight : "",
+      studentGradeLabel: inferStudentGradeLabel(fileGradeLabel, data.studentGradeLabel),
+      testDate: typeof data.testDate === "string" && data.testDate ? data.testDate : testDate,
+      item1: typeof data.item1 === "number" ? data.item1 : 0,
+      item2: typeof data.item2 === "number" ? data.item2 : 0,
+      item3: typeof data.item3 === "number" ? data.item3 : 0,
+      item4: typeof data.item4 === "number" ? data.item4 : 0,
+      item5: typeof data.item5 === "number" ? data.item5 : 0,
+      item6: typeof data.item6 === "number" ? data.item6 : 0,
+      comment: typeof data.comment === "string" ? data.comment : "",
+    };
+  });
 }
 
 function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
@@ -464,15 +522,17 @@ export async function loadCloudFile(
   }
 
   const data = snapshot.data();
+  const gradeLabel = typeof data.gradeLabel === "string" ? data.gradeLabel : "";
+  const testDate =
+    typeof data.testDate === "string" && data.testDate
+      ? data.testDate
+      : defaultAppData.testDate;
   return {
     schemaVersion:
       typeof data.schemaVersion === "number"
         ? data.schemaVersion
         : defaultAppData.schemaVersion,
-    testDate:
-      typeof data.testDate === "string" && data.testDate
-        ? data.testDate
-        : defaultAppData.testDate,
+    testDate,
     academicTerm:
       typeof data.academicTerm === "string" && data.academicTerm
         ? data.academicTerm
@@ -482,9 +542,9 @@ export async function loadCloudFile(
         ? data.itemLabels
         : defaultAppData.itemLabels,
     rosterName: typeof data.rosterName === "string" ? data.rosterName : "",
-    gradeLabel: typeof data.gradeLabel === "string" ? data.gradeLabel : "",
-    rosterEntries: Array.isArray(data.rosterEntries) ? data.rosterEntries : [],
-    records: Array.isArray(data.records) ? data.records : [],
+    gradeLabel,
+    rosterEntries: normalizeRosterEntries(data.rosterEntries, gradeLabel),
+    records: normalizeRecords(data.records, gradeLabel, testDate),
   };
 }
 

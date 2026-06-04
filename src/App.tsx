@@ -24,7 +24,7 @@ import {
   defaultAbilityRulesConfig,
   type AbilityRulesConfig,
 } from "./ability-settings";
-import { schoolGradeOptions } from "./ability-rules";
+import { abilityRulesByGradeGroup, schoolGradeOptions } from "./ability-rules";
 import {
   loadDebugSettings,
   type DebugSettings,
@@ -75,7 +75,7 @@ import {
 } from "./friendships";
 import RadarChart from "./RadarChart";
 import { defaultAppData } from "./sample-data";
-import type { AppData, FitnessField, FitnessRecord, RosterEntry } from "./types";
+import type { AppData, FitnessField, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
 import type { User } from "firebase/auth";
 import QRCode from "qrcode";
 import associationLogo from "./assets/sgpea-logo.png";
@@ -159,6 +159,7 @@ const tableEditableFields: EditableField[] = [
   "studentName",
   "height",
   "weight",
+  "studentGradeLabel",
   ...scoreFields,
 ];
 
@@ -171,6 +172,7 @@ const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
 ];
 
 const GRADE_OPTIONS = schoolGradeOptions;
+const STUDENT_GRADE_OPTIONS: StudentGradeLabel[] = ["幼幼班", "小班", "中班", "大班"];
 const TERM_OPTIONS = ["上學期", "下學期"] as const;
 const CURRENT_ROC_YEAR = new Date().getFullYear() - 1911;
 const ACADEMIC_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) =>
@@ -190,6 +192,7 @@ function makeEmptyRecord(testDate: string): FitnessRecord {
     studentName: "",
     height: "",
     weight: "",
+    studentGradeLabel: "大班",
     testDate,
     item1: 0,
     item2: 0,
@@ -207,7 +210,43 @@ function makeEmptyRosterEntry(): RosterEntry {
     studentName: "",
     height: "",
     weight: "",
+    studentGradeLabel: "大班",
   };
+}
+
+function isStudentGradeLabel(value: string): value is StudentGradeLabel {
+  return value === "幼幼班" || value === "小班" || value === "中班" || value === "大班";
+}
+
+function resolveStudentGradeLabel(
+  fileGradeLabel: string,
+  studentGradeLabel: string,
+): StudentGradeLabel {
+  if (isStudentGradeLabel(studentGradeLabel)) {
+    return studentGradeLabel;
+  }
+
+  if (isStudentGradeLabel(fileGradeLabel)) {
+    return fileGradeLabel;
+  }
+
+  return "中班";
+}
+
+function isMixedAgeClass(gradeLabel: string): boolean {
+  return gradeLabel === "混齡班";
+}
+
+function inferStudentGradeFromText(
+  value: string | undefined,
+  fallback: StudentGradeLabel,
+): StudentGradeLabel {
+  if (!value) {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return isStudentGradeLabel(trimmed) ? trimmed : fallback;
 }
 
 function upsertRecord(records: FitnessRecord[], nextRecord: FitnessRecord) {
@@ -791,11 +830,54 @@ export default function App() {
     () => data.records.find((record) => record.id === selectedId) ?? null,
     [data.records, selectedId],
   );
+  function getRecordGradeLabel(record: FitnessRecord | null): string {
+    if (!record) {
+      return data.gradeLabel;
+    }
+
+    return resolveStudentGradeLabel(data.gradeLabel, record.studentGradeLabel);
+  }
+
+  function getProfileForGradeLabel(gradeLabel: string) {
+    return findAbilityGradeProfile(abilityRulesConfig, gradeLabel);
+  }
+
+  function getProfileForRecord(record: FitnessRecord | null) {
+    return getProfileForGradeLabel(getRecordGradeLabel(record));
+  }
+
   const currentAbilityProfile = useMemo(
-    () => findAbilityGradeProfile(abilityRulesConfig, data.gradeLabel),
-    [abilityRulesConfig, data.gradeLabel],
+    () => getProfileForRecord(selectedRecord),
+    [abilityRulesConfig, data.gradeLabel, selectedRecord],
   );
-  const resolvedItemLabels = useMemo(
+  const resolvedItemLabels = useMemo(() => {
+    if (!isMixedAgeClass(data.gradeLabel)) {
+      return scoreFields.map(
+        (field, index) =>
+          getAbilityRuleForField(currentAbilityProfile, field)?.metricLabel ??
+          data.itemLabels[index] ??
+          field,
+      );
+    }
+
+    const juniorRules = abilityRulesByGradeGroup.junior;
+    const middleSeniorRules = abilityRulesByGradeGroup.middleSenior;
+
+    return scoreFields.map((field, index) => {
+      const juniorLabel = juniorRules[field]?.metricLabel;
+      const middleSeniorLabel = middleSeniorRules[field]?.metricLabel;
+      if (
+        juniorLabel &&
+        middleSeniorLabel &&
+        juniorLabel !== middleSeniorLabel
+      ) {
+        return `${middleSeniorLabel} / ${juniorLabel}`;
+      }
+
+      return middleSeniorLabel ?? juniorLabel ?? data.itemLabels[index] ?? field;
+    });
+  }, [currentAbilityProfile, data.gradeLabel, data.itemLabels]);
+  const selectedRecordItemLabels = useMemo(
     () =>
       scoreFields.map(
         (field, index) =>
@@ -1109,6 +1191,24 @@ export default function App() {
     setData((current) => ({
       ...current,
       gradeLabel: nextGrade,
+      rosterEntries: current.rosterEntries.map((entry) => ({
+        ...entry,
+        studentGradeLabel: resolveStudentGradeLabel(nextGrade, entry.studentGradeLabel),
+      })),
+      records: current.records.map((record) => ({
+        ...record,
+        studentGradeLabel: resolveStudentGradeLabel(nextGrade, record.studentGradeLabel),
+      })),
+    }));
+    setRosterDraft((current) =>
+      current.map((entry) => ({
+        ...entry,
+        studentGradeLabel: resolveStudentGradeLabel(nextGrade, entry.studentGradeLabel),
+      })),
+    );
+    setDraftRecord((current) => ({
+      ...current,
+      studentGradeLabel: resolveStudentGradeLabel(nextGrade, current.studentGradeLabel),
     }));
   }
 
@@ -1139,6 +1239,7 @@ export default function App() {
       "studentName",
       "height",
       "weight",
+      "studentGradeLabel",
     ];
     const targetField = rosterFields[columnIndex];
     if (!targetField) {
@@ -1158,7 +1259,13 @@ export default function App() {
   }
 
   function addRosterRow(): void {
-    setRosterDraft((current) => [...current, makeEmptyRosterEntry()]);
+    setRosterDraft((current) => [
+      ...current,
+      {
+        ...makeEmptyRosterEntry(),
+        studentGradeLabel: resolveStudentGradeLabel(data.gradeLabel, ""),
+      },
+    ]);
   }
 
   function applyRosterSize(): void {
@@ -1173,7 +1280,10 @@ export default function App() {
     if (nextCount > currentCount) {
       setRosterDraft((current) => [
         ...current,
-        ...Array.from({ length: nextCount - currentCount }, () => makeEmptyRosterEntry()),
+        ...Array.from({ length: nextCount - currentCount }, () => ({
+          ...makeEmptyRosterEntry(),
+          studentGradeLabel: resolveStudentGradeLabel(data.gradeLabel, ""),
+        })),
       ]);
       setRosterSizeInput(String(nextCount));
       return;
@@ -1239,6 +1349,7 @@ export default function App() {
       entry.studentName,
       entry.height,
       entry.weight,
+      entry.studentGradeLabel,
     ]);
     const nextRows = applyGridPaste(
       rosterRows,
@@ -1253,6 +1364,8 @@ export default function App() {
         studentName: nextRows[rowIndex]?.[0] ?? entry.studentName,
         height: nextRows[rowIndex]?.[1] ?? entry.height,
         weight: nextRows[rowIndex]?.[2] ?? entry.weight,
+        studentGradeLabel:
+          inferStudentGradeFromText(nextRows[rowIndex]?.[3], entry.studentGradeLabel),
       })),
     );
   }
@@ -1272,7 +1385,7 @@ export default function App() {
   }
 
   function handleRosterKeyDown(
-    event: KeyboardEvent<HTMLInputElement>,
+    event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     rowIndex: number,
     columnIndex: number,
   ): void {
@@ -1300,7 +1413,10 @@ export default function App() {
       nextColumnIndex = Math.max(0, columnIndex - 1);
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      nextColumnIndex = Math.min(2, columnIndex + 1);
+      nextColumnIndex = Math.min(
+        isMixedAgeClass(data.gradeLabel) ? 3 : 2,
+        columnIndex + 1,
+      );
     } else {
       return;
     }
@@ -1315,6 +1431,10 @@ export default function App() {
         studentName: entry.studentName.trim(),
         height: entry.height.trim(),
         weight: entry.weight.trim(),
+        studentGradeLabel: resolveStudentGradeLabel(
+          data.gradeLabel,
+          entry.studentGradeLabel,
+        ),
       }))
       .filter((entry) => entry.studentName);
 
@@ -1335,6 +1455,7 @@ export default function App() {
           studentName: entry.studentName,
           height: entry.height,
           weight: entry.weight,
+          studentGradeLabel: entry.studentGradeLabel,
           testDate: data.testDate,
         };
       }
@@ -1344,6 +1465,7 @@ export default function App() {
         studentName: entry.studentName,
         height: entry.height,
         weight: entry.weight,
+        studentGradeLabel: entry.studentGradeLabel,
       };
     });
 
@@ -1420,7 +1542,7 @@ export default function App() {
     await exportAllReportsPdf({
       abilityProfile: currentAbilityProfile,
       abilityRulesConfig,
-      labels: resolvedItemLabels,
+      fileGradeLabel: data.gradeLabel,
       records: data.records,
       rosterName: data.rosterName,
       testDate: data.testDate,
@@ -2114,20 +2236,24 @@ export default function App() {
     updateDraftField(field, normalizeNumber(value));
   }
 
-  function getMetricRule(field: FitnessField) {
-    return getAbilityRuleForField(currentAbilityProfile, field);
+  function getMetricRule(field: FitnessField, record: FitnessRecord | null = selectedRecord) {
+    return getAbilityRuleForField(getProfileForRecord(record), field);
   }
 
   function getMetricDisplayValue(record: FitnessRecord, field: FitnessField): string {
-    return getDisplayValueForField(record[field], getMetricRule(field));
+    return getDisplayValueForField(record[field], getMetricRule(field, record));
   }
 
-  function getMetricSelectOptions(field: FitnessField) {
-    return getRubricOptions(getMetricRule(field));
+  function getMetricSelectOptions(field: FitnessField, record: FitnessRecord | null = selectedRecord) {
+    return getRubricOptions(getMetricRule(field, record));
   }
 
   function getMetricRangeHint(field: FitnessField): string {
-    const rule = getMetricRule(field);
+    if (isMixedAgeClass(data.gradeLabel)) {
+      return "依學生年級";
+    }
+
+    const rule = getMetricRule(field, selectedRecord);
     if (!rule) {
       return "";
     }
@@ -2159,10 +2285,10 @@ export default function App() {
   }
 
   function getTopLabel(record: FitnessRecord): string {
-    const values = getAbilityScores(record, currentAbilityProfile);
+    const values = getAbilityScores(record, getProfileForRecord(record));
     const maxValue = Math.max(...values);
     const maxIndex = values.indexOf(maxValue);
-    return resolvedItemLabels[maxIndex] ?? "未設定";
+    return getMetricRule(scoreFields[maxIndex], record)?.abilityLabel ?? "未設定";
   }
 
   function renderTableCell(
@@ -2176,13 +2302,17 @@ export default function App() {
       step?: number;
       className?: string;
       displayValue?: string;
-      selectOptions?: Array<{ value: number; label: string }>;
+      selectOptions?: Array<{ value: number | string; label: string }>;
     },
   ) {
     const isEditing =
       activeCell?.recordId === record.id && activeCell.field === field;
 
-    const navigationFields = options?.navigationFields ?? tableEditableFields;
+    const navigationFields =
+      options?.navigationFields ??
+      (isMixedAgeClass(data.gradeLabel)
+        ? tableEditableFields
+        : tableEditableFields.filter((nextField) => nextField !== "studentGradeLabel"));
 
     if (isEditing) {
       if (options?.inputType === "select") {
@@ -2525,7 +2655,7 @@ export default function App() {
           abilityRulesConfig={abilityRulesConfig}
           abilityLevelLabels={selectedAbilityLevelLabels}
           abilityScores={selectedAbilityScores}
-          labels={resolvedItemLabels}
+          labels={selectedRecordItemLabels}
           record={selectedRecord}
           rosterName={data.rosterName}
           seatNumber={selectedSeatNumber}
@@ -2812,6 +2942,7 @@ export default function App() {
                       <thead>
                         <tr>
                           <th className="is-frozen-column">學生姓名</th>
+                          {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
                           <th>身高</th>
                           <th>體重</th>
                           {scoreFields.map((field, index) => (
@@ -2836,20 +2967,37 @@ export default function App() {
                             <td className="is-frozen-column">
                               {renderTableCell(record, "studentName", record.studentName)}
                             </td>
+                            {isMixedAgeClass(data.gradeLabel) ? (
+                              <td>
+                                {renderTableCell(
+                                  record,
+                                  "studentGradeLabel",
+                                  record.studentGradeLabel,
+                                  {
+                                    inputType: "select",
+                                    displayValue: record.studentGradeLabel,
+                                    selectOptions: STUDENT_GRADE_OPTIONS.map((grade) => ({
+                                      value: grade,
+                                      label: grade,
+                                    })),
+                                  },
+                                )}
+                              </td>
+                            ) : null}
                             <td>{renderTableCell(record, "height", record.height)}</td>
                             <td>{renderTableCell(record, "weight", record.weight)}</td>
                             {scoreFields.map((field) => (
                               <td key={field}>
                                 {renderTableCell(record, field, record[field], {
                                   inputType:
-                                    getMetricRule(field)?.kind === "rubric"
+                                    getMetricRule(field, record)?.kind === "rubric"
                                       ? "select"
                                       : "number",
                                   min: 0,
                                   step: 1,
                                   className: "cell-input-number",
                                   displayValue: getMetricDisplayValue(record, field),
-                                  selectOptions: getMetricSelectOptions(field),
+                                  selectOptions: getMetricSelectOptions(field, record),
                                 })}
                               </td>
                             ))}
@@ -3703,6 +3851,7 @@ export default function App() {
                       <thead>
                         <tr>
                           <th className="is-frozen-column">學生姓名</th>
+                          {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
                           <th>{activeMetricLabel}</th>
                         </tr>
                       </thead>
@@ -3714,10 +3863,13 @@ export default function App() {
                             onClick={() => selectRecord(record)}
                           >
                             <td className="is-frozen-column">{record.studentName}</td>
+                            {isMixedAgeClass(data.gradeLabel) ? (
+                              <td>{record.studentGradeLabel}</td>
+                            ) : null}
                             <td>
                               {renderTableCell(record, activeMetric, record[activeMetric], {
                                 inputType:
-                                  getMetricRule(activeMetric)?.kind === "rubric"
+                                  getMetricRule(activeMetric, record)?.kind === "rubric"
                                     ? "select"
                                     : "number",
                                 min: 0,
@@ -3725,7 +3877,7 @@ export default function App() {
                                 step: 1,
                                 className: "cell-input-number",
                                 displayValue: getMetricDisplayValue(record, activeMetric),
-                                selectOptions: getMetricSelectOptions(activeMetric),
+                                selectOptions: getMetricSelectOptions(activeMetric, record),
                               })}
                             </td>
                           </tr>
@@ -3772,16 +3924,33 @@ export default function App() {
                     value={draftRecord.weight}
                   />
                 </label>
+                {isMixedAgeClass(data.gradeLabel) ? (
+                  <label>
+                    學生年級
+                    <select
+                      onChange={(event) =>
+                        updateDraftField("studentGradeLabel", event.target.value)
+                      }
+                      value={draftRecord.studentGradeLabel}
+                    >
+                      {STUDENT_GRADE_OPTIONS.map((grade) => (
+                        <option key={`draft-${grade}`} value={grade}>
+                          {grade}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 {scoreFields.map((field, index) => (
                   <label key={field}>
-                    {resolvedItemLabels[index]}
-                    {getMetricRule(field)?.kind === "rubric" ? (
+                    {getMetricRule(field, draftRecord)?.metricLabel ?? resolvedItemLabels[index]}
+                    {getMetricRule(field, draftRecord)?.kind === "rubric" ? (
                       <select
                         onChange={(event) => updateScore(field, event.target.value)}
                         value={draftRecord[field]}
                       >
                         <option value="0">未填寫</option>
-                        {getMetricSelectOptions(field).map((option) => (
+                        {getMetricSelectOptions(field, draftRecord).map((option) => (
                           <option key={`${field}-${option.value}`} value={option.value}>
                             {option.label}
                           </option>
@@ -3898,6 +4067,7 @@ export default function App() {
                             <th className="is-frozen-column-secondary">姓名</th>
                             <th>身高</th>
                             <th>體重</th>
+                            {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
                           </tr>
                         </thead>
                         <tbody>
@@ -3997,6 +4167,41 @@ export default function App() {
                                   </button>
                                 )}
                               </td>
+                              {isMixedAgeClass(data.gradeLabel) ? (
+                                <td>
+                                  {rosterActiveCell?.rowIndex === index &&
+                                  rosterActiveCell?.columnIndex === 3 ? (
+                                    <select
+                                      autoFocus
+                                      className="sheet-input"
+                                      onBlur={() => setRosterActiveCell(null)}
+                                      onChange={(event) =>
+                                        updateRosterDraftCell(index, 3, event.target.value)
+                                      }
+                                      onKeyDown={(event) =>
+                                        handleRosterKeyDown(event, index, 3)
+                                      }
+                                      value={entry.studentGradeLabel}
+                                    >
+                                      {STUDENT_GRADE_OPTIONS.map((grade) => (
+                                        <option key={`${entry.id}-${grade}`} value={grade}>
+                                          {grade}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <button
+                                      className="sheet-cell"
+                                      onClick={() =>
+                                        setRosterActiveCell({ rowIndex: index, columnIndex: 3 })
+                                      }
+                                      type="button"
+                                    >
+                                      {entry.studentGradeLabel}
+                                    </button>
+                                  )}
+                                </td>
+                              ) : null}
                             </tr>
                           ))}
                         </tbody>
@@ -4057,7 +4262,7 @@ export default function App() {
                 </label>
               </div>
               <RadarChart
-                labels={resolvedItemLabels}
+                labels={selectedRecordItemLabels}
                 record={selectedRecord}
                 scores={selectedAbilityScores}
               />
@@ -4101,7 +4306,7 @@ export default function App() {
                 abilityRulesConfig={abilityRulesConfig}
                 abilityLevelLabels={selectedAbilityLevelLabels}
                 abilityScores={selectedAbilityScores}
-                labels={resolvedItemLabels}
+                labels={selectedRecordItemLabels}
                 record={selectedRecord}
                 rosterName={data.rosterName}
                 seatNumber={selectedSeatNumber}

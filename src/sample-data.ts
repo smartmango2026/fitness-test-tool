@@ -8,8 +8,8 @@ export const defaultAppData: AppData = {
   rosterName: "星星班",
   gradeLabel: "大班",
   rosterEntries: [
-    { id: "roster_001", studentName: "王小明", height: "118", weight: "22" },
-    { id: "roster_002", studentName: "林小華", height: "121", weight: "23" },
+    { id: "roster_001", studentName: "王小明", height: "118", weight: "22", studentGradeLabel: "大班" },
+    { id: "roster_002", studentName: "林小華", height: "121", weight: "23", studentGradeLabel: "大班" },
   ],
   records: [
     {
@@ -17,6 +17,7 @@ export const defaultAppData: AppData = {
       studentName: "王小明",
       height: "118",
       weight: "22",
+      studentGradeLabel: "大班",
       testDate: "2026-04-22",
       item1: 12,
       item2: 10,
@@ -31,6 +32,7 @@ export const defaultAppData: AppData = {
       studentName: "林小華",
       height: "121",
       weight: "23",
+      studentGradeLabel: "大班",
       testDate: "2026-04-22",
       item1: 9,
       item2: 13,

@@ -1,14 +1,31 @@
 import * as XLSX from "xlsx";
-import type { AppData, FitnessRecord } from "./types";
+import type { AppData, FitnessRecord, StudentGradeLabel } from "./types";
 
 const VISIBLE_SHEET_NAME = "Records";
 const SYSTEM_SHEET_NAME = "_system";
 
 type SystemSheetMap = Record<string, string>;
 
+function isStudentGradeLabel(value: unknown): value is StudentGradeLabel {
+  return value === "幼幼班" || value === "小班" || value === "中班" || value === "大班";
+}
+
+function inferStudentGradeLabel(fileGradeLabel: string, value: unknown): StudentGradeLabel {
+  if (isStudentGradeLabel(value)) {
+    return value;
+  }
+
+  if (isStudentGradeLabel(fileGradeLabel)) {
+    return fileGradeLabel;
+  }
+
+  return "中班";
+}
+
 function buildVisibleSheet(data: AppData): XLSX.WorkSheet {
   const headerRow = [
     "姓名",
+    "學生年級",
     "身高",
     "體重",
     data.itemLabels[0] ?? "測驗項目 1",
@@ -21,6 +38,7 @@ function buildVisibleSheet(data: AppData): XLSX.WorkSheet {
   ];
   const recordRows = data.records.map((record) => [
     record.studentName,
+    record.studentGradeLabel,
     record.height,
     record.weight,
     record.item1,
@@ -44,6 +62,7 @@ function buildVisibleSheet(data: AppData): XLSX.WorkSheet {
 
   sheet["!cols"] = [
     { wch: 14 },
+    { wch: 12 },
     { wch: 10 },
     { wch: 10 },
     { wch: 12 },
@@ -133,6 +152,7 @@ export async function importWorkbook(file: File): Promise<AppData> {
 
   const records = parseRecordsJson(values.recordsJson).map((record) => ({
     ...record,
+    studentGradeLabel: inferStudentGradeLabel(values.gradeLabel, record.studentGradeLabel),
     height: record.height || "",
     weight: record.weight || "",
     testDate: values.testDate || record.testDate,
@@ -150,6 +170,7 @@ export async function importWorkbook(file: File): Promise<AppData> {
       : records.map((record, index) => ({
           id: `roster_${index + 1}`,
           studentName: record.studentName,
+          studentGradeLabel: inferStudentGradeLabel(values.gradeLabel, record.studentGradeLabel),
           height: record.height,
           weight: record.weight,
         })),
