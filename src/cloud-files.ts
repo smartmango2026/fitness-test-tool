@@ -68,6 +68,14 @@ function buildFileName(data: Pick<AppData, "rosterName" | "academicTerm">): stri
   return academicTerm ? `${academicTerm} / ${rosterName}` : rosterName;
 }
 
+function buildFileShareDocumentId(
+  ownerUid: string,
+  fileId: string,
+  recipientUid: string,
+): string {
+  return `${ownerUid}__${fileId}__${recipientUid}`;
+}
+
 function buildStoredFileData(
   ownerUid: string,
   ownerUsername: string,
@@ -553,6 +561,7 @@ export async function setCloudFileEditors(options: {
   ownerUsername: string;
   ownerDisplayName?: string | null;
   file: CloudFileSummary;
+  previousEditorUids?: string[];
   editorTargets: Array<{
     uid: string;
     username: string;
@@ -568,23 +577,13 @@ export async function setCloudFileEditors(options: {
     updatedAt: serverTimestamp(),
   });
 
-  const existingSharesQuery = query(
-    collection(db, "fileShares"),
-    where("ownerUid", "==", options.ownerUid),
-    where("fileId", "==", options.file.id),
-  );
-  const existingSharesSnapshot = await getDocs(existingSharesQuery);
-  const existingByRecipient = new Map(
-    existingSharesSnapshot.docs.map((shareDoc) => [
-      shareDoc.data().recipientUid as string,
-      shareDoc,
-    ]),
-  );
-
   const batch = writeBatch(db);
   options.editorTargets.forEach((target) => {
-    const existing = existingByRecipient.get(target.uid);
-    const shareRef = existing?.ref ?? doc(collection(db, "fileShares"));
+    const shareRef = doc(
+      db,
+      "fileShares",
+      buildFileShareDocumentId(options.ownerUid, options.file.id, target.uid),
+    );
     batch.set(
       shareRef,
       {
@@ -602,19 +601,27 @@ export async function setCloudFileEditors(options: {
         recipientUsername: target.username,
         recipientDisplayName: target.displayName,
         status: "active",
-        createdAt: existing?.data().createdAt ?? serverTimestamp(),
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
     );
   });
 
-  existingSharesSnapshot.docs.forEach((shareDoc) => {
-    const recipientUid = shareDoc.data().recipientUid as string;
+  const previousEditorUids = options.previousEditorUids ?? [];
+  previousEditorUids.forEach((recipientUid) => {
     if (!editorUids.includes(recipientUid)) {
+      const shareRef = doc(
+        db,
+        "fileShares",
+        buildFileShareDocumentId(options.ownerUid, options.file.id, recipientUid),
+      );
       batch.set(
-        shareDoc.ref,
+        shareRef,
         {
+          fileId: options.file.id,
+          ownerUid: options.ownerUid,
+          recipientUid,
           status: "revoked",
           updatedAt: serverTimestamp(),
         },

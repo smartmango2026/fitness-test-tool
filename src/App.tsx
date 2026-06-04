@@ -501,6 +501,7 @@ export default function App() {
   );
   const reportDebugFileLoadedRef = useRef<string | null>(null);
   const autoOpenedLastCloudFileRef = useRef<string | null>(null);
+  const shareRepairSignatureRef = useRef<string | null>(null);
   const rosterViewportRef = useRef<HTMLDivElement | null>(null);
   const tableViewportRef = useRef<HTMLDivElement | null>(null);
   const metricViewportRef = useRef<HTMLDivElement | null>(null);
@@ -532,6 +533,7 @@ export default function App() {
     if (!currentUser) {
       reportDebugFileLoadedRef.current = null;
       autoOpenedLastCloudFileRef.current = null;
+      shareRepairSignatureRef.current = null;
       setCurrentProfile(null);
       setNicknameDraft("");
       setFriendNicknameDrafts({});
@@ -986,6 +988,67 @@ export default function App() {
       setSelectedShareFriendUid("");
     }
   }, [availableShareFriends, selectedShareFriendUid]);
+
+  useEffect(() => {
+    if (
+      !currentUser ||
+      !currentProfile ||
+      !currentCloudFileSummary ||
+      currentCloudFileSummary.ownerUid !== currentUser.uid
+    ) {
+      shareRepairSignatureRef.current = null;
+      return;
+    }
+
+    const activeTargets = shareableFriends
+      .filter((friend) => shareEditorUids.includes(friend.friendUid))
+      .map((friend) => ({
+        uid: friend.friendUid,
+        username: friend.username,
+        displayName: friend.profileNickname,
+      }));
+
+    if (
+      shareEditorUids.length > 0 &&
+      activeTargets.length !== shareEditorUids.length
+    ) {
+      return;
+    }
+
+    const signature = JSON.stringify({
+      fileId: currentCloudFileSummary.id,
+      ownerUid: currentUser.uid,
+      editorUids: [...shareEditorUids].sort(),
+      targetUids: activeTargets.map((target) => target.uid).sort(),
+    });
+
+    if (shareRepairSignatureRef.current === signature) {
+      return;
+    }
+
+    shareRepairSignatureRef.current = signature;
+
+    void setCloudFileEditors({
+      ownerUid: currentUser.uid,
+      ownerUsername: currentUsername,
+      ownerDisplayName: currentProfile.displayNickname ?? null,
+      file: currentCloudFileSummary,
+      previousEditorUids: shareEditorUids,
+      editorTargets: activeTargets,
+    }).catch((error) => {
+      const nextMessage =
+        error instanceof Error ? error.message : "無法修復共同編輯分享資料。";
+      setMessage(`共同編輯分享資料修復失敗：${nextMessage}`);
+      shareRepairSignatureRef.current = null;
+    });
+  }, [
+    currentCloudFileSummary,
+    currentProfile,
+    currentUser,
+    currentUsername,
+    shareEditorUids,
+    shareableFriends,
+  ]);
   const inviteIdFromUrl = useMemo(() => {
     if (typeof window === "undefined") {
       return "";
@@ -2151,6 +2214,7 @@ export default function App() {
         ownerUsername: currentUsername,
         ownerDisplayName: currentProfile?.displayNickname ?? null,
         file,
+        previousEditorUids,
         editorTargets: shareableFriends
           .filter((friend) => nextEditorUids.includes(friend.friendUid))
           .map((friend) => ({
