@@ -31,6 +31,7 @@ export type CloudFileSummary = {
   ownerUsername: string;
   ownerDisplayName: string | null;
   accessRole: "owner" | "editor";
+  sharedEditorUids: string[];
 };
 
 type SharedWithEntry = {
@@ -155,6 +156,16 @@ function normalizeRecords(raw: unknown, fileGradeLabel: string, testDate: string
 }
 
 function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
+  const editorUids = Array.isArray(data.editorUids)
+    ? data.editorUids.filter((value): value is string => typeof value === "string")
+    : [];
+  const sharedWith = readSharedWith(data);
+  const sharedEditorUids =
+    editorUids.length > 0
+      ? editorUids
+      : Object.entries(sharedWith)
+          .filter(([, entry]) => entry.status !== "revoked")
+          .map(([uid]) => uid);
   return {
     id,
     fileName:
@@ -183,6 +194,7 @@ function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
       typeof data.ownerUsername === "string" ? data.ownerUsername : "未命名使用者",
     ownerDisplayName: normalizeDisplayName(data.ownerDisplayName),
     accessRole: "owner",
+    sharedEditorUids,
   };
 }
 
@@ -237,6 +249,7 @@ function mapRecipientSharedFileSummary(id: string, data: DocumentData): CloudFil
       typeof data.ownerUsername === "string" ? data.ownerUsername : "未命名使用者",
     ownerDisplayName: normalizeDisplayName(data.ownerDisplayName),
     accessRole: "editor",
+    sharedEditorUids: [],
   };
 }
 

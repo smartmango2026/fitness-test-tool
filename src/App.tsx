@@ -1026,10 +1026,18 @@ export default function App() {
       return;
     }
 
+    const currentSummary = cloudFiles.find(
+      (file) =>
+        file.id === currentCloudFileId && file.ownerUid === currentCloudFileOwnerUid,
+    );
+    if (currentSummary?.sharedEditorUids?.length) {
+      setShareEditorUids(currentSummary.sharedEditorUids);
+    }
+
     void getCloudFileEditorUids(currentCloudFileOwnerUid, currentCloudFileId).then(
       setShareEditorUids,
     );
-  }, [currentCloudFileId, currentCloudFileOwnerUid, currentUser]);
+  }, [cloudFiles, currentCloudFileId, currentCloudFileOwnerUid, currentUser]);
 
   useEffect(() => {
     if (!currentUser) {
