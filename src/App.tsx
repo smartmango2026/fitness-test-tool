@@ -1032,6 +1032,7 @@ export default function App() {
     );
     if (currentSummary?.sharedEditorUids?.length) {
       setShareEditorUids(currentSummary.sharedEditorUids);
+      return;
     }
 
     void getCloudFileEditorUids(currentCloudFileOwnerUid, currentCloudFileId).then(
@@ -1211,6 +1212,13 @@ export default function App() {
       ) ?? null,
     [cloudFiles, currentCloudFileId, currentCloudFileOwnerUid],
   );
+  const effectiveSharedEditorUids = useMemo(() => {
+    const summaryEditorUids = currentCloudFileSummary?.sharedEditorUids ?? [];
+    if (summaryEditorUids.length > 0) {
+      return summaryEditorUids;
+    }
+    return shareEditorUids;
+  }, [currentCloudFileSummary, shareEditorUids]);
   const currentCloudFileIsOwner = Boolean(
     currentUser &&
       currentCloudFileOwnerUid &&
@@ -1221,12 +1229,18 @@ export default function App() {
     [friends, currentUser],
   );
   const sharedEditorFriends = useMemo(
-    () => shareableFriends.filter((friend) => shareEditorUids.includes(friend.friendUid)),
-    [shareEditorUids, shareableFriends],
+    () =>
+      shareableFriends.filter((friend) =>
+        effectiveSharedEditorUids.includes(friend.friendUid),
+      ),
+    [effectiveSharedEditorUids, shareableFriends],
   );
   const availableShareFriends = useMemo(
-    () => shareableFriends.filter((friend) => !shareEditorUids.includes(friend.friendUid)),
-    [shareEditorUids, shareableFriends],
+    () =>
+      shareableFriends.filter(
+        (friend) => !effectiveSharedEditorUids.includes(friend.friendUid),
+      ),
+    [effectiveSharedEditorUids, shareableFriends],
   );
   useEffect(() => {
     if (
@@ -1248,13 +1262,13 @@ export default function App() {
       return;
     }
 
-    if (shareEditorUids.length === 0) {
+    if (effectiveSharedEditorUids.length === 0) {
       shareRepairSignatureRef.current = null;
       return;
     }
 
     const activeTargets = shareableFriends
-      .filter((friend) => shareEditorUids.includes(friend.friendUid))
+      .filter((friend) => effectiveSharedEditorUids.includes(friend.friendUid))
       .map((friend) => ({
         uid: friend.friendUid,
         username: friend.username,
@@ -1262,8 +1276,8 @@ export default function App() {
       }));
 
     if (
-      shareEditorUids.length > 0 &&
-      activeTargets.length !== shareEditorUids.length
+      effectiveSharedEditorUids.length > 0 &&
+      activeTargets.length !== effectiveSharedEditorUids.length
     ) {
       return;
     }
@@ -1271,7 +1285,7 @@ export default function App() {
     const signature = JSON.stringify({
       fileId: currentCloudFileSummary.id,
       ownerUid: currentUser.uid,
-      editorUids: [...shareEditorUids].sort(),
+      editorUids: [...effectiveSharedEditorUids].sort(),
       targetUids: activeTargets.map((target) => target.uid).sort(),
     });
 
@@ -1286,7 +1300,7 @@ export default function App() {
       ownerUsername: currentUsername,
       ownerDisplayName: currentProfile.displayNickname ?? null,
       file: currentCloudFileSummary,
-      previousEditorUids: shareEditorUids,
+      previousEditorUids: effectiveSharedEditorUids,
       editorTargets: activeTargets,
     }).catch((error) => {
       const nextMessage =
@@ -1299,7 +1313,7 @@ export default function App() {
     currentProfile,
     currentUser,
     currentUsername,
-    shareEditorUids,
+    effectiveSharedEditorUids,
     shareableFriends,
   ]);
   const inviteIdFromUrl = useMemo(() => {
