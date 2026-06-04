@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   onSnapshot,
   query,
   serverTimestamp,
@@ -641,13 +642,27 @@ export async function getCloudFileEditorUids(
   ownerUid: string,
   fileId: string,
 ): Promise<string[]> {
-  const snapshot = await getDoc(doc(db, "users", ownerUid, "files", fileId));
+  const fileRef = doc(db, "users", ownerUid, "files", fileId);
+  let snapshot;
+  try {
+    snapshot = await getDocFromServer(fileRef);
+  } catch {
+    snapshot = await getDoc(fileRef);
+  }
   if (!snapshot.exists()) {
     return [];
   }
 
   const data = snapshot.data();
-  return Array.isArray(data.editorUids)
+  const editorUids = Array.isArray(data.editorUids)
     ? data.editorUids.filter((value): value is string => typeof value === "string")
     : [];
+  if (editorUids.length > 0) {
+    return editorUids;
+  }
+
+  const sharedWith = readSharedWith(data);
+  return Object.entries(sharedWith)
+    .filter(([, entry]) => entry.status !== "revoked")
+    .map(([uid]) => uid);
 }
