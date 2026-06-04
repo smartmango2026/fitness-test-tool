@@ -79,8 +79,6 @@ function buildStoredFileData(
     ownerUid,
     ownerUsername,
     ownerDisplayName,
-    editorUids: [],
-    sharedWith: {},
     status: "active",
     fileName: buildFileName(data),
     rosterName: data.rosterName,
@@ -368,6 +366,8 @@ export async function createCloudFile(options: {
   const fileRef = doc(collection(db, "users", options.uid, "files"));
   await setDoc(fileRef, {
     createdAt: serverTimestamp(),
+    editorUids: [],
+    sharedWith: {},
     ...buildStoredFileData(
       options.uid,
       options.username,
