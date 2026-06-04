@@ -80,11 +80,11 @@
       <section class="boot-note">
         <h1>體適能測驗工具</h1>
         <p>如果你現在只看到這個區塊，代表前端 JavaScript 沒有成功啟動，所以 React 畫面尚未載入。</p>
-        <p>這通常發生在直接打開本機 <code>file:///.../dist/index.html</code>，而目前瀏覽器沒有允許相關模組資源正常載入。</p>
-        <p>建議改用本機預覽伺服器：</p>
+        <p>這通常代表網頁腳本、Firebase 連線，或部署資源在啟動時出了問題。</p>
+        <p>如果你是一般使用者，請先重新整理頁面；若仍然失敗，請把畫面截圖給維護者。</p>
+        <p>如果你是本機開發者，請改用開發伺服器或預覽伺服器開啟，不要直接點開 HTML 檔案。</p>
         <pre>cd fitness-test-tool
-pnpm preview</pre>
-        <p>如果部署到 GitHub Pages，因為會透過 <code>https://</code> 提供檔案，通常就能正常運作。</p>
+pnpm dev</pre>
       </section>
     </div>
     <script>
@@ -98,11 +98,9 @@ pnpm preview</pre>
           '<section class="boot-error">' +
           "<h1>網頁載入失敗</h1>" +
           "<p>" + message + "</p>" +
-          "<p>如果你是直接開啟原始專案中的 <code>index.html</code>，這個 React + Vite 專案通常需要透過開發伺服器或 build 後版本執行。</p>" +
-          "<p>建議做法：</p>" +
+          "<p>請先重新整理頁面；如果仍然失敗，請把下面的錯誤訊息截圖給維護者。</p>" +
+          "<p>如果你是本機開發者，請用開發伺服器或預覽伺服器開啟，而不是直接點開 HTML 檔案。</p>" +
           "<pre>cd fitness-test-tool\npnpm dev</pre>" +
-          "<p>或先執行：</p>" +
-          "<pre>cd fitness-test-tool\npnpm build\npnpm preview</pre>" +
           (details ? "<pre>" + details + "</pre>" : "") +
           "</section>";
       };
@@ -132,7 +130,7 @@ pnpm preview</pre>
           error instanceof Error ? error.stack || error.message : String(error);
 
         window.__fitnessToolRenderBootError(
-          "無法載入前端入口模組。這通常代表目前不是透過 Vite 開發伺服器或正式 build 後頁面啟動。",
+          "無法載入前端入口模組。這通常代表部署腳本、靜態資源或瀏覽器載入流程出了問題。",
           details,
         );
       });

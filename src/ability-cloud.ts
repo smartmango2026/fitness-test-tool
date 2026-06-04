@@ -42,18 +42,25 @@ export async function ensureAbilityRulesConfig(uid: string): Promise<AbilityRule
 export function subscribeToAbilityRulesConfig(
   uid: string,
   callback: (config: AbilityRulesConfig) => void,
+  onError?: (error: unknown) => void,
 ): () => void {
   const settingsRef = getAbilitySettingsRef(uid);
 
-  return onSnapshot(settingsRef, async (snapshot) => {
-    if (!snapshot.exists()) {
-      const defaults = await ensureAbilityRulesConfig(uid);
-      callback(defaults);
-      return;
-    }
+  return onSnapshot(
+    settingsRef,
+    async (snapshot) => {
+      if (!snapshot.exists()) {
+        const defaults = await ensureAbilityRulesConfig(uid);
+        callback(defaults);
+        return;
+      }
 
-    callback(normalizeAbilityRulesConfig(snapshot.data()));
-  });
+      callback(normalizeAbilityRulesConfig(snapshot.data()));
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 }
 
 export async function saveAbilityRulesConfigToCloud(
@@ -84,4 +91,3 @@ export async function resetAbilityRulesConfigInCloud(uid: string): Promise<Abili
   );
   return defaults;
 }
-

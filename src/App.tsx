@@ -378,6 +378,90 @@ type ReportDebugParams = {
   seat: number | null;
 };
 
+type LoadCheckpointKey =
+  | "frontend"
+  | "auth"
+  | "profile"
+  | "friends"
+  | "friendRequests"
+  | "cloudFiles"
+  | "abilityRules"
+  | "restoreFile";
+
+type LoadCheckpointState = {
+  label: string;
+  status: "waiting" | "loading" | "success" | "error";
+  detail: string;
+};
+
+const DEFAULT_LOAD_CHECKPOINTS: Record<LoadCheckpointKey, LoadCheckpointState> = {
+  frontend: {
+    label: "前端啟動",
+    status: "success",
+    detail: "React 畫面已啟動，正在確認 Firebase 登入狀態。",
+  },
+  auth: {
+    label: "登入狀態",
+    status: "loading",
+    detail: "正在確認目前是否已登入。",
+  },
+  profile: {
+    label: "基本資料",
+    status: "waiting",
+    detail: "登入後才會載入使用者基本資料。",
+  },
+  friends: {
+    label: "好友列表",
+    status: "waiting",
+    detail: "登入後才會載入好友資料。",
+  },
+  friendRequests: {
+    label: "好友邀請",
+    status: "waiting",
+    detail: "登入後才會載入收到與送出的好友邀請。",
+  },
+  cloudFiles: {
+    label: "雲端檔案",
+    status: "waiting",
+    detail: "登入後才會載入你的檔案與共享檔案。",
+  },
+  abilityRules: {
+    label: "能力值設定",
+    status: "waiting",
+    detail: "登入後才會載入能力值對應表。",
+  },
+  restoreFile: {
+    label: "上次檔案",
+    status: "waiting",
+    detail: "登入後會嘗試恢復上次使用的檔案。",
+  },
+};
+
+function makeDefaultLoadCheckpoints(): Record<LoadCheckpointKey, LoadCheckpointState> {
+  return JSON.parse(JSON.stringify(DEFAULT_LOAD_CHECKPOINTS)) as Record<
+    LoadCheckpointKey,
+    LoadCheckpointState
+  >;
+}
+
+function summarizeFrontendStatus(
+  checkpoints: Record<LoadCheckpointKey, LoadCheckpointState>,
+): string {
+  const errorCheckpoint = Object.values(checkpoints).find((checkpoint) => checkpoint.status === "error");
+  if (errorCheckpoint) {
+    return `${errorCheckpoint.label}失敗：${errorCheckpoint.detail}`;
+  }
+
+  const loadingCheckpoint = Object.values(checkpoints).find(
+    (checkpoint) => checkpoint.status === "loading",
+  );
+  if (loadingCheckpoint) {
+    return `${loadingCheckpoint.label}中：${loadingCheckpoint.detail}`;
+  }
+
+  return "前端已完成目前可執行的載入檢查。";
+}
+
 function readReportDebugParamsFromUrl(): ReportDebugParams {
   if (typeof window === "undefined") {
     return {
@@ -472,7 +556,12 @@ export default function App() {
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
   );
-  const [message, setMessage] = useState("已載入本機資料。");
+  const [message, setMessage] = useState("前端已啟動。");
+  const [loadCheckpoints, setLoadCheckpoints] = useState<Record<
+    LoadCheckpointKey,
+    LoadCheckpointState
+  >>(() => makeDefaultLoadCheckpoints());
+  const [frontendIssues, setFrontendIssues] = useState<string[]>([]);
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
   const [activeMetric, setActiveMetric] = useState<FitnessField>("item1");
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
@@ -513,13 +602,84 @@ export default function App() {
   const previousMetricScaleRef = useRef(1);
   const skipNextCloudDirtyRef = useRef(false);
 
+  const updateLoadCheckpoint = (
+    key: LoadCheckpointKey,
+    status: LoadCheckpointState["status"],
+    detail: string,
+  ) => {
+    setLoadCheckpoints((current) => ({
+      ...current,
+      [key]: {
+        ...current[key],
+        status,
+        detail,
+      },
+    }));
+  };
+
+  const pushFrontendIssue = (issue: string) => {
+    setFrontendIssues((current) => (current.includes(issue) ? current : [...current, issue]));
+  };
+
   useEffect(() => {
+    updateLoadCheckpoint("auth", "loading", "正在確認目前是否已登入。");
+
     const unsubscribe = subscribeToAuthState((user) => {
       if (user) {
         void ensureUserProfile(user);
         setActiveTab((current) =>
           isReportDebugMode ? "pdf" : current === "account" ? "files" : current,
         );
+        updateLoadCheckpoint(
+          "auth",
+          "success",
+          `已登入 ${emailToUsername(user.email) || user.displayName || "使用者"}，正在載入雲端資料。`,
+        );
+        updateLoadCheckpoint("profile", "loading", "正在載入使用者基本資料。");
+        updateLoadCheckpoint("friends", "loading", "正在載入好友列表。");
+        updateLoadCheckpoint("friendRequests", "loading", "正在載入好友邀請。");
+        updateLoadCheckpoint("cloudFiles", "loading", "正在載入雲端檔案與共享檔案。");
+        updateLoadCheckpoint("abilityRules", "loading", "正在載入能力值對應表。");
+        updateLoadCheckpoint("restoreFile", "loading", "正在判斷要恢復哪一份檔案。");
+      } else {
+        setLoadCheckpoints((current) => ({
+          ...current,
+          auth: {
+            ...current.auth,
+            status: "success",
+            detail: "目前尚未登入，可以先進入帳號管理。",
+          },
+          profile: {
+            ...current.profile,
+            status: "waiting",
+            detail: "登入後才會載入使用者基本資料。",
+          },
+          friends: {
+            ...current.friends,
+            status: "waiting",
+            detail: "登入後才會載入好友列表。",
+          },
+          friendRequests: {
+            ...current.friendRequests,
+            status: "waiting",
+            detail: "登入後才會載入好友邀請。",
+          },
+          cloudFiles: {
+            ...current.cloudFiles,
+            status: "waiting",
+            detail: "登入後才會載入你的檔案與共享檔案。",
+          },
+          abilityRules: {
+            ...current.abilityRules,
+            status: "waiting",
+            detail: "登入後才會載入能力值對應表。",
+          },
+          restoreFile: {
+            ...current.restoreFile,
+            status: "waiting",
+            detail: "登入後才會嘗試恢復上次使用的檔案。",
+          },
+        }));
       }
       setCurrentUser(user);
       setAuthReady(true);
@@ -547,40 +707,85 @@ export default function App() {
       setCurrentCloudFileOwnerUid(null);
       setIsCloudDirty(false);
       setShareEditorUids([]);
+      setFrontendIssues([]);
       return;
     }
 
-    const unsubscribeFriends = subscribeToFriends(currentUser.uid, setFriends);
+    let incomingLoaded = false;
+    let outgoingLoaded = false;
+    let filesLoaded = false;
+
+    const markFriendRequestsLoaded = () => {
+      if (incomingLoaded && outgoingLoaded) {
+        updateLoadCheckpoint("friendRequests", "success", "好友邀請資料已載入。");
+      }
+    };
+
+    const unsubscribeFriends = subscribeToFriends(currentUser.uid, (nextFriends) => {
+      setFriends(nextFriends);
+      updateLoadCheckpoint("friends", "success", `好友列表已載入，共 ${nextFriends.length} 位好友。`);
+    });
     const unsubscribeProfile = subscribeToUserProfile(currentUser.uid, (profile) => {
       setCurrentProfile(profile);
       setNicknameDraft(profile?.displayNickname ?? "");
+      updateLoadCheckpoint("profile", "success", "使用者基本資料已載入。");
     });
     const unsubscribeIncoming = subscribeToIncomingFriendRequests(
       currentUser.uid,
-      setIncomingFriendRequests,
+      (requests) => {
+        setIncomingFriendRequests(requests);
+        incomingLoaded = true;
+        markFriendRequestsLoaded();
+      },
     );
     const unsubscribeOutgoing = subscribeToOutgoingFriendRequests(
       currentUser.uid,
-      setOutgoingFriendRequests,
+      (requests) => {
+        setOutgoingFriendRequests(requests);
+        outgoingLoaded = true;
+        markFriendRequestsLoaded();
+      },
     );
     const unsubscribeCloudFiles = subscribeToCloudFiles(
       currentUser.uid,
-      setCloudFiles,
+      (files) => {
+        setCloudFiles(files);
+        if (!filesLoaded) {
+          filesLoaded = true;
+          updateLoadCheckpoint("cloudFiles", "success", `雲端檔案列表已載入，共 ${files.length} 份檔案。`);
+        } else {
+          updateLoadCheckpoint("cloudFiles", "success", `雲端檔案列表已更新，共 ${files.length} 份檔案。`);
+        }
+      },
       (error) => {
         const nextMessage =
           error instanceof Error ? error.message : "無法載入雲端檔案列表。";
         setMessage(`雲端檔案列表載入失敗：${nextMessage}`);
+        updateLoadCheckpoint("cloudFiles", "error", nextMessage);
+        pushFrontendIssue(`雲端檔案列表載入失敗：${nextMessage}`);
       },
     );
     const unsubscribeAbilityRules = subscribeToAbilityRulesConfig(
       currentUser.uid,
-      setAbilityRulesConfig,
+      (config) => {
+        setAbilityRulesConfig(config);
+        updateLoadCheckpoint("abilityRules", "success", "能力值對應表已載入。");
+      },
+      (error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法訂閱能力值對應表。";
+        setMessage(`能力值對應表載入失敗：${nextMessage}`);
+        updateLoadCheckpoint("abilityRules", "error", nextMessage);
+        pushFrontendIssue(`能力值對應表載入失敗：${nextMessage}`);
+      },
     );
 
     void ensureAbilityRulesConfig(currentUser.uid).catch((error) => {
       const nextMessage =
         error instanceof Error ? error.message : "無法載入能力值對應表。";
       setMessage(`能力值對應表載入失敗：${nextMessage}`);
+      updateLoadCheckpoint("abilityRules", "error", nextMessage);
+      pushFrontendIssue(`能力值對應表載入失敗：${nextMessage}`);
     });
 
     return () => {
@@ -728,6 +933,7 @@ export default function App() {
     }
 
     autoOpenedLastCloudFileRef.current = `${targetFile.ownerUid}:${targetFile.id}`;
+    updateLoadCheckpoint("restoreFile", "loading", `正在開啟檔案：${targetFile.fileName}`);
     void loadCloudFile(targetFile.ownerUid, targetFile.id)
       .then((nextData) => {
         skipNextCloudDirtyRef.current = true;
@@ -754,13 +960,27 @@ export default function App() {
             ? `已自動開啟上次使用的檔案：${targetFile.fileName}`
             : `已自動開啟最新建立的檔案：${targetFile.fileName}`,
         );
+        updateLoadCheckpoint("restoreFile", "success", `已開啟檔案：${targetFile.fileName}`);
       })
       .catch((error) => {
         const nextMessage =
           error instanceof Error ? error.message : "無法開啟上次使用的檔案。";
         setMessage(`自動開啟檔案失敗：${nextMessage}`);
+        updateLoadCheckpoint("restoreFile", "error", nextMessage);
+        pushFrontendIssue(`自動開啟檔案失敗：${nextMessage}`);
       });
   }, [cloudFiles, currentCloudFileId, currentUser, isReportDebugMode]);
+
+  useEffect(() => {
+    if (!currentUser && authReady) {
+      updateLoadCheckpoint("restoreFile", "waiting", "登入後才會嘗試恢復上次使用的檔案。");
+      return;
+    }
+
+    if (currentUser && authReady && cloudFiles.length === 0 && !currentCloudFileId) {
+      updateLoadCheckpoint("restoreFile", "success", "目前沒有可自動開啟的檔案。");
+    }
+  }, [authReady, cloudFiles.length, currentCloudFileId, currentUser]);
 
   useEffect(() => {
     if (!currentCloudFileId) {
@@ -2926,6 +3146,37 @@ export default function App() {
       <div className="status-banner" role="status">
         {message}
       </div>
+
+      <section className="startup-banner" aria-live="polite">
+        <div className="startup-banner-head">
+          <h2>前端載入檢查</h2>
+          <p>{summarizeFrontendStatus(loadCheckpoints)}</p>
+        </div>
+        <div className="startup-checkpoint-grid">
+          {(Object.entries(loadCheckpoints) as Array<[LoadCheckpointKey, LoadCheckpointState]>).map(
+            ([key, checkpoint]) => (
+              <article
+                className={`startup-checkpoint is-${checkpoint.status}`}
+                key={key}
+              >
+                <strong>{checkpoint.label}</strong>
+                <span>{checkpoint.detail}</span>
+              </article>
+            ),
+          )}
+        </div>
+        {frontendIssues.length > 0 ? (
+          <div className="startup-issues">
+            <strong>目前偵測到的前端問題</strong>
+            <ul>
+              {frontendIssues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+            <p>如果問題持續發生，請將這段訊息截圖給維護者。</p>
+          </div>
+        ) : null}
+      </section>
 
       <nav className="tab-bar" aria-label="主要功能">
         {tabs.map((tab) => (

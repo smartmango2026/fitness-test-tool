@@ -991,6 +991,96 @@ button {
   color: #115e59;
 }
 
+.startup-banner {
+  margin: 0 0 18px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+
+.startup-banner-head h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.startup-banner-head p {
+  margin: 0;
+  color: #475569;
+}
+
+.startup-checkpoint-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.startup-checkpoint {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #dbe4ee;
+  background: #f8fafc;
+}
+
+.startup-checkpoint strong {
+  color: #172033;
+}
+
+.startup-checkpoint span {
+  color: #475569;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.startup-checkpoint.is-loading {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.startup-checkpoint.is-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.startup-checkpoint.is-error {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.startup-checkpoint.is-waiting {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+.startup-issues {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+}
+
+.startup-issues strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #991b1b;
+}
+
+.startup-issues ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #7f1d1d;
+}
+
+.startup-issues p {
+  margin: 10px 0 0;
+  color: #7f1d1d;
+}
+
 .panel-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

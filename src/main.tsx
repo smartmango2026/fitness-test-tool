@@ -19,6 +19,7 @@ function renderRuntimeError(error: unknown): void {
     <section class="boot-error">
       <h1>應用程式執行失敗</h1>
       <p>前端入口已載入，但 React 啟動過程中發生錯誤，因此無法正常顯示內容。</p>
+      <p>請先重新整理頁面；如果仍然發生，請把下面訊息截圖給維護者。</p>
       <pre>${details}</pre>
     </section>
   `;
