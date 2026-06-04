@@ -3147,25 +3147,25 @@ export default function App() {
         {message}
       </div>
 
-      <section className="startup-banner" aria-live="polite">
-        <div className="startup-banner-head">
-          <h2>前端載入檢查</h2>
-          <p>{summarizeFrontendStatus(loadCheckpoints)}</p>
-        </div>
-        <div className="startup-checkpoint-grid">
-          {(Object.entries(loadCheckpoints) as Array<[LoadCheckpointKey, LoadCheckpointState]>).map(
-            ([key, checkpoint]) => (
-              <article
-                className={`startup-checkpoint is-${checkpoint.status}`}
-                key={key}
-              >
-                <strong>{checkpoint.label}</strong>
-                <span>{checkpoint.detail}</span>
-              </article>
-            ),
-          )}
-        </div>
-        {frontendIssues.length > 0 ? (
+      {frontendIssues.length > 0 ? (
+        <section className="startup-banner" aria-live="polite">
+          <div className="startup-banner-head">
+            <h2>前端載入檢查</h2>
+            <p>{summarizeFrontendStatus(loadCheckpoints)}</p>
+          </div>
+          <div className="startup-checkpoint-grid">
+            {(Object.entries(loadCheckpoints) as Array<[LoadCheckpointKey, LoadCheckpointState]>).map(
+              ([key, checkpoint]) => (
+                <article
+                  className={`startup-checkpoint is-${checkpoint.status}`}
+                  key={key}
+                >
+                  <strong>{checkpoint.label}</strong>
+                  <span>{checkpoint.detail}</span>
+                </article>
+              ),
+            )}
+          </div>
           <div className="startup-issues">
             <strong>目前偵測到的前端問題</strong>
             <ul>
@@ -3175,8 +3175,8 @@ export default function App() {
             </ul>
             <p>如果問題持續發生，請將這段訊息截圖給維護者。</p>
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <nav className="tab-bar" aria-label="主要功能">
         {tabs.map((tab) => (

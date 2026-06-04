@@ -50,6 +50,15 @@ export type FileShareRecord = {
   updatedAt: string | null;
 };
 
+function isPermissionDeniedError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "permission-denied"
+  );
+}
+
 function timestampToIso(value: unknown): string | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -275,7 +284,18 @@ async function mapSharedFileSummary(share: FileShareRecord): Promise<CloudFileSu
     return null;
   }
 
-  const snapshot = await getDoc(doc(db, "users", share.ownerUid, "files", share.fileId));
+  let snapshot;
+  try {
+    snapshot = await getDoc(doc(db, "users", share.ownerUid, "files", share.fileId));
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      throw new Error(
+        `共享檔案權限不同步：${share.ownerFileName}（分享者 ${share.ownerDisplayName || share.ownerUsername}）。`,
+      );
+    }
+    throw error;
+  }
+
   if (!snapshot.exists()) {
     return null;
   }
@@ -362,15 +382,39 @@ export function subscribeToCloudFiles(
     sharesQuery,
     (snapshot) => {
       void (async () => {
-        try {
-          const shareRecords = snapshot.docs.map((entry) =>
-            mapShareRecord(entry.id, entry.data()),
+        const shareRecords = snapshot.docs.map((entry) =>
+          mapShareRecord(entry.id, entry.data()),
+        );
+        const resolved = await Promise.allSettled(shareRecords.map(mapSharedFileSummary));
+        const nextSharedFiles: CloudFileSummary[] = [];
+        const failedShares: string[] = [];
+
+        resolved.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            if (result.value) {
+              nextSharedFiles.push(result.value);
+            }
+            return;
+          }
+
+          const fallbackName =
+            shareRecords[index]?.ownerFileName || `檔案 ${shareRecords[index]?.fileId || ""}`.trim();
+          const reason =
+            result.reason instanceof Error ? result.reason.message : String(result.reason);
+          failedShares.push(reason || `共享檔案讀取失敗：${fallbackName}`);
+        });
+
+        sharedFiles = nextSharedFiles;
+        emit();
+
+        if (failedShares.length > 0) {
+          onError?.(
+            new Error(
+              failedShares.length === 1
+                ? failedShares[0]
+                : `共有 ${failedShares.length} 份共享檔案讀取失敗：${failedShares.join("；")}`,
+            ),
           );
-          const resolved = await Promise.all(shareRecords.map(mapSharedFileSummary));
-          sharedFiles = resolved.filter((file): file is CloudFileSummary => Boolean(file));
-          emit();
-        } catch (error) {
-          onError?.(error);
         }
       })();
     },
