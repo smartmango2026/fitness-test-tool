@@ -345,38 +345,6 @@ async function syncShareMetadata(options: {
     );
   });
   await recipientBatch.commit();
-
-  const sharesQuery = query(
-    collection(db, "fileShares"),
-    where("ownerUid", "==", options.ownerUid),
-    where("fileId", "==", options.fileId),
-    where("status", "==", "active"),
-  );
-  const snapshot = await getDocs(sharesQuery);
-  if (snapshot.empty) {
-    return;
-  }
-
-  const batch = writeBatch(db);
-  snapshot.docs.forEach((shareDoc) => {
-    batch.set(
-      shareDoc.ref,
-      {
-        fileName: options.fileName,
-        rosterName: options.rosterName,
-        gradeLabel: options.gradeLabel,
-        academicTerm: options.academicTerm,
-        rosterCount: options.rosterCount,
-        recordCount: options.recordCount,
-        ownerUsername: options.ownerUsername,
-        ownerDisplayName: options.ownerDisplayName,
-        fileStatus: options.status ?? "active",
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  });
-  await batch.commit();
 }
 
 async function mapSharedFileSummary(share: FileShareRecord): Promise<CloudFileSummary | null> {
@@ -811,33 +779,6 @@ export async function setCloudFileEditors(options: {
       { merge: true },
     );
 
-    const shareRef = doc(
-      db,
-      "fileShares",
-      buildFileShareDocumentId(options.ownerUid, options.file.id, target.uid),
-    );
-    batch.set(
-      shareRef,
-      {
-        fileId: options.file.id,
-        ownerUid: options.ownerUid,
-        ownerUsername: options.ownerUsername,
-        ownerDisplayName: options.ownerDisplayName?.trim() || null,
-        fileName: options.file.fileName,
-        rosterName: options.file.rosterName,
-        gradeLabel: options.file.gradeLabel,
-        academicTerm: options.file.academicTerm,
-        rosterCount: options.file.rosterCount,
-        recordCount: options.file.recordCount,
-        recipientUid: target.uid,
-        recipientUsername: target.username,
-        recipientDisplayName: target.displayName,
-        status: "active",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
   });
 
   const previousEditorUids = options.previousEditorUids ?? [];
@@ -862,22 +803,6 @@ export async function setCloudFileEditors(options: {
         { merge: true },
       );
 
-      const shareRef = doc(
-        db,
-        "fileShares",
-        buildFileShareDocumentId(options.ownerUid, options.file.id, recipientUid),
-      );
-      batch.set(
-        shareRef,
-        {
-          fileId: options.file.id,
-          ownerUid: options.ownerUid,
-          recipientUid,
-          status: "revoked",
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
     }
   });
 
