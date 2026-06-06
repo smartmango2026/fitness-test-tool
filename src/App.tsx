@@ -154,10 +154,10 @@ function readRequestedTabFromUrl(): string | null {
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "account", label: "帳號管理" },
-  { key: "files", label: "檔案中心" },
-  { key: "roster", label: "編輯名冊" },
+  { key: "files", label: "編輯檔案" },
+  { key: "roster", label: "學員名單" },
   { key: "metric", label: "測驗項目" },
-  { key: "table", label: "檢視總表" },
+  { key: "table", label: "測驗報告" },
   { key: "pdf", label: "檢視報表" },
 ];
 
@@ -199,7 +199,7 @@ const tabShowcaseSamples = [
     id: "scroll",
     title: "橫向捲動",
     description: "手機版保留單列高度，能容納更多功能項目。",
-    items: ["帳號管理", "檔案中心", "編輯名冊", "測驗項目", "檢視總表", "檢視報表", "設定"],
+    items: ["帳號管理", "編輯檔案", "學員名單", "測驗項目", "測驗報告", "檢視報表", "設定"],
     tone: "scroll",
   },
 ] as const;
@@ -3856,7 +3856,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>檢視總表</h2>
+                  <h2>測驗報告</h2>
                   <p>這一頁預設是列表檢視，點一下儲存格再就地編輯，也能直接選取學生供能力分析使用。</p>
                 </div>
                 <div className="button-row">
@@ -3991,7 +3991,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>檔案中心</h2>
+                  <h2>編輯檔案</h2>
                   <p>所有檔案都會放在 Firebase，登入後才能在自己的帳號下建立與管理檔案。</p>
                 </div>
                 <div className="button-row">
@@ -4023,7 +4023,7 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="file-list-shell">
                 <div className="file-list-head">
                   <h3>我的檔案</h3>
-                  <p>登入後可以建立自己的檔案，也能開啟好友分享給你的共同編輯檔案。</p>
+                  <p>登入後可以建立自己的檔案，也能編輯好友分享給你的共同編輯檔案。</p>
                   {currentUser ? (
                     <label className="file-sort-field">
                       <span>排序方式</span>
@@ -5044,7 +5044,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>編輯名冊</h2>
+                  <h2>學員名單</h2>
                   <p>這裡只管理一份目前名冊。若要切換班級，直接匯入那個班先前的資料即可。</p>
                 </div>
               </div>
