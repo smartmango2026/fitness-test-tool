@@ -4152,8 +4152,6 @@ export default function App({ experimentalMode = false }: AppProps) {
 
               <div className="file-list-shell">
                 <div className="file-list-head">
-                  <h3>我的檔案</h3>
-                  <p>登入後可以建立自己的檔案，也能編輯好友分享給你的共同編輯檔案。</p>
                   {currentUser ? (
                     <label className="file-sort-field">
                       <span>排序方式</span>
@@ -4181,11 +4179,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </div>
                 ) : (
                   <div className="file-table">
-                    <div className="file-table-row file-table-row-header">
-                      <span>學年度／學期</span>
-                      <span>班級</span>
-                      <span>狀態</span>
-                    </div>
                     {sortedCloudFiles.map((file) => (
                       <div className="file-accordion-item" key={file.id}>
                         <div
@@ -4197,7 +4190,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           }
                           onClick={() => toggleCloudFilePanel(file.id)}
                         >
-                          <span className="file-name-cell">
+                          <span className="file-summary-line">
                             <span
                               className={
                                 expandedCloudFileId === file.id
@@ -4208,12 +4201,17 @@ export default function App({ experimentalMode = false }: AppProps) {
                             >
                               ▾
                             </span>
-                            <span>{file.academicTerm}</span>
+                            <span className="file-summary-text">
+                              <span>{file.academicTerm}</span>
+                              <span className="file-summary-divider" aria-hidden="true">
+                                ／
+                              </span>
+                              <span>{file.rosterName}</span>
+                            </span>
                           </span>
-                          <span>{file.rosterName}</span>
                           {file.id === currentCloudFileId &&
                           file.ownerUid === currentCloudFileOwnerUid ? (
-                            <span>目前使用中</span>
+                            <span className="file-summary-status">目前使用中</span>
                           ) : (
                             <button
                               className="secondary-button"
@@ -4223,7 +4221,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                               }}
                               type="button"
                             >
-                              使用這個檔案
+                              切換到這個檔案
                             </button>
                           )}
                         </div>

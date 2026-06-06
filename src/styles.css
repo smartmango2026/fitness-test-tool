@@ -409,7 +409,6 @@ button {
   margin-bottom: 16px;
 }
 
-.file-list-head h3,
 .account-card h3 {
   margin: 0;
   font-size: 1.18rem;
@@ -420,15 +419,9 @@ button {
   color: #64748b;
 }
 
-.file-list-head p {
-  margin: 10px 0 0;
-  color: #64748b;
-}
-
 .file-sort-field {
   display: inline-grid;
   gap: 8px;
-  margin-top: 14px;
   color: #334155;
   font-weight: 600;
 }
@@ -448,7 +441,7 @@ button {
 
 .file-table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(180px, 1.4fr) minmax(130px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
@@ -457,23 +450,6 @@ button {
   background: #ffffff;
   color: #172033;
   text-align: left;
-}
-
-.file-table-row span {
-  min-width: 0;
-}
-
-.file-table-row > *:not(.file-name-cell) {
-  color: #475569;
-  font-size: 0.95rem;
-}
-
-.file-table-row-header {
-  border-style: dashed;
-  background: #f8fafc;
-  color: #475569;
-  font-size: 0.88rem;
-  font-weight: 700;
 }
 
 .file-table-row-body:hover {
@@ -492,11 +468,31 @@ button {
   gap: 10px;
 }
 
-.file-name-cell {
+.file-summary-line {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  font-weight: 700;
+}
+
+.file-summary-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #172033;
+  flex-wrap: wrap;
+}
+
+.file-summary-divider {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.file-summary-status {
+  color: #0f766e;
+  font-size: 0.95rem;
   font-weight: 700;
 }
 
@@ -2039,7 +2035,6 @@ tbody tr.is-selected {
     border-radius: 20px;
   }
 
-  .file-list-head h3,
   .account-card h3 {
     font-size: 1.16rem;
   }
@@ -2070,21 +2065,17 @@ tbody tr.is-selected {
   }
 
   .file-table-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 10px;
     padding: 12px 14px;
   }
 
-  .file-table-row-header {
-    display: none;
-  }
-
-  .file-name-cell {
-    grid-column: 1 / -1;
+  .file-summary-line {
+    width: 100%;
   }
 
   .file-table-row > :last-child {
-    justify-self: end;
+    justify-self: stretch;
   }
 
   .file-share-row {
