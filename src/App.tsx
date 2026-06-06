@@ -135,6 +135,15 @@ function formatAuthError(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function readFriendInviteIdFromUrl(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get("friendInvite") ?? params.get("invite") ?? "";
+}
+
 type ActiveCell = {
   recordId: string;
   field: EditableField;
@@ -652,6 +661,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
+  const [inviteIdFromUrl, setInviteIdFromUrl] = useState(() => readFriendInviteIdFromUrl());
   const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
   const [abilityRulesConfig, setAbilityRulesConfig] = useState<AbilityRulesConfig>(
     defaultAbilityRulesConfig,
@@ -1513,14 +1523,6 @@ export default function App({ experimentalMode = false }: AppProps) {
     shareableFriends,
     shareTargetFileSummary,
   ]);
-  const inviteIdFromUrl = useMemo(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    return params.get("friendInvite") ?? params.get("invite") ?? "";
-  }, []);
   const isFriendInvitePage = Boolean(inviteIdFromUrl);
   const currentEditableRecords = useMemo(() => {
     if (activeTab === "files") {
@@ -2579,6 +2581,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     nextUrl.searchParams.delete("invite");
     nextUrl.searchParams.delete("view");
     window.history.replaceState({}, "", nextUrl.toString());
+    setInviteIdFromUrl("");
     setScannedFriendInvite(null);
     setActiveTab(currentUser ? "files" : "account");
   }
