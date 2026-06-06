@@ -1634,38 +1634,20 @@ tbody tr.is-selected {
 }
 
 .metric-editor {
-  min-width: 280px;
-  width: max-content;
+  min-width: 520px;
 }
 
-.metric-editor th,
-.metric-editor td {
-  min-width: 0;
+.metric-editor.is-fit th,
+.metric-editor.is-fit td {
+  font-size: 1rem;
 }
 
-.metric-editor th:first-child,
-.metric-editor td:first-child {
-  min-width: 96px;
-  width: 96px;
-}
-
-.metric-editor th:nth-child(2):not(:last-child),
-.metric-editor td:nth-child(2):not(:last-child) {
-  min-width: 72px;
-  width: 72px;
-}
-
-.metric-editor th:last-child,
-.metric-editor td:last-child {
-  min-width: 72px;
-  width: 72px;
-}
-
-.metric-editor td:last-child .cell-display,
-.metric-editor td:last-child input,
-.metric-editor td:last-child select {
-  padding-left: 6px;
-  padding-right: 6px;
+.metric-editor.is-fit .cell-display,
+.metric-editor.is-fit input,
+.metric-editor.is-fit select {
+  min-height: 42px;
+  font-size: 1rem;
+  padding: 8px 10px;
 }
 
 .roster-editor {

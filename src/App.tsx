@@ -4888,7 +4888,9 @@ export default function App({ experimentalMode = false }: AppProps) {
                     }}
                   >
                     <table
-                      className="table-editor metric-editor sheet-playground summary-sheet"
+                      className={`table-editor metric-editor sheet-playground summary-sheet${
+                        metricZoomMode === "fit" ? " is-fit" : ""
+                      }`}
                       ref={metricTableRef}
                       style={{
                         transform: `scale(${metricScale})`,
