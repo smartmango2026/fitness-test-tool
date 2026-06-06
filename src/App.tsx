@@ -3858,6 +3858,10 @@ export default function App({ experimentalMode = false }: AppProps) {
     );
   }
 
+  const isScannedInviteAlreadyFriend =
+    Boolean(scannedFriendInvite) &&
+    friends.some((friend) => friend.username === scannedFriendInvite?.issuedByUsername);
+
   return (
     <div
       className="app-shell"
@@ -4045,6 +4049,8 @@ export default function App({ experimentalMode = false }: AppProps) {
                     <p>請先登入，再把這位老師加入好友。</p>
                   ) : scannedFriendInvite.issuedByUid === currentUser.uid ? (
                     <p>這是你自己的行動條碼。</p>
+                  ) : isScannedInviteAlreadyFriend ? (
+                    <p>你們已經是好友了，不需要再送出邀請。</p>
                   ) : (
                     <p>確認後會送出好友邀請，對方同意後就會加入好友列表。</p>
                   )}
@@ -4058,7 +4064,8 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="friend-row-actions">
                 {scannedFriendInvite &&
                 currentUser &&
-                scannedFriendInvite.issuedByUid !== currentUser.uid ? (
+                scannedFriendInvite.issuedByUid !== currentUser.uid &&
+                !isScannedInviteAlreadyFriend ? (
                   <button
                     className="primary-button"
                     disabled={friendInviteActionState.status === "loading"}
@@ -4080,7 +4087,8 @@ export default function App({ experimentalMode = false }: AppProps) {
                 >
                   {scannedFriendInvite &&
                   currentUser &&
-                  scannedFriendInvite.issuedByUid !== currentUser.uid
+                  scannedFriendInvite.issuedByUid !== currentUser.uid &&
+                  !isScannedInviteAlreadyFriend
                     ? "取消邀請"
                     : "回到主頁"}
                 </button>
