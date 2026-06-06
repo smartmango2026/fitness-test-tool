@@ -1361,6 +1361,27 @@ button {
   font-weight: 700;
 }
 
+.report-table-header {
+  margin-bottom: 8px;
+}
+
+.report-table-filter-trigger {
+  margin-top: 10px;
+}
+
+.report-preview-header {
+  align-items: flex-start;
+}
+
+.report-preview-header .shared-date-field {
+  margin-top: 10px;
+  margin-left: 0;
+}
+
+.report-student-picker {
+  align-self: flex-start;
+}
+
 .panel-header p,
 .panel p,
 .side-panel p {
@@ -1931,6 +1952,14 @@ tbody tr.is-selected {
   .workspace-file-card {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .report-table-filter-trigger {
+    margin-top: 0;
+  }
+
+  .report-preview-header .shared-date-field {
+    margin-top: 0;
   }
 
   .panel-grid {

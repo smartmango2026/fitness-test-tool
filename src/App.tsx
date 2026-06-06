@@ -3939,11 +3939,11 @@ export default function App({ experimentalMode = false }: AppProps) {
         {activeTab === "table" ? (
           <>
             <section className="panel">
-              <div className="panel-header">
+              <div className="panel-header report-table-header">
                 <div>
                   <h2>測驗報告</h2>
                 </div>
-                <div className="button-row">
+                <div className="button-row report-table-filter-trigger">
                   <button
                     className="primary-button"
                     onClick={() => setShowTableFilters((current) => !current)}
@@ -5508,11 +5508,11 @@ export default function App({ experimentalMode = false }: AppProps) {
         {activeTab === "pdf" ? (
           <>
             <section className="panel">
-              <div className="panel-header">
+              <div className="panel-header report-preview-header">
                 <div>
                   <h2>檢視報表</h2>
                 </div>
-                <label className="shared-date-field">
+                <label className="shared-date-field report-student-picker">
                   選擇學生
                   <select
                     className="search-input"
