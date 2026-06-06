@@ -1525,6 +1525,51 @@ export default function App({ experimentalMode = false }: AppProps) {
     );
   }
 
+  function renderIncomingFriendAlertCard() {
+    if (!currentUser || incomingFriendRequests.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="friend-alert-card">
+        <div className="friend-alert-card-head">
+          <strong>有人送出好友邀請</strong>
+          <span>{incomingFriendRequests.length} 筆待處理</span>
+        </div>
+        <div className="friend-alert-list">
+          {incomingFriendRequests.map((request) => (
+            <div className="friend-alert-item" key={request.id}>
+              <div className="friend-alert-copy">
+                <strong>{request.fromDisplayName || request.fromUsername}</strong>
+                <small>送出時間 {formatActivityDate(request.createdAt)}</small>
+              </div>
+              <div className="friend-row-actions">
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    void handleAcceptFriendRequest(request);
+                  }}
+                  type="button"
+                >
+                  同意
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    void handleRejectFriendRequest(request);
+                  }}
+                  type="button"
+                >
+                  拒絕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   function toggleFriendDetails(friendUid: string): void {
     setExpandedFriendUids((current) =>
       current.includes(friendUid)
@@ -4146,6 +4191,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>測驗報告</h2>
                 </div>
               </div>
+              {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
               <div className="table-toolbar-row">
                 {renderSheetZoomToolbar(
@@ -5143,7 +5189,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                         ) : (
                           <div className="friend-list">
                             {incomingFriendRequests.map((request) => (
-                              <div className="friend-row" key={request.id}>
+                              <div className="friend-row friend-row-alert" key={request.id}>
                                 <div>
                                   <strong>{request.fromDisplayName || request.fromUsername}</strong>
                                   <small>
@@ -5216,6 +5262,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>測驗項目</h2>
                 </div>
               </div>
+              {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
 
               <div className="metric-toolbar">
@@ -5416,6 +5463,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>學員名單</h2>
                 </div>
               </div>
+              {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
 
               <div className="roster-editor">
@@ -5731,6 +5779,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>檢視報表</h2>
                 </div>
               </div>
+              {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
               <div className="report-preview-toolbar">
                 <label className="shared-date-field report-student-picker">
