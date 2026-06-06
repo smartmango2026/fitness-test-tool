@@ -144,6 +144,14 @@ type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 type FileSortKey = "created-desc" | "updated-desc" | "name-asc" | "roster-asc" | "grade-asc";
 type MobileTabVariant = "wrap" | "scroll" | "compact";
 
+function readRequestedTabFromUrl(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return new URLSearchParams(window.location.search).get("tab");
+}
+
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "account", label: "帳號管理" },
   { key: "files", label: "檔案中心" },
@@ -568,6 +576,11 @@ export default function App({ experimentalMode = false }: AppProps) {
   const mobileTabVariant = useMemo(() => readMobileTabVariantFromUrl(), []);
   const isReportDebugMode = reportDebugParams.enabled;
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    const requestedTab = readRequestedTabFromUrl();
+    if (requestedTab === "tablab" && experimentalMode) {
+      return "tablab";
+    }
+
     if (readReportDebugParamsFromUrl().enabled) {
       return "pdf";
     }
@@ -577,6 +590,10 @@ export default function App({ experimentalMode = false }: AppProps) {
       new URLSearchParams(window.location.search).has("invite")
     ) {
       return "account";
+    }
+
+    if (experimentalMode) {
+      return "tablab";
     }
 
     return "account";
