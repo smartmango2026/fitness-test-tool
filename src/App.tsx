@@ -3834,7 +3834,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       ) : null}
 
       <nav
-        className={`tab-bar tab-bar--${mobileTabVariant}${experimentalMode ? " tab-bar--underline-main" : ""}`}
+        className={`tab-bar tab-bar--${mobileTabVariant} tab-bar--underline-main`}
         aria-label="主要功能"
       >
         {visibleTabs.map((tab) => (
@@ -3856,7 +3856,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="panel-header">
                 <div>
                   <h2>測驗報告</h2>
-                  <p>這一頁預設是列表檢視，點一下儲存格再就地編輯，也能直接選取學生供能力分析使用。</p>
                 </div>
                 <div className="button-row">
                   <label className="filter-toggle">
@@ -3995,7 +3994,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="panel-header">
                 <div>
                   <h2>編輯檔案</h2>
-                  <p>所有檔案都會放在 Firebase，登入後才能在自己的帳號下建立與管理檔案。</p>
                 </div>
                 <div className="button-row">
                   {currentCloudFileId ? (
@@ -4844,7 +4842,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="panel-header">
                 <div>
                   <h2>測驗項目</h2>
-                  <p>一次只處理一個測驗欄位，適合全班統一補分或修分。</p>
                 </div>
               </div>
 
@@ -5365,7 +5362,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="panel-header">
                 <div>
                   <h2>檢視報表</h2>
-                  <p>這裡直接整合 A4 報表畫布與 PDF 輸出，適合檢視學生報表內容並產出正式 PDF。</p>
                 </div>
                 <label className="shared-date-field">
                   選擇學生
