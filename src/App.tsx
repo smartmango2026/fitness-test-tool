@@ -3924,18 +3924,11 @@ export default function App({ experimentalMode = false }: AppProps) {
                 </div>
                 <div className="button-row">
                   <button
-                    className="secondary-button"
+                    className="primary-button"
                     onClick={() => setShowTableFilters((current) => !current)}
                     type="button"
                   >
                     {showTableFilters ? "收起篩選器" : "展開篩選器"}
-                  </button>
-                  <button
-                    className="primary-button"
-                    onClick={addTableRow}
-                    type="button"
-                  >
-                    新增列
                   </button>
                 </div>
               </div>
@@ -4133,16 +4126,15 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>編輯檔案</h2>
                 </div>
                 <div className="button-row">
-                  {currentCloudFileId ? (
+                  {currentCloudFileId && isCloudDirty ? (
                     <button
                       className="secondary-button"
-                      disabled={!isCloudDirty}
                       onClick={() => {
                         void handleSaveCurrentCloudFile();
                       }}
                       type="button"
                     >
-                      {isCloudDirty ? "儲存目前檔案" : "已儲存"}
+                      儲存目前檔案
                     </button>
                   ) : null}
                   <button
@@ -5368,13 +5360,6 @@ export default function App({ experimentalMode = false }: AppProps) {
 
                 <div className="button-row">
                   <button
-                    className="secondary-button"
-                    onClick={addRosterRow}
-                    type="button"
-                  >
-                    新增列
-                  </button>
-                  <button
                     className="primary-button"
                     onClick={importRosterToRecords}
                     type="button"
@@ -5534,27 +5519,11 @@ export default function App({ experimentalMode = false }: AppProps) {
                 seatNumber={selectedSeatNumber}
                 testDate={data.testDate}
               />
-              <div className="callout">
-                這裡是目前主要的報表檢視頁。除了直接下載 PDF，你也可以在這裡同步處理 Excel 備份與重新匯入。
-              </div>
               <div className="button-row">
-                <button className="secondary-button" onClick={handleDownloadCurrentPdf} type="button">
-                  下載目前學生 PDF
-                </button>
                 <button className="primary-button" onClick={handleDownloadAllPdfs} type="button">
                   下載全班 PDF
                 </button>
               </div>
-            </section>
-            <section className="panel side-panel">
-              <h2>目前能力</h2>
-              <ul className="plain-list">
-                <li>會直接帶入目前選到學生的雷達圖與基本資訊。</li>
-                <li>可以再往上疊文字與圖片圖層。</li>
-                <li>可直接下載真正的 PDF 檔。</li>
-                <li>Excel 仍然保留給備份、搬移與重新匯入使用。</li>
-                <li>若匯入的 Excel 缺少 `_system` 工作表，系統會拒絕載入。</li>
-              </ul>
             </section>
           </>
         ) : null}
