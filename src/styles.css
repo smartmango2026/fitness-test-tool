@@ -314,6 +314,10 @@ button {
   display: inline-block;
 }
 
+.table-filter-field {
+  min-width: 180px;
+}
+
 .auth-entry {
   position: relative;
   justify-items: end;

@@ -143,6 +143,8 @@ type ActiveCell = {
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 type FileSortKey = "created-desc" | "updated-desc" | "name-asc" | "roster-asc" | "grade-asc";
 type MobileTabVariant = "wrap" | "scroll" | "compact";
+type TableGradeFilter = "all" | "middle-senior" | "small" | "preschool";
+type TableSortKey = "seat" | "grade-desc" | "grade-asc";
 
 function readRequestedTabFromUrl(): string | null {
   if (typeof window === "undefined") {
@@ -242,6 +244,17 @@ const ACADEMIC_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) =>
   String(CURRENT_ROC_YEAR - 2 + index),
 );
 const LAST_CLOUD_FILE_STORAGE_PREFIX = "fitness-test-tool:last-cloud-file:";
+const TABLE_GRADE_FILTER_OPTIONS: Array<{ value: TableGradeFilter; label: string }> = [
+  { value: "all", label: "全部年級" },
+  { value: "middle-senior", label: "中大班" },
+  { value: "small", label: "小班" },
+  { value: "preschool", label: "幼幼班" },
+];
+const TABLE_SORT_OPTIONS: Array<{ value: TableSortKey; label: string }> = [
+  { value: "seat", label: "依號碼排序" },
+  { value: "grade-desc", label: "依年級排序（大到小）" },
+  { value: "grade-asc", label: "依年級排序（小到大）" },
+];
 
 function hasIncompleteScore(record: FitnessRecord): boolean {
   return scoreFields.some(
@@ -298,6 +311,21 @@ function resolveStudentGradeLabel(
 
 function isMixedAgeClass(gradeLabel: string): boolean {
   return gradeLabel === "混齡班";
+}
+
+function getStudentGradeRank(gradeLabel: StudentGradeLabel): number {
+  switch (gradeLabel) {
+    case "大班":
+      return 4;
+    case "中班":
+      return 3;
+    case "小班":
+      return 2;
+    case "幼幼班":
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 function inferStudentGradeFromText(
@@ -665,6 +693,8 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
   const [activeMetric, setActiveMetric] = useState<FitnessField>("item1");
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [tableGradeFilter, setTableGradeFilter] = useState<TableGradeFilter>("all");
+  const [tableSortKey, setTableSortKey] = useState<TableSortKey>("seat");
   const [firebaseStatus, setFirebaseStatus] = useState("尚未測試 Firebase 連線。");
   const [rosterDraft, setRosterDraft] = useState<RosterEntry[]>(() =>
     data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()],
@@ -1283,10 +1313,52 @@ export default function App({ experimentalMode = false }: AppProps) {
   }, [selectedRecord]);
 
   const tableRecords = useMemo(() => {
-    return showIncompleteOnly
+    let nextRecords = showIncompleteOnly
       ? data.records.filter((record) => hasIncompleteScore(record))
       : data.records;
-  }, [data.records, showIncompleteOnly]);
+
+    if (isMixedAgeClass(data.gradeLabel) && tableGradeFilter !== "all") {
+      nextRecords = nextRecords.filter((record) => {
+        const gradeLabel = resolveStudentGradeLabel(
+          data.gradeLabel,
+          record.studentGradeLabel,
+        );
+        if (tableGradeFilter === "middle-senior") {
+          return gradeLabel === "中班" || gradeLabel === "大班";
+        }
+
+        if (tableGradeFilter === "small") {
+          return gradeLabel === "小班";
+        }
+
+        return gradeLabel === "幼幼班";
+      });
+    }
+
+    if (tableSortKey === "seat") {
+      return nextRecords;
+    }
+
+    const sortedRecords = [...nextRecords].sort((left, right) => {
+      const leftGradeRank = getStudentGradeRank(
+        resolveStudentGradeLabel(data.gradeLabel, left.studentGradeLabel),
+      );
+      const rightGradeRank = getStudentGradeRank(
+        resolveStudentGradeLabel(data.gradeLabel, right.studentGradeLabel),
+      );
+
+      if (leftGradeRank !== rightGradeRank) {
+        return tableSortKey === "grade-desc"
+          ? rightGradeRank - leftGradeRank
+          : leftGradeRank - rightGradeRank;
+      }
+
+      return data.records.findIndex((record) => record.id === left.id) -
+        data.records.findIndex((record) => record.id === right.id);
+    });
+
+    return sortedRecords;
+  }, [data.gradeLabel, data.records, showIncompleteOnly, tableGradeFilter, tableSortKey]);
 
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
@@ -3858,6 +3930,40 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>測驗報告</h2>
                 </div>
                 <div className="button-row">
+                  {isMixedAgeClass(data.gradeLabel) ? (
+                    <label className="shared-date-field table-filter-field">
+                      <span>年級篩選</span>
+                      <select
+                        className="search-input"
+                        onChange={(event) =>
+                          setTableGradeFilter(event.target.value as TableGradeFilter)
+                        }
+                        value={tableGradeFilter}
+                      >
+                        {TABLE_GRADE_FILTER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <label className="shared-date-field table-filter-field">
+                    <span>排序方式</span>
+                    <select
+                      className="search-input"
+                      onChange={(event) =>
+                        setTableSortKey(event.target.value as TableSortKey)
+                      }
+                      value={tableSortKey}
+                    >
+                      {TABLE_SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="filter-toggle">
                     <input
                       checked={showIncompleteOnly}
