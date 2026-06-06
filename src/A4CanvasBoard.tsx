@@ -425,7 +425,7 @@ function renderReportPage(
   context.stroke();
 
   if (logoImage) {
-    drawLogoBadge(context, logoImage, 44, 42, 230, 138);
+    drawLogoBadge(context, logoImage, 44, 26, 230, 138);
   } else {
     drawGenericBadge(context, 64, 54, 128);
   }
