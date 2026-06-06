@@ -512,6 +512,15 @@ export async function rejectFriendRequest(
   });
 }
 
+export async function cancelFriendRequest(
+  requestId: string,
+): Promise<void> {
+  await updateDoc(doc(db, "friendRequests", requestId), {
+    status: "cancelled",
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function removeFriend(options: {
   currentUid: string;
   friendUid: string;

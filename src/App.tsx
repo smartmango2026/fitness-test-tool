@@ -55,6 +55,7 @@ import {
 } from "./cloud-files";
 import {
   acceptFriendRequest,
+  cancelFriendRequest,
   createFriendInvite,
   ensureUserProfile,
   getFriendInvite,
@@ -2512,6 +2513,46 @@ export default function App({ experimentalMode = false }: AppProps) {
         phase: "failed",
         targetUid: request.fromUid,
         targetUsername: request.fromUsername,
+        requestId: request.id,
+        message: nextMessage,
+      });
+      setMessage(nextMessage);
+    }
+  }
+
+  async function handleCancelOutgoingFriendRequest(
+    request: FriendRequestRecord,
+  ): Promise<void> {
+    try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_cancelled",
+        phase: "started",
+        targetUid: request.toUid,
+        targetUsername: request.toUsername,
+        requestId: request.id,
+        message: "開始取消已送出的好友邀請。",
+      });
+      await cancelFriendRequest(request.id);
+      await writeAppSystemLog({
+        operationId,
+        actionType: "friend_request_cancelled",
+        phase: "completed",
+        targetUid: request.toUid,
+        targetUsername: request.toUsername,
+        requestId: request.id,
+        message: "已取消已送出的好友邀請。",
+      });
+      setMessage(`已取消送給 ${request.toUsername} 的好友邀請。`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "取消好友邀請失敗。";
+      await writeAppSystemLog({
+        actionType: "friend_request_cancelled",
+        phase: "failed",
+        targetUid: request.toUid,
+        targetUsername: request.toUsername,
         requestId: request.id,
         message: nextMessage,
       });
@@ -5241,7 +5282,18 @@ export default function App({ experimentalMode = false }: AppProps) {
                                     送出時間 {formatActivityDate(request.createdAt)}
                                   </small>
                                 </div>
-                                <span className="status-chip">等待對方確認</span>
+                                <div className="friend-row-actions">
+                                  <span className="status-chip">等待對方確認</span>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => {
+                                      void handleCancelOutgoingFriendRequest(request);
+                                    }}
+                                    type="button"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
