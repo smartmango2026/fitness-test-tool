@@ -3939,21 +3939,26 @@ export default function App({ experimentalMode = false }: AppProps) {
         {activeTab === "table" ? (
           <>
             <section className="panel">
-              <div className="panel-header report-table-header">
+              <div className="panel-header">
                 <div>
                   <h2>測驗報告</h2>
                 </div>
-                <div className="button-row report-table-filter-trigger">
-                  <button
-                    className="primary-button"
-                    onClick={() => setShowTableFilters((current) => !current)}
-                    type="button"
-                  >
-                    {showTableFilters ? "收起篩選器" : "展開篩選器"}
-                  </button>
-                </div>
               </div>
               {renderWorkspaceFileCard()}
+              <div className="table-toolbar-row">
+                {renderSheetZoomToolbar(
+                  tableZoomMode,
+                  setTableZoomMode,
+                  TABLE_SHEET_ZOOM_OPTIONS,
+                )}
+                <button
+                  className="primary-button"
+                  onClick={() => setShowTableFilters((current) => !current)}
+                  type="button"
+                >
+                  {showTableFilters ? "收起篩選器" : "展開篩選器"}
+                </button>
+              </div>
               {showTableFilters ? (
                 <div className="table-filter-panel">
                   {isMixedAgeClass(data.gradeLabel) ? (
@@ -4028,11 +4033,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                 </div>
               ) : null}
               <div className="sheet-shell">
-                {renderSheetZoomToolbar(
-                  tableZoomMode,
-                  setTableZoomMode,
-                  TABLE_SHEET_ZOOM_OPTIONS,
-                )}
                 {debugSettings.showSheetDebug
                   ? renderSheetDebugInfo({
                       viewportWidth: tableViewportWidth,
@@ -5508,33 +5508,33 @@ export default function App({ experimentalMode = false }: AppProps) {
         {activeTab === "pdf" ? (
           <>
             <section className="panel">
-              <div className="panel-header report-preview-header">
+              <div className="panel-header">
                 <div>
                   <h2>檢視報表</h2>
                 </div>
-                <label className="shared-date-field report-student-picker">
-                  選擇學生
-                  <select
-                    className="search-input"
-                    onChange={(event) => {
-                      const nextRecord = data.records.find(
-                        (record) => record.id === event.target.value,
-                      );
-                      if (nextRecord) {
-                        selectRecord(nextRecord);
-                      }
-                    }}
-                    value={selectedId}
-                  >
-                    {data.records.map((record, index) => (
-                      <option key={record.id} value={record.id}>
-                        {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
               {renderWorkspaceFileCard()}
+              <label className="shared-date-field report-student-picker">
+                選擇學生
+                <select
+                  className="search-input"
+                  onChange={(event) => {
+                    const nextRecord = data.records.find(
+                      (record) => record.id === event.target.value,
+                    );
+                    if (nextRecord) {
+                      selectRecord(nextRecord);
+                    }
+                  }}
+                  value={selectedId}
+                >
+                  {data.records.map((record, index) => (
+                    <option key={record.id} value={record.id}>
+                      {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <A4CanvasBoard
                 ref={pdfCanvasRef}
                 abilityProfile={currentAbilityProfile}

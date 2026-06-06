@@ -1361,25 +1361,19 @@ button {
   font-weight: 700;
 }
 
-.report-table-header {
-  margin-bottom: 8px;
-}
-
-.report-table-filter-trigger {
-  margin-top: 10px;
-}
-
-.report-preview-header {
-  align-items: flex-start;
-}
-
-.report-preview-header .shared-date-field {
-  margin-top: 10px;
-  margin-left: 0;
-}
-
 .report-student-picker {
+  display: grid;
+  gap: 8px;
   align-self: flex-start;
+  margin-bottom: 18px;
+}
+
+.table-toolbar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .panel-header p,
@@ -1954,12 +1948,9 @@ tbody tr.is-selected {
     align-items: stretch;
   }
 
-  .report-table-filter-trigger {
-    margin-top: 0;
-  }
-
-  .report-preview-header .shared-date-field {
-    margin-top: 0;
+  .table-toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .panel-grid {
