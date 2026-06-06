@@ -5044,35 +5044,10 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="panel-header">
                 <div>
                   <h2>學員名單</h2>
-                  <p>這裡只管理一份目前名冊。若要切換班級，直接匯入那個班先前的資料即可。</p>
                 </div>
               </div>
 
               <div className="roster-editor">
-                <div className="roster-settings">
-                  <label className="metric-label-editor">
-                    班級人數
-                    <input
-                      inputMode="numeric"
-                      min="1"
-                      onChange={(event) => setRosterSizeInput(event.target.value)}
-                      type="number"
-                      value={rosterSizeInput}
-                    />
-                  </label>
-                  <button
-                    className="secondary-button"
-                    onClick={applyRosterSize}
-                    type="button"
-                  >
-                    套用人數
-                  </button>
-                </div>
-
-                <div className="roster-hint">
-                  減少人數時會先提醒你，因為之後儲存名冊可能刪除超出人數的學生資料。
-                </div>
-
                 <div className="sheet-shell">
                   {debugSettings.showSheetDebug
                     ? renderSheetDebugInfo({

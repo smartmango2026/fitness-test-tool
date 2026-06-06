@@ -1646,18 +1646,6 @@ tbody tr.is-selected {
   gap: 16px;
 }
 
-.roster-settings {
-  display: flex;
-  gap: 12px;
-  align-items: end;
-  flex-wrap: wrap;
-}
-
-.roster-hint {
-  color: #64748b;
-  font-size: 0.92rem;
-}
-
 .row-action-button,
 .row-delete-button {
   border: 0;
@@ -2010,10 +1998,6 @@ tbody tr.is-selected {
 
   .sheet-toolbar {
     gap: 6px;
-  }
-
-  .roster-settings {
-    align-items: stretch;
   }
 
   .debug-grid {
