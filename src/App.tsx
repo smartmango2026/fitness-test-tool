@@ -97,6 +97,18 @@ type TabKey =
   | "tablab";
 
 type EditableField = keyof FitnessRecord;
+type FriendInviteActionState = {
+  status: "idle" | "loading" | "success" | "error";
+  detail: string;
+};
+
+type FriendInviteTraceEntry = {
+  timestamp: string;
+  status: "loading" | "success" | "error";
+  detail: string;
+};
+
+const FRIEND_INVITE_TRACE_STORAGE_KEY = "fitness-test-tool:friend-invite-trace";
 
 function formatAuthError(error: unknown, fallback: string): string {
   if (
@@ -142,6 +154,46 @@ function readFriendInviteIdFromUrl(): string {
 
   const params = new URLSearchParams(window.location.search);
   return params.get("friendInvite") ?? params.get("invite") ?? "";
+}
+
+function loadFriendInviteTrace(): FriendInviteTraceEntry[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(FRIEND_INVITE_TRACE_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (entry): entry is FriendInviteTraceEntry =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        typeof entry.timestamp === "string" &&
+        typeof entry.detail === "string" &&
+        (entry.status === "loading" || entry.status === "success" || entry.status === "error"),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveFriendInviteTrace(entries: FriendInviteTraceEntry[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(
+    FRIEND_INVITE_TRACE_STORAGE_KEY,
+    JSON.stringify(entries.slice(0, 5)),
+  );
 }
 
 type ActiveCell = {
@@ -660,6 +712,13 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [activeFriendInviteUrl, setActiveFriendInviteUrl] = useState("");
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
+  const [friendInviteActionState, setFriendInviteActionState] = useState<FriendInviteActionState>({
+    status: "idle",
+    detail: "",
+  });
+  const [friendInviteTraceEntries, setFriendInviteTraceEntries] = useState<
+    FriendInviteTraceEntry[]
+  >(() => loadFriendInviteTrace());
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
   const [inviteIdFromUrl, setInviteIdFromUrl] = useState(() => readFriendInviteIdFromUrl());
   const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
@@ -755,6 +814,22 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   const pushFrontendIssue = (issue: string) => {
     setFrontendIssues((current) => (current.includes(issue) ? current : [...current, issue]));
+  };
+
+  const pushFriendInviteTrace = (
+    status: FriendInviteTraceEntry["status"],
+    detail: string,
+  ) => {
+    const nextEntry: FriendInviteTraceEntry = {
+      timestamp: new Date().toISOString(),
+      status,
+      detail,
+    };
+    setFriendInviteTraceEntries((current) => {
+      const nextEntries = [nextEntry, ...current].slice(0, 5);
+      saveFriendInviteTrace(nextEntries);
+      return nextEntries;
+    });
   };
 
   async function writeAppSystemLog(
@@ -2484,16 +2559,31 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   async function handleSendFriendRequestFromQr(): Promise<void> {
     if (!currentUser) {
+      setFriendInviteActionState({
+        status: "error",
+        detail: "請先登入，再送出好友邀請。",
+      });
+      pushFriendInviteTrace("error", "請先登入，再送出好友邀請。");
       setMessage("請先登入，再送出好友邀請。");
       return;
     }
 
     if (!scannedFriendInvite) {
+      setFriendInviteActionState({
+        status: "error",
+        detail: "找不到這張加好友邀請。",
+      });
+      pushFriendInviteTrace("error", "找不到這張加好友邀請。");
       setMessage("找不到這張加好友邀請。");
       return;
     }
 
     if (scannedFriendInvite.issuedByUid === currentUser.uid) {
+      setFriendInviteActionState({
+        status: "error",
+        detail: "這是你自己的行動條碼。",
+      });
+      pushFriendInviteTrace("error", "這是你自己的行動條碼。");
       setMessage("這是你自己的加好友 QR Code。");
       return;
     }
@@ -2501,6 +2591,14 @@ export default function App({ experimentalMode = false }: AppProps) {
     if (
       friends.some((friend) => friend.username === scannedFriendInvite.issuedByUsername)
     ) {
+      setFriendInviteActionState({
+        status: "error",
+        detail: `${scannedFriendInvite.issuedByUsername} 已經在好友列表中。`,
+      });
+      pushFriendInviteTrace(
+        "error",
+        `${scannedFriendInvite.issuedByUsername} 已經在好友列表中。`,
+      );
       setMessage(`${scannedFriendInvite.issuedByUsername} 已經在好友列表中。`);
       return;
     }
@@ -2510,6 +2608,11 @@ export default function App({ experimentalMode = false }: AppProps) {
         (request) => request.toUid === scannedFriendInvite.issuedByUid,
       )
     ) {
+      setFriendInviteActionState({
+        status: "error",
+        detail: "你已經送出好友邀請，請等待對方確認。",
+      });
+      pushFriendInviteTrace("error", "你已經送出好友邀請，請等待對方確認。");
       setMessage("你已經送出好友邀請，請等待對方確認。");
       return;
     }
@@ -2519,11 +2622,24 @@ export default function App({ experimentalMode = false }: AppProps) {
         (request) => request.fromUid === scannedFriendInvite.issuedByUid,
       )
     ) {
+      setFriendInviteActionState({
+        status: "error",
+        detail: "對方已先送出好友邀請，請直接在收到的邀請中按同意。",
+      });
+      pushFriendInviteTrace(
+        "error",
+        "對方已先送出好友邀請，請直接在收到的邀請中按同意。",
+      );
       setMessage("對方已先送出好友邀請，請直接在收到的邀請中按同意。");
       return;
     }
 
     try {
+      setFriendInviteActionState({
+        status: "loading",
+        detail: "正在送出好友邀請...",
+      });
+      pushFriendInviteTrace("loading", "正在送出好友邀請...");
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -2554,6 +2670,14 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage(
         `已透過 QR Code 對 ${scannedFriendInvite.issuedByUsername} 送出好友邀請。`,
       );
+      setFriendInviteActionState({
+        status: "success",
+        detail: `已送出給 ${scannedFriendInvite.issuedByUsername} 的好友邀請。`,
+      });
+      pushFriendInviteTrace(
+        "success",
+        `已送出給 ${scannedFriendInvite.issuedByUsername} 的好友邀請。`,
+      );
       closeFriendInvitePage();
     } catch (error) {
       const nextMessage =
@@ -2567,6 +2691,11 @@ export default function App({ experimentalMode = false }: AppProps) {
         message: nextMessage,
         payload: { source: "invite" },
       });
+      setFriendInviteActionState({
+        status: "error",
+        detail: nextMessage,
+      });
+      pushFriendInviteTrace("error", nextMessage);
       setMessage(nextMessage);
     }
   }
@@ -2585,6 +2714,15 @@ export default function App({ experimentalMode = false }: AppProps) {
     setScannedFriendInvite(null);
     setActiveTab(currentUser ? "files" : "account");
   }
+
+  useEffect(() => {
+    if (isFriendInvitePage) {
+      setFriendInviteActionState({
+        status: "idle",
+        detail: "",
+      });
+    }
+  }, [inviteIdFromUrl, isFriendInvitePage]);
 
   function openAccountPanel(): void {
     setActiveTab("account");
@@ -3923,16 +4061,20 @@ export default function App({ experimentalMode = false }: AppProps) {
                 scannedFriendInvite.issuedByUid !== currentUser.uid ? (
                   <button
                     className="primary-button"
+                    disabled={friendInviteActionState.status === "loading"}
                     onClick={() => {
                       void handleSendFriendRequestFromQr();
                     }}
                     type="button"
                   >
-                    送出好友邀請
+                    {friendInviteActionState.status === "loading"
+                      ? "送出中"
+                      : "送出好友邀請"}
                   </button>
                 ) : null}
                 <button
                   className="secondary-button"
+                  disabled={friendInviteActionState.status === "loading"}
                   onClick={closeFriendInvitePage}
                   type="button"
                 >
@@ -3943,6 +4085,29 @@ export default function App({ experimentalMode = false }: AppProps) {
                     : "回到主頁"}
                 </button>
               </div>
+              {friendInviteActionState.status !== "idle" ? (
+                <div
+                  className={`friend-invite-status is-${friendInviteActionState.status}`}
+                >
+                  {friendInviteActionState.detail}
+                </div>
+              ) : null}
+              {friendInviteTraceEntries.length > 0 ? (
+                <div className="friend-invite-trace">
+                  <strong>最近操作紀錄</strong>
+                  <ul>
+                    {friendInviteTraceEntries.map((entry, index) => (
+                      <li key={`${entry.timestamp}-${index}`}>
+                        [{new Date(entry.timestamp).toLocaleTimeString("zh-TW", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}] {entry.detail}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </section>
         </main>

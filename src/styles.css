@@ -694,6 +694,50 @@ button {
   margin: 0 auto;
 }
 
+.friend-invite-status {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+}
+
+.friend-invite-status.is-loading {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.friend-invite-status.is-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.friend-invite-status.is-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.friend-invite-trace {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #cbd5e1;
+  color: #475569;
+}
+
+.friend-invite-trace strong {
+  color: #172033;
+}
+
+.friend-invite-trace ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.friend-invite-trace li {
+  line-height: 1.5;
+}
+
 .friend-invite-modal {
   position: fixed;
   inset: 0;
