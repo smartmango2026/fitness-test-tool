@@ -1447,6 +1447,14 @@ export default function App({ experimentalMode = false }: AppProps) {
     "未登入";
   const currentDisplayName =
     currentProfile?.displayNickname?.trim() || currentUsername;
+
+  function getIncomingRequestDisplayName(request: FriendRequestRecord) {
+    const matchedFriend = friends.find((friend) => friend.friendUid === request.fromUid);
+    if (matchedFriend?.displayName?.trim()) {
+      return matchedFriend.displayName.trim();
+    }
+    return request.fromDisplayName || request.fromUsername;
+  }
   const currentCloudFileSummary = useMemo(
     () =>
       cloudFiles.find(
@@ -1541,7 +1549,7 @@ export default function App({ experimentalMode = false }: AppProps) {
           {incomingFriendRequests.map((request) => (
             <div className="friend-alert-item" key={request.id}>
               <div className="friend-alert-copy">
-                <strong>{request.fromDisplayName || request.fromUsername}</strong>
+                <strong>{getIncomingRequestDisplayName(request)}</strong>
                 <small>送出時間 {formatActivityDate(request.createdAt)}</small>
               </div>
               <div className="friend-row-actions">
@@ -5234,7 +5242,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                             {incomingFriendRequests.map((request) => (
                               <div className="friend-row friend-row-alert" key={request.id}>
                                 <div>
-                                  <strong>{request.fromDisplayName || request.fromUsername}</strong>
+                                  <strong>{getIncomingRequestDisplayName(request)}</strong>
                                   <small>
                                     送出時間 {formatActivityDate(request.createdAt)}
                                   </small>
