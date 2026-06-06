@@ -4419,6 +4419,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </button>
                 </div>
               </div>
+              {renderIncomingFriendAlertCard()}
 
               <div className="file-list-shell">
                 <div className="file-list-head">
@@ -4947,6 +4948,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>帳號管理</h2>
                 </div>
               </div>
+              {renderIncomingFriendAlertCard()}
 
               <div className="account-center-grid">
                 <article className="account-card">
