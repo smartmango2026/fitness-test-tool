@@ -1393,6 +1393,9 @@ export default function App({ experimentalMode = false }: AppProps) {
       currentCloudFileOwnerUid &&
       currentUser.uid === currentCloudFileOwnerUid,
   );
+  const currentWorkspaceFileLabel = currentCloudFileSummary
+    ? `${currentCloudFileSummary.academicTerm}／${currentCloudFileSummary.rosterName}`
+    : "尚未開啟檔案";
   const shareableFriends = useMemo(
     () => friends.filter((friend) => friend.friendUid !== currentUser?.uid),
     [friends, currentUser],
@@ -1419,6 +1422,24 @@ export default function App({ experimentalMode = false }: AppProps) {
       setSelectedShareFriendUid("");
     }
   }, [availableShareFriends, selectedShareFriendUid]);
+
+  function renderWorkspaceFileCard() {
+    return (
+      <div className="workspace-file-card">
+        <div>
+          <strong>目前使用檔案</strong>
+          <span>{currentWorkspaceFileLabel}</span>
+        </div>
+        <button
+          className="secondary-button"
+          onClick={() => setActiveTab("files")}
+          type="button"
+        >
+          切換檔案
+        </button>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (
@@ -3932,6 +3953,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </button>
                 </div>
               </div>
+              {renderWorkspaceFileCard()}
               {showTableFilters ? (
                 <div className="table-filter-panel">
                   {isMixedAgeClass(data.gradeLabel) ? (
@@ -4976,6 +4998,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>測驗項目</h2>
                 </div>
               </div>
+              {renderWorkspaceFileCard()}
 
               <div className="metric-toolbar">
                 {scoreFields.map((field, index) => (
@@ -5175,6 +5198,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>學員名單</h2>
                 </div>
               </div>
+              {renderWorkspaceFileCard()}
 
               <div className="roster-editor">
                 <div className="sheet-shell">
@@ -5510,6 +5534,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </select>
                 </label>
               </div>
+              {renderWorkspaceFileCard()}
               <A4CanvasBoard
                 ref={pdfCanvasRef}
                 abilityProfile={currentAbilityProfile}

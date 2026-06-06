@@ -1334,6 +1334,33 @@ button {
   margin-bottom: 18px;
 }
 
+.workspace-file-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.workspace-file-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-file-card strong {
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.workspace-file-card span {
+  color: #172033;
+  font-weight: 700;
+}
+
 .panel-header p,
 .panel p,
 .side-panel p {
@@ -1897,6 +1924,11 @@ tbody tr.is-selected {
 @media (max-width: 960px) {
   .hero,
   .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-file-card {
     flex-direction: column;
     align-items: stretch;
   }
