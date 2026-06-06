@@ -8,6 +8,7 @@ import {
   useState,
   type TouchEvent,
 } from "react";
+import associationLogo from "./assets/sgpea-logo.png";
 import {
   findAbilityGradeProfile,
   generateObservationAndEncouragement,
@@ -30,6 +31,7 @@ const MUTED_TEXT_COLOR = "#64748b";
 const CHART_LINE = "#2d72d8";
 const CHART_FILL = "rgba(69, 132, 220, 0.18)";
 const SCORE_COLORS = ["#5b8fd9", "#75bc67", "#f59b43", "#f26b75", "#8c80d8", "#f7b93f"];
+let associationLogoImagePromise: Promise<HTMLImageElement> | null = null;
 
 export type A4CanvasBoardHandle = {
   downloadCurrentPdf: () => Promise<void>;
@@ -176,6 +178,49 @@ function drawGenericBadge(
   context.arc(centerX, centerY, radius * 0.35, 0, Math.PI * 2);
   context.fillStyle = "#f8c85c";
   context.fill();
+}
+
+function drawLogoBadge(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  drawRoundedRect(context, x, y, size, size, 24);
+  context.fillStyle = "#ffffff";
+  context.fill();
+  context.strokeStyle = "#c9def7";
+  context.lineWidth = 2;
+  context.stroke();
+
+  const padding = 12;
+  const targetX = x + padding;
+  const targetY = y + padding;
+  const targetWidth = size - padding * 2;
+  const targetHeight = size - padding * 2;
+  const scale = Math.min(targetWidth / image.naturalWidth, targetHeight / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  const drawX = targetX + (targetWidth - drawWidth) / 2;
+  const drawY = targetY + (targetHeight - drawHeight) / 2;
+
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+}
+
+function loadAssociationLogoImage(): Promise<HTMLImageElement> {
+  if (associationLogoImagePromise) {
+    return associationLogoImagePromise;
+  }
+
+  associationLogoImagePromise = new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("無法載入報表 logo。"));
+    image.src = associationLogo;
+  });
+
+  return associationLogoImagePromise;
 }
 
 function getRadarPolygonPoints(
@@ -361,6 +406,7 @@ function drawBarMeter(
 function renderReportPage(
   context: CanvasRenderingContext2D,
   payload: ReportRenderPayload,
+  logoImage: HTMLImageElement | null,
 ): void {
   const {
     abilityProfile,
@@ -389,7 +435,11 @@ function renderReportPage(
   context.lineWidth = 3;
   context.stroke();
 
-  drawGenericBadge(context, 64, 54, 128);
+  if (logoImage) {
+    drawLogoBadge(context, logoImage, 64, 54, 128);
+  } else {
+    drawGenericBadge(context, 64, 54, 128);
+  }
 
   context.fillStyle = TITLE_COLOR;
   context.textAlign = "center";
@@ -681,7 +731,7 @@ function renderReportPage(
   drawObservationSections(context, generatedObservation, 82, 1272, 1070, 11);
 }
 
-function createReportCanvas(payload: ReportRenderPayload): HTMLCanvasElement {
+async function createReportCanvas(payload: ReportRenderPayload): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = CANVAS_WIDTH;
   canvas.height = CANVAS_HEIGHT;
@@ -691,7 +741,14 @@ function createReportCanvas(payload: ReportRenderPayload): HTMLCanvasElement {
     throw new Error("無法建立報表畫布。");
   }
 
-  renderReportPage(context, payload);
+  let logoImage: HTMLImageElement | null = null;
+  try {
+    logoImage = await loadAssociationLogoImage();
+  } catch {
+    logoImage = null;
+  }
+
+  renderReportPage(context, payload, logoImage);
   return canvas;
 }
 
@@ -722,7 +779,7 @@ export async function exportAllReportsPdf(
     const labels = (["item1", "item2", "item3", "item4", "item5", "item6"] as const).map(
       (field) => getAbilityRuleForField(abilityProfile, field)?.metricLabel ?? field,
     );
-    const canvas = createReportCanvas({
+    const canvas = await createReportCanvas({
       abilityProfile: null,
       abilityRulesConfig,
       abilityLevelLabels: ["未分級", "未分級", "未分級", "未分級", "未分級", "未分級"],
@@ -735,7 +792,8 @@ export async function exportAllReportsPdf(
     });
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
   } else {
-    records.forEach((record, index) => {
+    for (let index = 0; index < records.length; index += 1) {
+      const record = records[index];
       const abilityScores = getAbilityScores(record, abilityProfile);
       const nextAbilityProfile =
         findAbilityGradeProfile(
@@ -747,7 +805,7 @@ export async function exportAllReportsPdf(
           getAbilityRuleForField(nextAbilityProfile, field)?.metricLabel ?? field,
       );
       const nextAbilityScores = getAbilityScores(record, nextAbilityProfile);
-      const canvas = createReportCanvas({
+      const canvas = await createReportCanvas({
         abilityProfile: nextAbilityProfile,
         abilityRulesConfig,
         abilityLevelLabels: nextAbilityScores.map((score) =>
@@ -766,7 +824,7 @@ export async function exportAllReportsPdf(
       }
 
       pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
-    });
+    }
   }
 
   pdf.save(`${sanitizeFileName(rosterName)}-全班體能報告.pdf`);
@@ -792,6 +850,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
     const [previewDataUrl, setPreviewDataUrl] = useState("");
     const [previewScale, setPreviewScale] = useState(1);
     const [previewOffset, setPreviewOffset] = useState({ x: 0, y: 0 });
+    const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
     const pinchStateRef = useRef<{
       startDistance: number;
       startScale: number;
@@ -825,14 +884,20 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
     );
 
     useEffect(() => {
+      loadAssociationLogoImage()
+        .then((image) => setLogoImage(image))
+        .catch(() => setLogoImage(null));
+    }, []);
+
+    useEffect(() => {
       const canvas = canvasRef.current;
       const context = canvas?.getContext("2d");
       if (!canvas || !context) {
         return;
       }
 
-      renderReportPage(context, renderPayload);
-    }, [renderPayload]);
+      renderReportPage(context, renderPayload, logoImage);
+    }, [logoImage, renderPayload]);
 
     useEffect(() => {
       if (!isPreviewOpen) {
@@ -966,7 +1031,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
 
     useImperativeHandle(ref, () => ({
       async downloadCurrentPdf(): Promise<void> {
-        const canvas = createReportCanvas(renderPayload);
+        const canvas = await createReportCanvas(renderPayload);
         const pdf = new jsPDF({
           orientation: "portrait",
           unit: "mm",
@@ -980,7 +1045,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
         );
       },
       async downloadCurrentPng(): Promise<void> {
-        const canvas = createReportCanvas(renderPayload);
+        const canvas = await createReportCanvas(renderPayload);
         const fileName = `${sanitizeFileName(
           `${rosterName || "班級"}-${record?.studentName || "未選擇學生"}-體能報告`,
         )}.png`;
