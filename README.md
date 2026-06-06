@@ -117,6 +117,12 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
   - Logs use phased entries such as `started`, `completed`, and `failed`
   - Client-side failures before authentication or before Firestore is usable may still only exist in frontend diagnostics
 
+## Experimental Page
+
+- `/lab/` is a full experimental copy of the main app entry.
+- Use it for trying new UI or workflow changes before copying stable changes back into the production entry.
+- `/debug/` remains the ability-rules maintenance page, not the full app.
+
 ## Documents
 
 - `docs/product-spec.md`: first-version product scope and feature rules

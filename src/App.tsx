@@ -513,7 +513,11 @@ function readMobileTabVariantFromUrl(): MobileTabVariant {
   return "wrap";
 }
 
-export default function App() {
+type AppProps = {
+  experimentalMode?: boolean;
+};
+
+export default function App({ experimentalMode = false }: AppProps) {
   const [data, setData] = useState<AppData>(defaultAppData);
   const reportDebugParams = useMemo(() => readReportDebugParamsFromUrl(), []);
   const mobileTabVariant = useMemo(() => readMobileTabVariantFromUrl(), []);
@@ -3721,6 +3725,15 @@ export default function App() {
       <div className="status-banner" role="status">
         {message}
       </div>
+
+      {experimentalMode ? (
+        <section className="startup-banner experimental-banner" aria-live="polite">
+          <div className="startup-banner-head">
+            <h2>實驗版頁面</h2>
+            <p>這個入口和正式版共用同一套畫面與資料流，之後新的功能會先放在這裡測試，再決定是否複製回正式版。</p>
+          </div>
+        </section>
+      ) : null}
 
       {frontendIssues.length > 0 ? (
         <section className="startup-banner" aria-live="polite">

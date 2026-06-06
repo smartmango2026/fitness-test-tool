@@ -1004,6 +1004,15 @@ button {
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
 }
 
+.experimental-banner {
+  border-color: rgba(180, 83, 9, 0.18);
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
+}
+
+.experimental-banner .startup-banner-head h2 {
+  color: #9a3412;
+}
+
 .startup-banner-head h2 {
   margin: 0 0 6px;
   font-size: 1rem;
