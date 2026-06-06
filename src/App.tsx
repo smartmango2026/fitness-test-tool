@@ -3834,7 +3834,10 @@ export default function App({ experimentalMode = false }: AppProps) {
         </section>
       ) : null}
 
-      <nav className={`tab-bar tab-bar--${mobileTabVariant}`} aria-label="主要功能">
+      <nav
+        className={`tab-bar tab-bar--${mobileTabVariant}${experimentalMode ? " tab-bar--underline-main" : ""}`}
+        aria-label="主要功能"
+      >
         {visibleTabs.map((tab) => (
           <button
             className={tab.key === activeTab ? "tab is-active" : "tab"}

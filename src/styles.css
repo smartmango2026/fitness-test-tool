@@ -986,6 +986,40 @@ button {
   box-shadow: 0 10px 24px rgba(15, 118, 110, 0.24);
 }
 
+.tab-bar--underline-main {
+  gap: 4px;
+  margin-top: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #dbe4ee;
+}
+
+.tab-bar--underline-main .tab {
+  position: relative;
+  padding: 10px 14px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #475569;
+  box-shadow: none;
+}
+
+.tab-bar--underline-main .tab.is-active {
+  background: transparent;
+  color: #0f766e;
+  box-shadow: none;
+}
+
+.tab-bar--underline-main .tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -7px;
+  height: 3px;
+  border-radius: 999px;
+  background: #0f766e;
+}
+
 .tab-lab-grid {
   display: grid;
   gap: 18px;
