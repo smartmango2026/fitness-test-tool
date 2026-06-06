@@ -689,6 +689,11 @@ button {
   font-size: 1.04rem;
 }
 
+.friend-invite-page {
+  width: min(100%, 560px);
+  margin: 0 auto;
+}
+
 .friend-invite-modal {
   position: fixed;
   inset: 0;

@@ -651,8 +651,6 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [activeFriendInviteUrl, setActiveFriendInviteUrl] = useState("");
   const [scannedFriendInvite, setScannedFriendInvite] =
     useState<FriendInviteRecord | null>(null);
-  const [showScannedFriendInviteModal, setShowScannedFriendInviteModal] =
-    useState(false);
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
   const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
   const [abilityRulesConfig, setAbilityRulesConfig] = useState<AbilityRulesConfig>(
@@ -1520,8 +1518,10 @@ export default function App({ experimentalMode = false }: AppProps) {
       return "";
     }
 
-    return new URLSearchParams(window.location.search).get("invite") ?? "";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("friendInvite") ?? params.get("invite") ?? "";
   }, []);
+  const isFriendInvitePage = Boolean(inviteIdFromUrl);
   const currentEditableRecords = useMemo(() => {
     if (activeTab === "files") {
       return data.records;
@@ -2552,6 +2552,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage(
         `已透過 QR Code 對 ${scannedFriendInvite.issuedByUsername} 送出好友邀請。`,
       );
+      closeFriendInvitePage();
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "送出好友邀請失敗。";
@@ -2566,6 +2567,20 @@ export default function App({ experimentalMode = false }: AppProps) {
       });
       setMessage(nextMessage);
     }
+  }
+
+  function closeFriendInvitePage(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("friendInvite");
+    nextUrl.searchParams.delete("invite");
+    nextUrl.searchParams.delete("view");
+    window.history.replaceState({}, "", nextUrl.toString());
+    setScannedFriendInvite(null);
+    setActiveTab(currentUser ? "files" : "account");
   }
 
   function openAccountPanel(): void {
@@ -3581,7 +3596,6 @@ export default function App({ experimentalMode = false }: AppProps) {
   useEffect(() => {
     if (!inviteIdFromUrl) {
       setScannedFriendInvite(null);
-      setShowScannedFriendInviteModal(false);
       return;
     }
 
@@ -3591,13 +3605,11 @@ export default function App({ experimentalMode = false }: AppProps) {
       .then((invite) => {
         if (!isCancelled) {
           setScannedFriendInvite(invite);
-          setShowScannedFriendInviteModal(Boolean(invite));
         }
       })
       .catch(() => {
         if (!isCancelled) {
           setScannedFriendInvite(null);
-          setShowScannedFriendInviteModal(false);
         }
       });
 
@@ -3615,7 +3627,9 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     let isCancelled = false;
     const inviteUrl = new URL(window.location.href);
-    inviteUrl.searchParams.set("invite", activeFriendInvite.id);
+    inviteUrl.searchParams.set("friendInvite", activeFriendInvite.id);
+    inviteUrl.searchParams.set("view", "friend-invite");
+    inviteUrl.searchParams.delete("invite");
     inviteUrl.hash = "";
     const inviteUrlText = inviteUrl.toString();
     setActiveFriendInviteUrl(inviteUrlText);
@@ -3633,18 +3647,6 @@ export default function App({ experimentalMode = false }: AppProps) {
       isCancelled = true;
     };
   }, [activeFriendInvite]);
-
-  useEffect(() => {
-    if (!showScannedFriendInviteModal) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [showScannedFriendInviteModal]);
 
   function renderSheetZoomToolbar(
     currentMode: SheetZoomMode,
@@ -3724,52 +3726,6 @@ export default function App({ experimentalMode = false }: AppProps) {
         } as CSSProperties
       }
     >
-      {scannedFriendInvite && showScannedFriendInviteModal ? (
-        <div
-          className="friend-invite-modal"
-          onClick={() => setShowScannedFriendInviteModal(false)}
-          role="dialog"
-          aria-label="加入好友邀請"
-        >
-          <div
-            className="friend-invite-modal-card"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              className="secondary-button friend-invite-modal-close"
-              onClick={() => setShowScannedFriendInviteModal(false)}
-              type="button"
-            >
-              關閉
-            </button>
-            <div className="friend-empty-state friend-invite-state">
-              <h3>加入好友</h3>
-              <strong>
-                {scannedFriendInvite.issuedByDisplayName ||
-                  scannedFriendInvite.issuedByUsername}
-              </strong>
-              <p>{formatInviteExpiry(scannedFriendInvite.expiresAt)}</p>
-              {!currentUser ? (
-                <p>請先登入，再把這位老師加入好友。</p>
-              ) : scannedFriendInvite.issuedByUid === currentUser.uid ? (
-                <p>這是你自己的加好友 QR Code。</p>
-              ) : (
-                <div className="friend-row-actions">
-                  <button
-                    className="primary-button"
-                    onClick={() => {
-                      void handleSendFriendRequestFromQr();
-                    }}
-                    type="button"
-                  >
-                    送出好友邀請
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
       <header className="hero">
         <div>
           <div className="hero-top">
@@ -3928,23 +3884,85 @@ export default function App({ experimentalMode = false }: AppProps) {
         </section>
       ) : null}
 
-      <nav
-        className={`tab-bar tab-bar--${mobileTabVariant} tab-bar--underline-main`}
-        aria-label="主要功能"
-      >
-        {visibleTabs.map((tab) => (
-          <button
-            className={tab.key === activeTab ? "tab is-active" : "tab"}
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            type="button"
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+      {isFriendInvitePage ? (
+        <main className="panel-grid">
+          <section className="panel friend-invite-page">
+            <div className="panel-header">
+              <div>
+                <h2>加入好友邀請</h2>
+              </div>
+            </div>
+            <div className="friend-empty-state friend-invite-state">
+              {scannedFriendInvite ? (
+                <>
+                  <strong>
+                    {scannedFriendInvite.issuedByDisplayName ||
+                      scannedFriendInvite.issuedByUsername}
+                  </strong>
+                  <p>{formatInviteExpiry(scannedFriendInvite.expiresAt)}</p>
+                  {!currentUser ? (
+                    <p>請先登入，再把這位老師加入好友。</p>
+                  ) : scannedFriendInvite.issuedByUid === currentUser.uid ? (
+                    <p>這是你自己的行動條碼。</p>
+                  ) : (
+                    <p>確認後會送出好友邀請，對方同意後就會加入好友列表。</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <strong>找不到這張好友邀請</strong>
+                  <p>這個邀請可能已失效、過期，或網址不完整。</p>
+                </>
+              )}
+              <div className="friend-row-actions">
+                {scannedFriendInvite &&
+                currentUser &&
+                scannedFriendInvite.issuedByUid !== currentUser.uid ? (
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      void handleSendFriendRequestFromQr();
+                    }}
+                    type="button"
+                  >
+                    送出好友邀請
+                  </button>
+                ) : null}
+                <button
+                  className="secondary-button"
+                  onClick={closeFriendInvitePage}
+                  type="button"
+                >
+                  {scannedFriendInvite &&
+                  currentUser &&
+                  scannedFriendInvite.issuedByUid !== currentUser.uid
+                    ? "取消邀請"
+                    : "回到主頁"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </main>
+      ) : (
+        <>
 
-      <main className="panel-grid">
+          <nav
+            className={`tab-bar tab-bar--${mobileTabVariant} tab-bar--underline-main`}
+            aria-label="主要功能"
+          >
+            {visibleTabs.map((tab) => (
+              <button
+                className={tab.key === activeTab ? "tab is-active" : "tab"}
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <main className="panel-grid">
         {activeTab === "table" ? (
           <>
             <section className="panel">
@@ -4760,6 +4778,105 @@ export default function App({ experimentalMode = false }: AppProps) {
                 <article className="account-card">
                   <div className="account-card-head">
                     <div>
+                      <h3>好友列表</h3>
+                    </div>
+                  </div>
+                  {!currentUser ? (
+                    <div className="friend-empty-state">
+                      <strong>尚未登入</strong>
+                      <p>登入後才會顯示你的好友列表。</p>
+                    </div>
+                  ) : friends.length === 0 ? (
+                    <div className="friend-empty-state">
+                      <strong>目前還沒有好友</strong>
+                      <p>可以先從上方輸入帳號送出邀請，等對方確認後會顯示在這裡。</p>
+                    </div>
+                  ) : (
+                    <div className="friend-list">
+                      {friends.map((friend) => {
+                        const isExpanded = expandedFriendUids.includes(friend.friendUid);
+                        return (
+                          <div className="friend-row" key={friend.friendUid}>
+                            <div className="friend-row-summary">
+                              <strong>{friend.displayName}</strong>
+                              <button
+                                className="secondary-button"
+                                onClick={() => toggleFriendDetails(friend.friendUid)}
+                                type="button"
+                              >
+                                {isExpanded ? "收合" : "展開"}
+                              </button>
+                            </div>
+                            {isExpanded ? (
+                              <div className="friend-row-main">
+                                <div className="friend-identity">
+                                  <small>帳號：{friend.username}</small>
+                                  {friend.customNickname ? (
+                                    <small>
+                                      好友原本暱稱：
+                                      {friend.profileNickname || friend.username}
+                                    </small>
+                                  ) : null}
+                                </div>
+                                <div className="friend-alias-form">
+                                  <input
+                                    onChange={(event) =>
+                                      updateFriendNicknameDraft(
+                                        friend.friendUid,
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder={friend.profileNickname || friend.username}
+                                    type="text"
+                                    value={friendNicknameDrafts[friend.friendUid] ?? ""}
+                                  />
+                                  <div className="friend-row-actions">
+                                    <button
+                                      className="primary-button"
+                                      onClick={() => {
+                                        void handleSaveFriendNickname(friend);
+                                      }}
+                                      type="button"
+                                    >
+                                      儲存備註
+                                    </button>
+                                    <button
+                                      className="secondary-button"
+                                      onClick={() => {
+                                        void handleResetFriendNickname(friend);
+                                      }}
+                                      type="button"
+                                    >
+                                      恢復好友暱稱
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="friend-row-footer">
+                                  <small>
+                                    成為好友時間 {formatActivityDate(friend.addedAt)}
+                                  </small>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => {
+                                      void handleRemoveFriend(friend);
+                                    }}
+                                    type="button"
+                                  >
+                                    移除
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </article>
+
+                <article className="account-card">
+                  <div className="account-card-head">
+                    <div>
                       <h3>好友邀請</h3>
                     </div>
                   </div>
@@ -4909,105 +5026,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                       </div>
 
                     </>
-                  )}
-                </article>
-
-                <article className="account-card">
-                  <div className="account-card-head">
-                    <div>
-                      <h3>好友列表</h3>
-                    </div>
-                  </div>
-                  {!currentUser ? (
-                    <div className="friend-empty-state">
-                      <strong>尚未登入</strong>
-                      <p>登入後才會顯示你的好友列表。</p>
-                    </div>
-                  ) : friends.length === 0 ? (
-                    <div className="friend-empty-state">
-                      <strong>目前還沒有好友</strong>
-                      <p>可以先從上方輸入帳號送出邀請，等對方確認後會顯示在這裡。</p>
-                    </div>
-                  ) : (
-                    <div className="friend-list">
-                      {friends.map((friend) => {
-                        const isExpanded = expandedFriendUids.includes(friend.friendUid);
-                        return (
-                          <div className="friend-row" key={friend.friendUid}>
-                            <div className="friend-row-summary">
-                              <strong>{friend.displayName}</strong>
-                              <button
-                                className="secondary-button"
-                                onClick={() => toggleFriendDetails(friend.friendUid)}
-                                type="button"
-                              >
-                                {isExpanded ? "收合" : "展開"}
-                              </button>
-                            </div>
-                            {isExpanded ? (
-                              <div className="friend-row-main">
-                                <div className="friend-identity">
-                                  <small>帳號：{friend.username}</small>
-                                  {friend.customNickname ? (
-                                    <small>
-                                      好友原本暱稱：
-                                      {friend.profileNickname || friend.username}
-                                    </small>
-                                  ) : null}
-                                </div>
-                                <div className="friend-alias-form">
-                                  <input
-                                    onChange={(event) =>
-                                      updateFriendNicknameDraft(
-                                        friend.friendUid,
-                                        event.target.value,
-                                      )
-                                    }
-                                    placeholder={friend.profileNickname || friend.username}
-                                    type="text"
-                                    value={friendNicknameDrafts[friend.friendUid] ?? ""}
-                                  />
-                                  <div className="friend-row-actions">
-                                    <button
-                                      className="primary-button"
-                                      onClick={() => {
-                                        void handleSaveFriendNickname(friend);
-                                      }}
-                                      type="button"
-                                    >
-                                      儲存備註
-                                    </button>
-                                    <button
-                                      className="secondary-button"
-                                      onClick={() => {
-                                        void handleResetFriendNickname(friend);
-                                      }}
-                                      type="button"
-                                    >
-                                      恢復好友暱稱
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="friend-row-footer">
-                                  <small>
-                                    成為好友時間 {formatActivityDate(friend.addedAt)}
-                                  </small>
-                                  <button
-                                    className="secondary-button"
-                                    onClick={() => {
-                                      void handleRemoveFriend(friend);
-                                    }}
-                                    type="button"
-                                  >
-                                    移除
-                                  </button>
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
                   )}
                 </article>
               </div>
@@ -5585,6 +5603,8 @@ export default function App({ experimentalMode = false }: AppProps) {
           </>
         ) : null}
       </main>
+        </>
+      )}
     </div>
   );
 }
