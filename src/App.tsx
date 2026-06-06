@@ -3686,9 +3686,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               />
               <p className="eyebrow">新北市運動遊戲體育協會</p>
               <h1>體適能測驗管理工具</h1>
-              <p className="hero-copy">
-                正式資料以網頁為主，檔案、好友與報表都集中在這裡管理。
-              </p>
             </div>
             <div className="hero-auth">
               <div className="shared-date-field auth-entry">
@@ -3795,10 +3792,6 @@ export default function App({ experimentalMode = false }: AppProps) {
           ) : null}
         </div>
       </header>
-
-      <div className="status-banner" role="status">
-        {message}
-      </div>
 
       {experimentalMode ? (
         <section className="startup-banner experimental-banner" aria-live="polite">
@@ -4557,7 +4550,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="panel-header">
                 <div>
                   <h2>帳號管理</h2>
-                  <p>這一頁集中放帳號本身的資訊。之後如果加入好友、共享檔案與共同維護，也會從這裡往外延伸。</p>
                 </div>
               </div>
 
