@@ -93,7 +93,8 @@ type TabKey =
   | "editor"
   | "roster"
   | "analysis"
-  | "pdf";
+  | "pdf"
+  | "tablab";
 
 type EditableField = keyof FitnessRecord;
 
@@ -151,6 +152,49 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "table", label: "檢視總表" },
   { key: "pdf", label: "檢視報表" },
 ];
+
+const experimentalTabs: Array<{ key: TabKey; label: string }> = [
+  ...tabs,
+  { key: "tablab", label: "Tab 元件展示" },
+];
+
+const tabShowcaseSamples = [
+  {
+    id: "soft",
+    title: "柔和膠囊",
+    description: "偏正式產品頁風格，適合主要功能導覽。",
+    items: ["總覽", "學生", "報表", "設定"],
+    tone: "soft",
+  },
+  {
+    id: "underline",
+    title: "底線切換",
+    description: "像文件或設定頁，資訊密度高但不搶畫面。",
+    items: ["基本資料", "權限", "歷程", "備註"],
+    tone: "underline",
+  },
+  {
+    id: "segmented",
+    title: "分段切換",
+    description: "像 iOS segmented control，適合 2 到 4 個互斥視圖。",
+    items: ["今日", "本週", "本月"],
+    tone: "segmented",
+  },
+  {
+    id: "card",
+    title: "卡片導覽",
+    description: "每個 tab 都像功能捷徑，適合實驗性首頁。",
+    items: ["檔案", "好友", "分享", "匯出"],
+    tone: "card",
+  },
+  {
+    id: "scroll",
+    title: "橫向捲動",
+    description: "手機版保留單列高度，能容納更多功能項目。",
+    items: ["帳號管理", "檔案中心", "編輯名冊", "測驗項目", "檢視總表", "檢視報表", "設定"],
+    tone: "scroll",
+  },
+] as const;
 
 const scoreFields: FitnessField[] = [
   "item1",
@@ -518,6 +562,7 @@ type AppProps = {
 };
 
 export default function App({ experimentalMode = false }: AppProps) {
+  const visibleTabs = experimentalMode ? experimentalTabs : tabs;
   const [data, setData] = useState<AppData>(defaultAppData);
   const reportDebugParams = useMemo(() => readReportDebugParamsFromUrl(), []);
   const mobileTabVariant = useMemo(() => readMobileTabVariantFromUrl(), []);
@@ -574,6 +619,12 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [expandedCloudFileId, setExpandedCloudFileId] = useState<string | null>(null);
   const [shareEditorUids, setShareEditorUids] = useState<string[]>([]);
   const [selectedShareFriendUid, setSelectedShareFriendUid] = useState("");
+  const [tabShowcaseSelections, setTabShowcaseSelections] = useState<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        tabShowcaseSamples.map((sample) => [sample.id, sample.items[0] ?? ""]),
+      ),
+  );
   const [cloudFileDrafts, setCloudFileDrafts] = useState<
     Record<
       string,
@@ -3767,7 +3818,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       ) : null}
 
       <nav className={`tab-bar tab-bar--${mobileTabVariant}`} aria-label="主要功能">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             className={tab.key === activeTab ? "tab is-active" : "tab"}
             key={tab.key}
@@ -5242,6 +5293,73 @@ export default function App({ experimentalMode = false }: AppProps) {
                 record={selectedRecord}
                 scores={selectedAbilityScores}
               />
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "tablab" ? (
+          <>
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Tab 元件展示</h2>
+                  <p>這個頁面只出現在實驗版，用來快速比較不同 tab 元件的視覺與互動方式。每一組都可以直接點擊切換。</p>
+                </div>
+              </div>
+              <div className="tab-lab-grid">
+                {tabShowcaseSamples.map((sample) => {
+                  const selectedValue = tabShowcaseSelections[sample.id] ?? sample.items[0] ?? "";
+                  return (
+                    <article className="tab-lab-card" key={sample.id}>
+                      <div className="tab-lab-card-head">
+                        <h3>{sample.title}</h3>
+                        <p>{sample.description}</p>
+                      </div>
+                      <div
+                        className={`tab-lab-strip tab-lab-strip--${sample.tone}`}
+                        role="tablist"
+                        aria-label={sample.title}
+                      >
+                        {sample.items.map((item) => (
+                          <button
+                            aria-selected={selectedValue === item}
+                            className={
+                              selectedValue === item
+                                ? "tab-lab-item is-active"
+                                : "tab-lab-item"
+                            }
+                            key={item}
+                            onClick={() =>
+                              setTabShowcaseSelections((current) => ({
+                                ...current,
+                                [sample.id]: item,
+                              }))
+                            }
+                            role="tab"
+                            type="button"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="tab-lab-preview">
+                        <span className="tab-lab-preview-label">目前選中</span>
+                        <strong>{selectedValue}</strong>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+            <section className="panel side-panel">
+              <h2>怎麼看</h2>
+              <ul className="plain-list">
+                <li>柔和膠囊：最接近目前正式版，適合主導覽。</li>
+                <li>底線切換：資訊型頁面常見，視覺較輕。</li>
+                <li>分段切換：適合少量、互斥的內容視圖。</li>
+                <li>卡片導覽：功能感較強，首頁感會更重。</li>
+                <li>橫向捲動：最省高度，對手機最友善。</li>
+              </ul>
             </section>
           </>
         ) : null}
