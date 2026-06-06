@@ -3885,7 +3885,6 @@ export default function App({ experimentalMode = false }: AppProps) {
             </div>
             <div className="hero-auth">
               <div className="shared-date-field auth-entry">
-                <span>帳號</span>
                 {!currentUser ? (
                   <div className="button-row">
                     <button
