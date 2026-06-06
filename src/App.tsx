@@ -229,6 +229,11 @@ const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
   { label: "110%", value: 1.1 },
 ];
 
+const TABLE_SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
+  { label: "符合頁寬", value: "fit" },
+  { label: "100%", value: 1 },
+];
+
 const GRADE_OPTIONS = schoolGradeOptions;
 const STUDENT_GRADE_OPTIONS: StudentGradeLabel[] = ["幼幼班", "小班", "中班", "大班"];
 const TERM_OPTIONS = ["上學期", "下學期"] as const;
@@ -671,9 +676,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [rosterSizeInput, setRosterSizeInput] = useState(() =>
     String(data.rosterEntries.length || 1),
   );
-  const [rosterZoomMode, setRosterZoomMode] = useState<SheetZoomMode>("fit");
   const [tableZoomMode, setTableZoomMode] = useState<SheetZoomMode>("fit");
-  const [metricZoomMode, setMetricZoomMode] = useState<SheetZoomMode>("fit");
+  const rosterZoomMode: SheetZoomMode = 1;
+  const metricZoomMode: SheetZoomMode = 1.1;
   const [rosterViewportWidth, setRosterViewportWidth] = useState(0);
   const [tableViewportWidth, setTableViewportWidth] = useState(0);
   const [metricViewportWidth, setMetricViewportWidth] = useState(0);
@@ -3549,10 +3554,11 @@ export default function App({ experimentalMode = false }: AppProps) {
   function renderSheetZoomToolbar(
     currentMode: SheetZoomMode,
     onChange: (nextMode: SheetZoomMode) => void,
+    options: Array<{ label: string; value: SheetZoomMode }> = SHEET_ZOOM_OPTIONS,
   ) {
     return (
       <div className="sheet-toolbar" role="group" aria-label="表格縮放">
-        {SHEET_ZOOM_OPTIONS.map((option) => (
+        {options.map((option) => (
           <button
             className={
               currentMode === option.value
@@ -3878,7 +3884,11 @@ export default function App({ experimentalMode = false }: AppProps) {
                 </div>
               </div>
               <div className="sheet-shell">
-                {renderSheetZoomToolbar(tableZoomMode, setTableZoomMode)}
+                {renderSheetZoomToolbar(
+                  tableZoomMode,
+                  setTableZoomMode,
+                  TABLE_SHEET_ZOOM_OPTIONS,
+                )}
                 {debugSettings.showSheetDebug
                   ? renderSheetDebugInfo({
                       viewportWidth: tableViewportWidth,
@@ -4860,7 +4870,6 @@ export default function App({ experimentalMode = false }: AppProps) {
               </div>
 
               <div className="sheet-shell">
-                {renderSheetZoomToolbar(metricZoomMode, setMetricZoomMode)}
                 {debugSettings.showSheetDebug
                   ? renderSheetDebugInfo({
                       viewportWidth: metricViewportWidth,
@@ -4888,9 +4897,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                     }}
                   >
                     <table
-                      className={`table-editor metric-editor sheet-playground summary-sheet${
-                        metricZoomMode === "fit" ? " is-fit" : ""
-                      }`}
+                      className="table-editor metric-editor sheet-playground summary-sheet"
                       ref={metricTableRef}
                       style={{
                         transform: `scale(${metricScale})`,
@@ -5075,7 +5082,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                 </div>
 
                 <div className="sheet-shell">
-                  {renderSheetZoomToolbar(rosterZoomMode, setRosterZoomMode)}
                   {debugSettings.showSheetDebug
                     ? renderSheetDebugInfo({
                         viewportWidth: rosterViewportWidth,
