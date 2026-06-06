@@ -911,6 +911,31 @@ button {
   block-size: 16px;
 }
 
+.table-filter-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid #dbe4ee;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.table-filter-section {
+  display: grid;
+  gap: 10px;
+}
+
+.table-filter-section strong {
+  color: #172033;
+}
+
+.table-grade-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
 .primary-button,
 .secondary-button,
 .danger-button,

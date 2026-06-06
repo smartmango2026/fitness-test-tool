@@ -143,7 +143,6 @@ type ActiveCell = {
 type SheetZoomMode = "fit" | 0.8 | 0.9 | 1 | 1.1;
 type FileSortKey = "created-desc" | "updated-desc" | "name-asc" | "roster-asc" | "grade-asc";
 type MobileTabVariant = "wrap" | "scroll" | "compact";
-type TableGradeFilter = "all" | "middle-senior" | "small" | "preschool";
 type TableSortKey = "seat" | "grade-desc" | "grade-asc";
 
 function readRequestedTabFromUrl(): string | null {
@@ -244,17 +243,12 @@ const ACADEMIC_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) =>
   String(CURRENT_ROC_YEAR - 2 + index),
 );
 const LAST_CLOUD_FILE_STORAGE_PREFIX = "fitness-test-tool:last-cloud-file:";
-const TABLE_GRADE_FILTER_OPTIONS: Array<{ value: TableGradeFilter; label: string }> = [
-  { value: "all", label: "全部年級" },
-  { value: "middle-senior", label: "中大班" },
-  { value: "small", label: "小班" },
-  { value: "preschool", label: "幼幼班" },
-];
 const TABLE_SORT_OPTIONS: Array<{ value: TableSortKey; label: string }> = [
   { value: "seat", label: "依號碼排序" },
   { value: "grade-desc", label: "依年級排序（大到小）" },
   { value: "grade-asc", label: "依年級排序（小到大）" },
 ];
+const TABLE_GRADE_CHECKBOX_OPTIONS: StudentGradeLabel[] = ["幼幼班", "小班", "中班", "大班"];
 
 function hasIncompleteScore(record: FitnessRecord): boolean {
   return scoreFields.some(
@@ -693,8 +687,11 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
   const [activeMetric, setActiveMetric] = useState<FitnessField>("item1");
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
-  const [tableGradeFilter, setTableGradeFilter] = useState<TableGradeFilter>("all");
   const [tableSortKey, setTableSortKey] = useState<TableSortKey>("seat");
+  const [showTableFilters, setShowTableFilters] = useState(false);
+  const [selectedTableGrades, setSelectedTableGrades] = useState<StudentGradeLabel[]>(
+    TABLE_GRADE_CHECKBOX_OPTIONS,
+  );
   const [firebaseStatus, setFirebaseStatus] = useState("尚未測試 Firebase 連線。");
   const [rosterDraft, setRosterDraft] = useState<RosterEntry[]>(() =>
     data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()],
@@ -1317,21 +1314,17 @@ export default function App({ experimentalMode = false }: AppProps) {
       ? data.records.filter((record) => hasIncompleteScore(record))
       : data.records;
 
-    if (isMixedAgeClass(data.gradeLabel) && tableGradeFilter !== "all") {
+    if (
+      isMixedAgeClass(data.gradeLabel) &&
+      selectedTableGrades.length > 0 &&
+      selectedTableGrades.length < TABLE_GRADE_CHECKBOX_OPTIONS.length
+    ) {
       nextRecords = nextRecords.filter((record) => {
         const gradeLabel = resolveStudentGradeLabel(
           data.gradeLabel,
           record.studentGradeLabel,
         );
-        if (tableGradeFilter === "middle-senior") {
-          return gradeLabel === "中班" || gradeLabel === "大班";
-        }
-
-        if (tableGradeFilter === "small") {
-          return gradeLabel === "小班";
-        }
-
-        return gradeLabel === "幼幼班";
+        return selectedTableGrades.includes(gradeLabel);
       });
     }
 
@@ -1358,7 +1351,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     });
 
     return sortedRecords;
-  }, [data.gradeLabel, data.records, showIncompleteOnly, tableGradeFilter, tableSortKey]);
+  }, [data.gradeLabel, data.records, selectedTableGrades, showIncompleteOnly, tableSortKey]);
 
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
@@ -3930,48 +3923,13 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <h2>測驗報告</h2>
                 </div>
                 <div className="button-row">
-                  {isMixedAgeClass(data.gradeLabel) ? (
-                    <label className="shared-date-field table-filter-field">
-                      <span>年級篩選</span>
-                      <select
-                        className="search-input"
-                        onChange={(event) =>
-                          setTableGradeFilter(event.target.value as TableGradeFilter)
-                        }
-                        value={tableGradeFilter}
-                      >
-                        {TABLE_GRADE_FILTER_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <label className="shared-date-field table-filter-field">
-                    <span>排序方式</span>
-                    <select
-                      className="search-input"
-                      onChange={(event) =>
-                        setTableSortKey(event.target.value as TableSortKey)
-                      }
-                      value={tableSortKey}
-                    >
-                      {TABLE_SORT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="filter-toggle">
-                    <input
-                      checked={showIncompleteOnly}
-                      onChange={(event) => setShowIncompleteOnly(event.target.checked)}
-                      type="checkbox"
-                    />
-                    只看未完成學生
-                  </label>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setShowTableFilters((current) => !current)}
+                    type="button"
+                  >
+                    {showTableFilters ? "收起篩選器" : "展開篩選器"}
+                  </button>
                   <button
                     className="primary-button"
                     onClick={addTableRow}
@@ -3981,6 +3939,79 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </button>
                 </div>
               </div>
+              {showTableFilters ? (
+                <div className="table-filter-panel">
+                  {isMixedAgeClass(data.gradeLabel) ? (
+                    <div className="table-filter-section">
+                      <strong>年級篩選</strong>
+                      <label className="filter-toggle">
+                        <input
+                          checked={
+                            selectedTableGrades.length ===
+                            TABLE_GRADE_CHECKBOX_OPTIONS.length
+                          }
+                          onChange={(event) =>
+                            setSelectedTableGrades(
+                              event.target.checked ? TABLE_GRADE_CHECKBOX_OPTIONS : [],
+                            )
+                          }
+                          type="checkbox"
+                        />
+                        全部年級
+                      </label>
+                      <div className="table-grade-filter-grid">
+                        {TABLE_GRADE_CHECKBOX_OPTIONS.map((grade) => (
+                          <label className="filter-toggle" key={grade}>
+                            <input
+                              checked={selectedTableGrades.includes(grade)}
+                              onChange={(event) =>
+                                setSelectedTableGrades((current) =>
+                                  event.target.checked
+                                    ? current.includes(grade)
+                                      ? current
+                                      : [...current, grade]
+                                    : current.filter((item) => item !== grade),
+                                )
+                              }
+                              type="checkbox"
+                            />
+                            {grade}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="table-filter-section">
+                    <strong>顯示條件</strong>
+                    <label className="filter-toggle">
+                      <input
+                        checked={showIncompleteOnly}
+                        onChange={(event) => setShowIncompleteOnly(event.target.checked)}
+                        type="checkbox"
+                      />
+                      只顯示未完成學生
+                    </label>
+                  </div>
+                  <div className="table-filter-section">
+                    <strong>排序方式</strong>
+                    <label className="shared-date-field table-filter-field">
+                      <select
+                        className="search-input"
+                        onChange={(event) =>
+                          setTableSortKey(event.target.value as TableSortKey)
+                        }
+                        value={tableSortKey}
+                      >
+                        {TABLE_SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
               <div className="sheet-shell">
                 {renderSheetZoomToolbar(
                   tableZoomMode,
