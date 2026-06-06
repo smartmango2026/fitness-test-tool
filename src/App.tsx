@@ -5514,27 +5514,36 @@ export default function App({ experimentalMode = false }: AppProps) {
                 </div>
               </div>
               {renderWorkspaceFileCard()}
-              <label className="shared-date-field report-student-picker">
-                選擇學生
-                <select
-                  className="search-input"
-                  onChange={(event) => {
-                    const nextRecord = data.records.find(
-                      (record) => record.id === event.target.value,
-                    );
-                    if (nextRecord) {
-                      selectRecord(nextRecord);
-                    }
-                  }}
-                  value={selectedId}
+              <div className="report-preview-toolbar">
+                <label className="shared-date-field report-student-picker">
+                  選擇學生
+                  <select
+                    className="search-input"
+                    onChange={(event) => {
+                      const nextRecord = data.records.find(
+                        (record) => record.id === event.target.value,
+                      );
+                      if (nextRecord) {
+                        selectRecord(nextRecord);
+                      }
+                    }}
+                    value={selectedId}
+                  >
+                    {data.records.map((record, index) => (
+                      <option key={record.id} value={record.id}>
+                        {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="primary-button"
+                  onClick={handleDownloadAllPdfs}
+                  type="button"
                 >
-                  {data.records.map((record, index) => (
-                    <option key={record.id} value={record.id}>
-                      {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  下載全班 PDF
+                </button>
+              </div>
               <A4CanvasBoard
                 ref={pdfCanvasRef}
                 abilityProfile={currentAbilityProfile}
@@ -5547,11 +5556,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                 seatNumber={selectedSeatNumber}
                 testDate={data.testDate}
               />
-              <div className="button-row">
-                <button className="primary-button" onClick={handleDownloadAllPdfs} type="button">
-                  下載全班 PDF
-                </button>
-              </div>
             </section>
           </>
         ) : null}
