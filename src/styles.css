@@ -773,14 +773,27 @@ button {
 }
 
 .friend-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
+  display: grid;
+  gap: 12px;
   padding: 14px 16px;
   border: 1px solid #d6dbe5;
   border-radius: 18px;
   background: #fff;
+}
+
+.friend-row-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.friend-row-summary strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .friend-row-main {
@@ -809,6 +822,14 @@ button {
 .friend-row-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.friend-row-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -2112,7 +2133,6 @@ tbody tr.is-selected {
 
   .friend-row {
     align-items: stretch;
-    flex-direction: column;
   }
 
   .friend-qr-card {
@@ -2125,6 +2145,12 @@ tbody tr.is-selected {
 
   .friend-row-actions {
     width: 100%;
+  }
+
+  .friend-row-summary,
+  .friend-row-footer {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .file-detail-grid {

@@ -637,6 +637,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [friendDraft, setFriendDraft] = useState("");
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [friendNicknameDrafts, setFriendNicknameDrafts] = useState<Record<string, string>>({});
+  const [expandedFriendUids, setExpandedFriendUids] = useState<string[]>([]);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   const [incomingFriendRequests, setIncomingFriendRequests] = useState<
     FriendRequestRecord[]
@@ -1438,6 +1439,14 @@ export default function App({ experimentalMode = false }: AppProps) {
           切換檔案
         </button>
       </div>
+    );
+  }
+
+  function toggleFriendDetails(friendUid: string): void {
+    setExpandedFriendUids((current) =>
+      current.includes(friendUid)
+        ? current.filter((item) => item !== friendUid)
+        : [...current, friendUid],
     );
   }
 
@@ -4766,7 +4775,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                         }}
                         type="button"
                       >
-                        顯示我的加好友 QR Code
+                        顯示行動條碼
                       </button>
                     </div>
 
@@ -4921,67 +4930,83 @@ export default function App({ experimentalMode = false }: AppProps) {
                     </div>
                   ) : (
                     <div className="friend-list">
-                      {friends.map((friend) => (
-                        <div className="friend-row" key={friend.friendUid}>
-                          <div className="friend-row-main">
-                            <div className="friend-identity">
+                      {friends.map((friend) => {
+                        const isExpanded = expandedFriendUids.includes(friend.friendUid);
+                        return (
+                          <div className="friend-row" key={friend.friendUid}>
+                            <div className="friend-row-summary">
                               <strong>{friend.displayName}</strong>
-                              <small>帳號：{friend.username}</small>
-                              {friend.customNickname ? (
-                                <small>
-                                  好友原本暱稱：
-                                  {friend.profileNickname || friend.username}
-                                </small>
-                              ) : null}
+                              <button
+                                className="secondary-button"
+                                onClick={() => toggleFriendDetails(friend.friendUid)}
+                                type="button"
+                              >
+                                {isExpanded ? "收合" : "展開"}
+                              </button>
                             </div>
-                            <div className="friend-alias-form">
-                              <input
-                                onChange={(event) =>
-                                  updateFriendNicknameDraft(
-                                    friend.friendUid,
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder={friend.profileNickname || friend.username}
-                                type="text"
-                                value={friendNicknameDrafts[friend.friendUid] ?? ""}
-                              />
-                              <div className="friend-row-actions">
-                                <button
-                                  className="primary-button"
-                                  onClick={() => {
-                                    void handleSaveFriendNickname(friend);
-                                  }}
-                                  type="button"
-                                >
-                                  儲存備註
-                                </button>
-                                <button
-                                  className="secondary-button"
-                                  onClick={() => {
-                                    void handleResetFriendNickname(friend);
-                                  }}
-                                  type="button"
-                                >
-                                  恢復好友暱稱
-                                </button>
+                            {isExpanded ? (
+                              <div className="friend-row-main">
+                                <div className="friend-identity">
+                                  <small>帳號：{friend.username}</small>
+                                  {friend.customNickname ? (
+                                    <small>
+                                      好友原本暱稱：
+                                      {friend.profileNickname || friend.username}
+                                    </small>
+                                  ) : null}
+                                </div>
+                                <div className="friend-alias-form">
+                                  <input
+                                    onChange={(event) =>
+                                      updateFriendNicknameDraft(
+                                        friend.friendUid,
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder={friend.profileNickname || friend.username}
+                                    type="text"
+                                    value={friendNicknameDrafts[friend.friendUid] ?? ""}
+                                  />
+                                  <div className="friend-row-actions">
+                                    <button
+                                      className="primary-button"
+                                      onClick={() => {
+                                        void handleSaveFriendNickname(friend);
+                                      }}
+                                      type="button"
+                                    >
+                                      儲存備註
+                                    </button>
+                                    <button
+                                      className="secondary-button"
+                                      onClick={() => {
+                                        void handleResetFriendNickname(friend);
+                                      }}
+                                      type="button"
+                                    >
+                                      恢復好友暱稱
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="friend-row-footer">
+                                  <small>
+                                    成為好友時間 {formatActivityDate(friend.addedAt)}
+                                  </small>
+                                  <button
+                                    className="secondary-button"
+                                    onClick={() => {
+                                      void handleRemoveFriend(friend);
+                                    }}
+                                    type="button"
+                                  >
+                                    移除
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                            <small>
-                              成為好友時間 {formatActivityDate(friend.addedAt)}
-                            </small>
+                            ) : null}
                           </div>
-                          <button
-                            className="secondary-button"
-                            onClick={() => {
-                              void handleRemoveFriend(friend);
-                            }}
-                            type="button"
-                          >
-                            移除
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </article>
