@@ -3269,7 +3269,7 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   function getMetricRangeHint(field: FitnessField): string {
     if (isMixedAgeClass(data.gradeLabel)) {
-      return "依學生年級";
+      return "";
     }
 
     const rule = getMetricRule(field, selectedRecord);
@@ -4722,8 +4722,8 @@ export default function App({ experimentalMode = false }: AppProps) {
                       )}
                     </div>
                     <div>
-                      <strong>說明</strong>
-                      <div>帳號是登入用名稱；暱稱會顯示在好友列表與好友邀請中。</div>
+                      <strong>狀態</strong>
+                      <div>{currentUser ? "已登入" : "尚未登入"}</div>
                     </div>
                   </div>
                 </article>
@@ -4731,8 +4731,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                 <article className="account-card">
                   <div className="account-card-head">
                     <div>
-                      <h3>好友列表</h3>
-                      <p>現在會把好友與好友邀請同步到 Firestore，也支援用 QR Code 快速送出好友邀請。</p>
+                      <h3>好友邀請</h3>
                     </div>
                   </div>
 
@@ -4880,84 +4879,90 @@ export default function App({ experimentalMode = false }: AppProps) {
                         )}
                       </div>
 
-                      <div className="friend-section">
-                        <h4>我的好友</h4>
-                        {friends.length === 0 ? (
-                          <div className="friend-empty-state">
-                            <strong>目前還沒有好友</strong>
-                            <p>可以先從上方輸入帳號送出邀請，等對方確認後會顯示在這裡。</p>
-                          </div>
-                        ) : (
-                          <div className="friend-list">
-                            {friends.map((friend) => (
-                              <div className="friend-row" key={friend.friendUid}>
-                                <div className="friend-row-main">
-                                  <div className="friend-identity">
-                                    <strong>{friend.displayName}</strong>
-                                    <small>帳號：{friend.username}</small>
-                                    {friend.customNickname ? (
-                                      <small>
-                                        好友原本暱稱：
-                                        {friend.profileNickname || friend.username}
-                                      </small>
-                                    ) : null}
-                                  </div>
-                                  <div className="friend-alias-form">
-                                    <input
-                                      onChange={(event) =>
-                                        updateFriendNicknameDraft(
-                                          friend.friendUid,
-                                          event.target.value,
-                                        )
-                                      }
-                                      placeholder={
-                                        friend.profileNickname || friend.username
-                                      }
-                                      type="text"
-                                      value={
-                                        friendNicknameDrafts[friend.friendUid] ?? ""
-                                      }
-                                    />
-                                    <div className="friend-row-actions">
-                                      <button
-                                        className="primary-button"
-                                        onClick={() => {
-                                          void handleSaveFriendNickname(friend);
-                                        }}
-                                        type="button"
-                                      >
-                                        儲存備註
-                                      </button>
-                                      <button
-                                        className="secondary-button"
-                                        onClick={() => {
-                                          void handleResetFriendNickname(friend);
-                                        }}
-                                        type="button"
-                                      >
-                                        恢復好友暱稱
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <small>
-                                    成為好友時間 {formatActivityDate(friend.addedAt)}
-                                  </small>
-                                </div>
+                    </>
+                  )}
+                </article>
+
+                <article className="account-card">
+                  <div className="account-card-head">
+                    <div>
+                      <h3>好友列表</h3>
+                    </div>
+                  </div>
+                  {!currentUser ? (
+                    <div className="friend-empty-state">
+                      <strong>尚未登入</strong>
+                      <p>登入後才會顯示你的好友列表。</p>
+                    </div>
+                  ) : friends.length === 0 ? (
+                    <div className="friend-empty-state">
+                      <strong>目前還沒有好友</strong>
+                      <p>可以先從上方輸入帳號送出邀請，等對方確認後會顯示在這裡。</p>
+                    </div>
+                  ) : (
+                    <div className="friend-list">
+                      {friends.map((friend) => (
+                        <div className="friend-row" key={friend.friendUid}>
+                          <div className="friend-row-main">
+                            <div className="friend-identity">
+                              <strong>{friend.displayName}</strong>
+                              <small>帳號：{friend.username}</small>
+                              {friend.customNickname ? (
+                                <small>
+                                  好友原本暱稱：
+                                  {friend.profileNickname || friend.username}
+                                </small>
+                              ) : null}
+                            </div>
+                            <div className="friend-alias-form">
+                              <input
+                                onChange={(event) =>
+                                  updateFriendNicknameDraft(
+                                    friend.friendUid,
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder={friend.profileNickname || friend.username}
+                                type="text"
+                                value={friendNicknameDrafts[friend.friendUid] ?? ""}
+                              />
+                              <div className="friend-row-actions">
                                 <button
-                                  className="secondary-button"
+                                  className="primary-button"
                                   onClick={() => {
-                                    void handleRemoveFriend(friend);
+                                    void handleSaveFriendNickname(friend);
                                   }}
                                   type="button"
                                 >
-                                  移除
+                                  儲存備註
+                                </button>
+                                <button
+                                  className="secondary-button"
+                                  onClick={() => {
+                                    void handleResetFriendNickname(friend);
+                                  }}
+                                  type="button"
+                                >
+                                  恢復好友暱稱
                                 </button>
                               </div>
-                            ))}
+                            </div>
+                            <small>
+                              成為好友時間 {formatActivityDate(friend.addedAt)}
+                            </small>
                           </div>
-                        )}
-                      </div>
-                    </>
+                          <button
+                            className="secondary-button"
+                            onClick={() => {
+                              void handleRemoveFriend(friend);
+                            }}
+                            type="button"
+                          >
+                            移除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </article>
               </div>
