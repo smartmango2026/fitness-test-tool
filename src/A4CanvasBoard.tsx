@@ -185,25 +185,14 @@ function drawLogoBadge(
   image: HTMLImageElement,
   x: number,
   y: number,
-  size: number,
+  maxWidth: number,
+  maxHeight: number,
 ): void {
-  drawRoundedRect(context, x, y, size, size, 24);
-  context.fillStyle = "#ffffff";
-  context.fill();
-  context.strokeStyle = "#c9def7";
-  context.lineWidth = 2;
-  context.stroke();
-
-  const padding = 12;
-  const targetX = x + padding;
-  const targetY = y + padding;
-  const targetWidth = size - padding * 2;
-  const targetHeight = size - padding * 2;
-  const scale = Math.min(targetWidth / image.naturalWidth, targetHeight / image.naturalHeight);
+  const scale = Math.min(maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
-  const drawX = targetX + (targetWidth - drawWidth) / 2;
-  const drawY = targetY + (targetHeight - drawHeight) / 2;
+  const drawX = x + (maxWidth - drawWidth) / 2;
+  const drawY = y + (maxHeight - drawHeight) / 2;
 
   context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 }
@@ -436,7 +425,7 @@ function renderReportPage(
   context.stroke();
 
   if (logoImage) {
-    drawLogoBadge(context, logoImage, 64, 54, 128);
+    drawLogoBadge(context, logoImage, 44, 42, 230, 138);
   } else {
     drawGenericBadge(context, 64, 54, 128);
   }
