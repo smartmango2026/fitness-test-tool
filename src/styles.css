@@ -328,6 +328,21 @@ button {
   position: relative;
 }
 
+.header-account-button {
+  min-width: 180px;
+  justify-content: space-between;
+  padding-inline: 16px;
+  border-width: 2px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.header-account-button::after {
+  content: "▾";
+  margin-left: 10px;
+  font-size: 0.9em;
+  opacity: 0.72;
+}
+
 .account-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -2088,6 +2103,11 @@ tbody tr.is-selected {
 
   .auth-entry span {
     display: none;
+  }
+
+  .header-account-button {
+    min-width: 0;
+    width: 100%;
   }
 
   .tab-bar {

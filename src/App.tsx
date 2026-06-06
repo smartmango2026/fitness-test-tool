@@ -3918,11 +3918,11 @@ export default function App({ experimentalMode = false }: AppProps) {
                 ) : (
                   <div className="account-menu-shell">
                     <button
-                      className="secondary-button"
+                      className="secondary-button header-account-button"
                       onClick={() => setShowAccountMenu((current) => !current)}
                       type="button"
                     >
-                      {currentDisplayName || "未命名使用者"}
+                      {`帳號：${currentDisplayName || "未命名使用者"}`}
                     </button>
                     {showAccountMenu ? (
                       <div className="account-dropdown">
