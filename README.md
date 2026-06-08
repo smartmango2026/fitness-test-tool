@@ -132,7 +132,7 @@ gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 - `docs/development-history.md`: staged release history and major feature milestones
 - `docs/time-estimate.md`: effort estimate and phased time breakdown based on commit history
 - `docs/system-logs.md`: current `systemLogs` structure, event types, and limitations
-- `docs/website-description.md`: estimation-oriented description of the product scope and system complexity
+- `docs/website-description.md`: description of the product scope and system complexity
 
 ## Current App Scope
 

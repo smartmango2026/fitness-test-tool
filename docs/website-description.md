@@ -1,4 +1,4 @@
-# Website Description for Estimation
+# Website Description
 
 This project is not a simple brochure site or a one-page CRUD demo. It is a domain-specific operational web system for kindergarten physical fitness testing, with real business rules, cloud data, sharing, reporting, and mobile usage considerations.
 
@@ -171,7 +171,7 @@ This is operational tooling, not just end-user UI.
 
 ## Technical Complexity Summary
 
-From an estimation perspective, this project should be treated as:
+This project should be understood as:
 
 - a custom operational web application
 - with cloud persistence
@@ -182,15 +182,7 @@ From an estimation perspective, this project should be treated as:
 - mobile adaptation
 - maintenance surfaces
 
-It should **not** be priced as:
-
-- a static website
-- a simple admin template
-- a one-screen Firebase demo
-
-## Estimation Notes for Other Sessions
-
-If another session is estimating this website, it should account for:
+Key complexity drivers include:
 
 - business-rule complexity
 - mixed-age logic
