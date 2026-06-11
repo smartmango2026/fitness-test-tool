@@ -487,6 +487,18 @@ button {
   box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.18);
 }
 
+.file-table-row-body.is-selected {
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
+}
+
+.file-table-row-body.is-active.is-selected {
+  background: #f0fdfa;
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 118, 110, 0.22),
+    inset 4px 0 0 rgba(15, 118, 110, 0.75);
+}
+
 .file-summary-line {
   display: inline-flex;
   align-items: center;
@@ -512,6 +524,12 @@ button {
 .file-summary-status {
   color: #0f766e;
   font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.file-summary-action {
+  color: #64748b;
+  font-size: 0.92rem;
   font-weight: 700;
 }
 

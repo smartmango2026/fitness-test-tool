@@ -3523,7 +3523,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function toggleCloudFilePanel(fileId: string): void {
-    setExpandedCloudFileId((current) => (current === fileId ? null : fileId));
+    setExpandedCloudFileId(fileId);
   }
 
   function formatInviteExpiry(dateString: string | null): string {
@@ -4513,22 +4513,16 @@ export default function App({ experimentalMode = false }: AppProps) {
                           className={
                             file.id === currentCloudFileId &&
                             file.ownerUid === currentCloudFileOwnerUid
-                              ? "file-table-row file-table-row-body is-active"
-                              : "file-table-row file-table-row-body"
+                              ? expandedCloudFileId === file.id
+                                ? "file-table-row file-table-row-body is-active is-selected"
+                                : "file-table-row file-table-row-body is-active"
+                              : expandedCloudFileId === file.id
+                                ? "file-table-row file-table-row-body is-selected"
+                                : "file-table-row file-table-row-body"
                           }
                           onClick={() => toggleCloudFilePanel(file.id)}
                         >
                           <span className="file-summary-line">
-                            <span
-                              className={
-                                expandedCloudFileId === file.id
-                                  ? "file-row-chevron is-open"
-                                  : "file-row-chevron"
-                              }
-                              aria-hidden="true"
-                            >
-                              ▾
-                            </span>
                             <span className="file-summary-text">
                               <span>{file.academicTerm}</span>
                               <span className="file-summary-divider" aria-hidden="true">
@@ -4559,19 +4553,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                             file.ownerUid === currentCloudFileOwnerUid ? (
                               <>
                                 <div className="file-detail-grid">
-                                  <label>
-                                    <strong>檔案擁有者</strong>
-                                    <div className="static-field">
-                                      {file.ownerDisplayName || file.ownerUsername}
-                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
-                                    </div>
-                                  </label>
-                                  <label>
-                                    <strong>你的權限</strong>
-                                    <div className="static-field">
-                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
-                                    </div>
-                                  </label>
                                   <label>
                                     <strong>班級名稱</strong>
                                     <input
@@ -4654,6 +4635,19 @@ export default function App({ experimentalMode = false }: AppProps) {
                                       >
                                         套用
                                       </button>
+                                    </div>
+                                  </label>
+                                  <label>
+                                    <strong>檔案擁有者</strong>
+                                    <div className="static-field">
+                                      {file.ownerDisplayName || file.ownerUsername}
+                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
+                                    </div>
+                                  </label>
+                                  <label>
+                                    <strong>你的權限</strong>
+                                    <div className="static-field">
+                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
                                     </div>
                                   </label>
                                 </div>
@@ -4770,19 +4764,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                               <>
                                 <div className="file-detail-grid">
                                   <label>
-                                    <strong>檔案擁有者</strong>
-                                    <div className="static-field">
-                                      {file.ownerDisplayName || file.ownerUsername}
-                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
-                                    </div>
-                                  </label>
-                                  <label>
-                                    <strong>你的權限</strong>
-                                    <div className="static-field">
-                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
-                                    </div>
-                                  </label>
-                                  <label>
                                     <strong>班級名稱</strong>
                                     <input
                                       onChange={(event) =>
@@ -4874,6 +4855,19 @@ export default function App({ experimentalMode = false }: AppProps) {
                                       {file.rosterCount} 人
                                     </div>
                                   </label>
+                                  <label>
+                                    <strong>檔案擁有者</strong>
+                                    <div className="static-field">
+                                      {file.ownerDisplayName || file.ownerUsername}
+                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
+                                    </div>
+                                  </label>
+                                  <label>
+                                    <strong>你的權限</strong>
+                                    <div className="static-field">
+                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
+                                    </div>
+                                  </label>
                                 </div>
                                 {file.accessRole === "owner" ? (
                                   <div className="file-share-section">
@@ -4961,6 +4955,15 @@ export default function App({ experimentalMode = false }: AppProps) {
                                   </span>
                                 </div>
                                 <div className="file-accordion-actions">
+                                  <button
+                                    className="primary-button"
+                                    onClick={() => {
+                                      void handleOpenCloudFile(file);
+                                    }}
+                                    type="button"
+                                  >
+                                    切換到這個檔案
+                                  </button>
                                   {file.accessRole === "owner" ? (
                                     <>
                                       <button
