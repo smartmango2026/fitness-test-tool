@@ -109,7 +109,14 @@ type FriendInviteTraceEntry = {
   detail: string;
 };
 
+type FileOpenTraceEntry = {
+  timestamp: string;
+  status: "info" | "success" | "error";
+  detail: string;
+};
+
 const FRIEND_INVITE_TRACE_STORAGE_KEY = "fitness-test-tool:friend-invite-trace";
+const FILE_OPEN_TRACE_STORAGE_KEY = "fitness-test-tool:file-open-trace";
 
 function formatAuthError(error: unknown, fallback: string): string {
   if (
@@ -183,6 +190,49 @@ function loadFriendInviteTrace(): FriendInviteTraceEntry[] {
     );
   } catch {
     return [];
+  }
+}
+
+function loadFileOpenTrace(): FileOpenTraceEntry[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(FILE_OPEN_TRACE_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (entry): entry is FileOpenTraceEntry =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        typeof entry.timestamp === "string" &&
+        (entry.status === "info" ||
+          entry.status === "success" ||
+          entry.status === "error") &&
+        typeof entry.detail === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveFileOpenTrace(entries: FileOpenTraceEntry[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(FILE_OPEN_TRACE_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // ignore sessionStorage errors
   }
 }
 
@@ -720,6 +770,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [friendInviteTraceEntries, setFriendInviteTraceEntries] = useState<
     FriendInviteTraceEntry[]
   >(() => loadFriendInviteTrace());
+  const [fileOpenTraceEntries, setFileOpenTraceEntries] = useState<FileOpenTraceEntry[]>(
+    () => loadFileOpenTrace(),
+  );
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
   const [inviteIdFromUrl, setInviteIdFromUrl] = useState(() => readFriendInviteIdFromUrl());
   const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
@@ -1447,6 +1500,19 @@ export default function App({ experimentalMode = false }: AppProps) {
     "未登入";
   const currentDisplayName =
     currentProfile?.displayNickname?.trim() || currentUsername;
+
+  function pushFileOpenTrace(status: FileOpenTraceEntry["status"], detail: string) {
+    const entry: FileOpenTraceEntry = {
+      timestamp: new Date().toISOString(),
+      status,
+      detail,
+    };
+    setFileOpenTraceEntries((current) => {
+      const next = [entry, ...current].slice(0, 10);
+      saveFileOpenTrace(next);
+      return next;
+    });
+  }
 
   function getFriendDisplayName(friend: FriendRecord) {
     return (
@@ -3127,15 +3193,20 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   async function handleOpenCloudFile(file: CloudFileSummary): Promise<void> {
     if (!currentUser) {
+      pushFileOpenTrace("error", "未登入，無法切換檔案。");
       setMessage("請先登入，再開啟雲端檔案。");
       return;
     }
 
     if (!confirmDiscardCloudChanges()) {
+      pushFileOpenTrace("info", `已取消切換「${file.fileName}」，因為目前檔案仍有未儲存變更。`);
       return;
     }
 
     try {
+      setFileOpenTraceEntries([]);
+      saveFileOpenTrace([]);
+      pushFileOpenTrace("info", `開始切換檔案：${file.fileName}`);
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -3146,14 +3217,26 @@ export default function App({ experimentalMode = false }: AppProps) {
         fileName: file.fileName,
         message: "開始開啟雲端檔案。",
       });
+      pushFileOpenTrace("info", "已寫入 systemLogs started。");
       const nextData = await loadCloudFile(file.ownerUid, file.id);
+      pushFileOpenTrace(
+        "success",
+        `已從雲端讀到檔案內容，名冊 ${nextData.rosterEntries.length} 人，測驗紀錄 ${nextData.records.length} 筆。`,
+      );
       skipNextCloudDirtyRef.current = true;
       setData(nextData);
+      pushFileOpenTrace("info", "已更新目前畫面資料。");
       setCurrentCloudFileId(file.id);
       setCurrentCloudFileOwnerUid(file.ownerUid);
       setExpandedCloudFileId(file.id);
       setIsCloudDirty(false);
-      setShareEditorUids(await getCloudFileEditorUids(file.ownerUid, file.id));
+      pushFileOpenTrace("info", `準備切換目前檔案 ID=${file.id} owner=${file.ownerUid}。`);
+      const nextShareEditorUids = await getCloudFileEditorUids(file.ownerUid, file.id);
+      setShareEditorUids(nextShareEditorUids);
+      pushFileOpenTrace(
+        "success",
+        `已讀取共同編輯名單，共 ${nextShareEditorUids.length} 位。`,
+      );
       setSelectedId(nextData.records[0]?.id ?? "");
       setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
       setRosterDraft(
@@ -3162,6 +3245,7 @@ export default function App({ experimentalMode = false }: AppProps) {
           : [makeEmptyRosterEntry()],
       );
       setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+      pushFileOpenTrace("success", "已更新目前選取學生、草稿與名冊狀態。");
       await writeAppSystemLog({
         operationId,
         actionType: "file_opened",
@@ -3171,10 +3255,12 @@ export default function App({ experimentalMode = false }: AppProps) {
         fileName: file.fileName,
         message: "已開啟雲端檔案。",
       });
+      pushFileOpenTrace("success", "已寫入 systemLogs completed，檔案切換完成。");
       setMessage(`已切換到檔案：${file.fileName}`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "開啟雲端檔案失敗。";
+      pushFileOpenTrace("error", `切換失敗：${nextMessage}`);
       await writeAppSystemLog({
         actionType: "file_opened",
         phase: "failed",
@@ -4554,6 +4640,23 @@ export default function App({ experimentalMode = false }: AppProps) {
                               <>
                                 <div className="file-detail-grid">
                                   <label>
+                                    <strong>學年度</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateAcademicTermPart(
+                                          "academicYear",
+                                          event.target.value,
+                                        )}
+                                      value={parseAcademicTermParts(data.academicTerm).academicYear}
+                                    >
+                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                                        <option key={year} value={year}>
+                                          民國 {year} 年
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
                                     <strong>班級名稱</strong>
                                     <input
                                       onChange={(event) => updateRosterName(event.target.value)}
@@ -4571,23 +4674,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                                       {GRADE_OPTIONS.map((grade) => (
                                         <option key={grade} value={grade}>
                                           {grade}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>學年度</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateAcademicTermPart(
-                                          "academicYear",
-                                          event.target.value,
-                                        )}
-                                      value={parseAcademicTermParts(data.academicTerm).academicYear}
-                                    >
-                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                                        <option key={year} value={year}>
-                                          民國 {year} 年
                                         </option>
                                       ))}
                                     </select>
@@ -4764,6 +4850,26 @@ export default function App({ experimentalMode = false }: AppProps) {
                               <>
                                 <div className="file-detail-grid">
                                   <label>
+                                    <strong>學年度</strong>
+                                    <select
+                                      onChange={(event) =>
+                                        updateCloudFileDraftTermPart(
+                                          file.id,
+                                          "academicYear",
+                                          event.target.value,
+                                        )}
+                                      value={parseAcademicTermParts(
+                                        cloudFileDrafts[file.id]?.academicTerm ?? file.academicTerm,
+                                      ).academicYear}
+                                    >
+                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                                        <option key={year} value={year}>
+                                          民國 {year} 年
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
                                     <strong>班級名稱</strong>
                                     <input
                                       onChange={(event) =>
@@ -4791,26 +4897,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                                       {GRADE_OPTIONS.map((grade) => (
                                         <option key={grade} value={grade}>
                                           {grade}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>學年度</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateCloudFileDraftTermPart(
-                                          file.id,
-                                          "academicYear",
-                                          event.target.value,
-                                        )}
-                                      value={parseAcademicTermParts(
-                                        cloudFileDrafts[file.id]?.academicTerm ?? file.academicTerm,
-                                      ).academicYear}
-                                    >
-                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                                        <option key={year} value={year}>
-                                          民國 {year} 年
                                         </option>
                                       ))}
                                     </select>
@@ -4954,6 +5040,26 @@ export default function App({ experimentalMode = false }: AppProps) {
                                     最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
                                   </span>
                                 </div>
+                                {fileOpenTraceEntries.length > 0 ? (
+                                  <div className="friend-alert-card file-open-trace-card">
+                                    <div className="friend-alert-card-head">
+                                      <strong>切換檔案除錯資訊</strong>
+                                      <span>最近 {fileOpenTraceEntries.length} 筆</span>
+                                    </div>
+                                    <div className="friend-alert-list">
+                                      {fileOpenTraceEntries.map((entry, index) => (
+                                        <div className="friend-alert-item" key={`${entry.timestamp}-${index}`}>
+                                          <div className="friend-alert-copy">
+                                            <strong>
+                                              [{new Date(entry.timestamp).toLocaleTimeString("zh-TW")}]
+                                            </strong>
+                                            <small>{entry.detail}</small>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
                                 <div className="file-accordion-actions">
                                   <button
                                     className="primary-button"
