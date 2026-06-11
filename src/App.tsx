@@ -1448,10 +1448,18 @@ export default function App({ experimentalMode = false }: AppProps) {
   const currentDisplayName =
     currentProfile?.displayNickname?.trim() || currentUsername;
 
+  function getFriendDisplayName(friend: FriendRecord) {
+    return (
+      friend.customNickname?.trim() ||
+      friend.profileNickname?.trim() ||
+      friend.username
+    );
+  }
+
   function getIncomingRequestDisplayName(request: FriendRequestRecord) {
     const matchedFriend = friends.find((friend) => friend.friendUid === request.fromUid);
-    if (matchedFriend?.displayName?.trim()) {
-      return matchedFriend.displayName.trim();
+    if (matchedFriend) {
+      return getFriendDisplayName(matchedFriend);
     }
     return request.fromDisplayName || request.fromUsername;
   }
@@ -5070,7 +5078,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                         return (
                           <div className="friend-row" key={friend.friendUid}>
                             <div className="friend-row-summary">
-                              <strong>{friend.displayName}</strong>
+                              <strong>{getFriendDisplayName(friend)}</strong>
                               <button
                                 className="secondary-button"
                                 onClick={() => toggleFriendDetails(friend.friendUid)}
