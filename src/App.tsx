@@ -3391,6 +3391,13 @@ export default function App({ experimentalMode = false }: AppProps) {
       return;
     }
 
+    const doubleConfirmed = window.confirm(
+      `請再次確認：要把「${file.fileName}」從檔案清單中封存移除嗎？`,
+    );
+    if (!doubleConfirmed) {
+      return;
+    }
+
     try {
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
