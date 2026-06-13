@@ -3,6 +3,7 @@ export type DebugSettings = {
   sheetScrollRightPadding: number;
   summaryFrozenColumnWidth: number;
   showSheetDebug: boolean;
+  showFileOpenTrace: boolean;
 };
 
 const DEBUG_SETTINGS_KEY = "fitness-test-tool.debug-settings.v1";
@@ -12,6 +13,7 @@ export const defaultDebugSettings: DebugSettings = {
   sheetScrollRightPadding: 0,
   summaryFrozenColumnWidth: 124,
   showSheetDebug: false,
+  showFileOpenTrace: false,
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -48,6 +50,7 @@ export function normalizeDebugSettings(value: unknown): DebugSettings {
       220,
     ),
     showSheetDebug: Boolean(candidate.showSheetDebug),
+    showFileOpenTrace: Boolean(candidate.showFileOpenTrace),
   };
 }
 

@@ -5047,7 +5047,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                                     最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
                                   </span>
                                 </div>
-                                {fileOpenTraceEntries.length > 0 ? (
+                                {debugSettings.showFileOpenTrace && fileOpenTraceEntries.length > 0 ? (
                                   <div className="friend-alert-card file-open-trace-card">
                                     <div className="friend-alert-card-head">
                                       <strong>切換檔案除錯資訊</strong>

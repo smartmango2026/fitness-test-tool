@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { useEffect } from "react";
 import {
+  loadDebugSettings,
+  resetDebugSettings,
+  saveDebugSettings,
+  type DebugSettings,
+} from "./debug-settings";
+import {
   ensureAbilityRulesConfig,
   resetAbilityRulesConfigInCloud,
   saveAbilityRulesConfigToCloud,
@@ -58,6 +64,9 @@ export default function DebugPage() {
   );
   const [selectedMetricKey, setSelectedMetricKey] = useState<AbilityMetricKey>("item1");
   const [isLoading, setIsLoading] = useState(true);
+  const [localDebugSettings, setLocalDebugSettings] = useState<DebugSettings>(() =>
+    loadDebugSettings(),
+  );
 
   const selectedProfile = useMemo(
     () =>
@@ -70,6 +79,10 @@ export default function DebugPage() {
   const selectedRule = selectedProfile?.rules[selectedMetricKey] ?? null;
 
   useEffect(() => subscribeToAuthState(setCurrentUser), []);
+
+  useEffect(() => {
+    setLocalDebugSettings(loadDebugSettings());
+  }, []);
 
   useEffect(() => {
     if (!currentUser) {
@@ -327,6 +340,27 @@ export default function DebugPage() {
       });
   }
 
+  function updateLocalDebugSetting<K extends keyof DebugSettings>(
+    key: K,
+    value: DebugSettings[K],
+  ) {
+    setLocalDebugSettings((current) => {
+      const next = {
+        ...current,
+        [key]: value,
+      };
+      saveDebugSettings(next);
+      return next;
+    });
+    setMessage("本機除錯顯示設定已更新。");
+  }
+
+  function resetLocalDebugSettings() {
+    resetDebugSettings();
+    setLocalDebugSettings(loadDebugSettings());
+    setMessage("本機除錯顯示設定已恢復預設。");
+  }
+
   return (
     <div className="debug-shell">
       <header className="debug-hero">
@@ -372,6 +406,31 @@ export default function DebugPage() {
                 value={draft.lowAbilityThreshold}
               />
             </label>
+            <label>
+              本機除錯顯示
+              <div className="file-share-current-list">
+                <label className="file-share-current-item">
+                  <span>顯示表格除錯資訊</span>
+                  <input
+                    checked={localDebugSettings.showSheetDebug}
+                    onChange={(event) =>
+                      updateLocalDebugSetting("showSheetDebug", event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                </label>
+                <label className="file-share-current-item">
+                  <span>顯示切換檔案除錯資訊</span>
+                  <input
+                    checked={localDebugSettings.showFileOpenTrace}
+                    onChange={(event) =>
+                      updateLocalDebugSetting("showFileOpenTrace", event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                </label>
+              </div>
+            </label>
           </div>
 
           <div className="button-row">
@@ -380,6 +439,13 @@ export default function DebugPage() {
             </button>
             <button className="secondary-button" onClick={restoreDefaults} type="button">
               恢復預設
+            </button>
+            <button
+              className="secondary-button"
+              onClick={resetLocalDebugSettings}
+              type="button"
+            >
+              重設本機除錯設定
             </button>
           </div>
 
