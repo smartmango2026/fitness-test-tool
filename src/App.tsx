@@ -4712,7 +4712,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                                 key={`${file.ownerUid}:${file.id}`}
                                 value={`${file.ownerUid}:${file.id}`}
                               >
-                                {file.academicTerm}／{file.rosterName}
+                                {file.accessRole === "owner" ? "【我的】" : "【共享】"} {file.academicTerm}／{file.rosterName}
                               </option>
                             ))}
                           </select>
