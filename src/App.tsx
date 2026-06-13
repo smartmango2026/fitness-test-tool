@@ -1624,7 +1624,9 @@ export default function App({ experimentalMode = false }: AppProps) {
         </div>
         <button
           className="secondary-button"
-          onClick={() => setActiveTab("files")}
+          onClick={() => {
+            void handleTabChange("files");
+          }}
           type="button"
         >
           切換檔案
@@ -2026,8 +2028,13 @@ export default function App({ experimentalMode = false }: AppProps) {
     ]);
   }
 
-  function applyRosterSize(): void {
-    const nextCount = Math.max(1, Math.floor(Number(rosterSizeInput) || 0));
+  function applyRosterSize(nextValue: string = rosterSizeInput): void {
+    if (!nextValue.trim()) {
+      setRosterSizeInput(String(Math.max(rosterDraft.length, 1)));
+      return;
+    }
+
+    const nextCount = Math.max(1, Math.floor(Number(nextValue) || 0));
     const currentCount = rosterDraft.length;
 
     if (nextCount === currentCount) {
@@ -2036,13 +2043,15 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     if (nextCount > currentCount) {
-      setRosterDraft((current) => [
+      const appendedRows = Array.from({ length: nextCount - currentCount }, () => ({
+        ...makeEmptyRosterEntry(),
+        studentGradeLabel: resolveStudentGradeLabel(data.gradeLabel, ""),
+      }));
+      setRosterDraft((current) => [...current, ...appendedRows]);
+      setData((current) => ({
         ...current,
-        ...Array.from({ length: nextCount - currentCount }, () => ({
-          ...makeEmptyRosterEntry(),
-          studentGradeLabel: resolveStudentGradeLabel(data.gradeLabel, ""),
-        })),
-      ]);
+        rosterEntries: [...current.rosterEntries, ...appendedRows],
+      }));
       setRosterSizeInput(String(nextCount));
       return;
     }
@@ -2064,6 +2073,10 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     setRosterDraft((current) => current.slice(0, nextCount));
+    setData((current) => ({
+      ...current,
+      rosterEntries: current.rosterEntries.slice(0, nextCount),
+    }));
     setRosterActiveCell((current) => {
       if (!current) {
         return null;
@@ -2917,7 +2930,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   }, [inviteIdFromUrl, isFriendInvitePage]);
 
   function openAccountPanel(): void {
-    setActiveTab("account");
+    void handleTabChange("account");
     setShowAccountMenu(false);
   }
 
@@ -3159,10 +3172,10 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
   }
 
-  async function handleSaveCurrentCloudFile(): Promise<void> {
+  async function handleSaveCurrentCloudFile(): Promise<boolean> {
     if (!currentUser || !currentCloudFileId || !currentCloudFileOwnerUid) {
       setMessage("請先開啟一份雲端檔案，再儲存。");
-      return;
+      return false;
     }
 
     try {
@@ -3198,6 +3211,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       });
       setIsCloudDirty(false);
       setMessage("目前檔案已儲存到雲端。");
+      return true;
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "儲存雲端檔案失敗。";
@@ -3212,7 +3226,71 @@ export default function App({ experimentalMode = false }: AppProps) {
         message: nextMessage,
       });
       setMessage(`儲存雲端檔案失敗：${nextMessage}`);
+      return false;
     }
+  }
+
+  async function restoreCurrentCloudFileFromServer(): Promise<boolean> {
+    if (!currentCloudFileId || !currentCloudFileOwnerUid) {
+      return false;
+    }
+
+    try {
+      const nextData = await loadCloudFile(currentCloudFileOwnerUid, currentCloudFileId);
+      skipNextCloudDirtyRef.current = true;
+      setData(nextData);
+      setIsCloudDirty(false);
+      setShareEditorUids(await getCloudFileEditorUids(currentCloudFileOwnerUid, currentCloudFileId));
+      setSelectedId(nextData.records[0]?.id ?? "");
+      setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
+      setRosterDraft(
+        nextData.rosterEntries.length ? nextData.rosterEntries : [makeEmptyRosterEntry()],
+      );
+      setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+      setMessage("已放棄未儲存變更，重新載入雲端檔案。");
+      return true;
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "無法重新載入目前檔案。";
+      setMessage(`放棄變更失敗：${nextMessage}`);
+      return false;
+    }
+  }
+
+  async function handleTabChange(nextTab: TabKey): Promise<void> {
+    if (nextTab === activeTab) {
+      return;
+    }
+
+    if (activeTab === "files" && currentCloudFileId && isCloudDirty) {
+      const shouldSave = window.confirm(
+        "目前檔案有未儲存變更。按「確定」會先儲存，再切換頁面。",
+      );
+
+      if (shouldSave) {
+        const saved = await handleSaveCurrentCloudFile();
+        if (!saved) {
+          return;
+        }
+        setActiveTab(nextTab);
+        return;
+      }
+
+      const shouldDiscard = window.confirm(
+        "要放棄目前的未儲存變更並切換頁面嗎？",
+      );
+
+      if (!shouldDiscard) {
+        return;
+      }
+
+      const restored = await restoreCurrentCloudFileFromServer();
+      if (!restored) {
+        return;
+      }
+    }
+
+    setActiveTab(nextTab);
   }
 
   async function handleOpenCloudFile(file: CloudFileSummary): Promise<void> {
@@ -3636,7 +3714,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function openFileWorkspace(nextTab: Exclude<TabKey, "files" | "account" | "editor">): void {
-    setActiveTab(nextTab);
+    void handleTabChange(nextTab);
   }
 
   function formatInviteExpiry(dateString: string | null): string {
@@ -4344,7 +4422,9 @@ export default function App({ experimentalMode = false }: AppProps) {
               <button
                 className={tab.key === activeTab ? "tab is-active" : "tab"}
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => {
+                  void handleTabChange(tab.key);
+                }}
                 type="button"
               >
                 {tab.label}
@@ -4737,17 +4817,16 @@ export default function App({ experimentalMode = false }: AppProps) {
                             <div className="file-size-row">
                               <input
                                 min={1}
+                                onBlur={(event) => applyRosterSize(event.target.value)}
                                 onChange={(event) => setRosterSizeInput(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    applyRosterSize((event.target as HTMLInputElement).value);
+                                  }
+                                }}
                                 type="number"
                                 value={rosterSizeInput}
                               />
-                              <button
-                                className="secondary-button"
-                                onClick={applyRosterSize}
-                                type="button"
-                              >
-                                套用
-                              </button>
                             </div>
                           </label>
                           <label>
