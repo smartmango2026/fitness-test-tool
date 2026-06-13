@@ -1612,7 +1612,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       currentUser.uid === currentCloudFileOwnerUid,
   );
   const currentWorkspaceFileLabel = currentCloudFileSummary
-    ? `${currentCloudFileSummary.academicTerm}／${currentCloudFileSummary.rosterName}`
+    ? `${currentCloudFileSummary.accessRole === "owner" ? "" : "【共享】"}${currentCloudFileSummary.academicTerm}／${currentCloudFileSummary.rosterName}`
     : "尚未開啟檔案";
   const pendingSwitchFile = useMemo(
     () =>
