@@ -424,6 +424,50 @@ button {
   margin-bottom: 16px;
 }
 
+.file-current-shell {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.file-current-card {
+  margin-bottom: 0;
+}
+
+.file-switcher-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid #dbe4ee;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.file-switcher-field {
+  display: grid;
+  gap: 8px;
+}
+
+.file-switcher-field strong {
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.file-switcher-field select {
+  width: 100%;
+  border: 1px solid #d6dbe5;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.file-switcher-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .account-card h3 {
   margin: 0;
   font-size: 1.18rem;
@@ -2271,6 +2315,14 @@ tbody tr.is-selected {
   .account-card {
     padding: 18px;
     border-radius: 20px;
+  }
+
+  .file-switcher-actions {
+    flex-direction: column;
+  }
+
+  .file-switcher-actions button {
+    width: 100%;
   }
 
   .account-card h3 {

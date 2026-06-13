@@ -775,7 +775,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   );
   const [cloudFiles, setCloudFiles] = useState<CloudFileSummary[]>([]);
   const [inviteIdFromUrl, setInviteIdFromUrl] = useState(() => readFriendInviteIdFromUrl());
-  const [fileSortKey, setFileSortKey] = useState<FileSortKey>("created-desc");
+  const [fileSortKey] = useState<FileSortKey>("created-desc");
   const [abilityRulesConfig, setAbilityRulesConfig] = useState<AbilityRulesConfig>(
     defaultAbilityRulesConfig,
   );
@@ -783,6 +783,8 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [currentCloudFileOwnerUid, setCurrentCloudFileOwnerUid] = useState<string | null>(null);
   const [isCloudDirty, setIsCloudDirty] = useState(false);
   const [expandedCloudFileId, setExpandedCloudFileId] = useState<string | null>(null);
+  const [showFileSwitcher, setShowFileSwitcher] = useState(false);
+  const [pendingSwitchFileKey, setPendingSwitchFileKey] = useState("");
   const [shareEditorUids, setShareEditorUids] = useState<string[]>([]);
   const [selectedShareFriendUid, setSelectedShareFriendUid] = useState("");
   const [tabShowcaseSelections, setTabShowcaseSelections] = useState<Record<string, string>>(
@@ -1279,7 +1281,8 @@ export default function App({ experimentalMode = false }: AppProps) {
   useEffect(() => {
     const shareTarget = cloudFiles.find(
       (file) =>
-        file.id === expandedCloudFileId &&
+        file.id === currentCloudFileId &&
+        file.ownerUid === currentCloudFileOwnerUid &&
         file.ownerUid === currentUser?.uid &&
         file.accessRole === "owner",
     );
@@ -1294,10 +1297,8 @@ export default function App({ experimentalMode = false }: AppProps) {
       return;
     }
 
-    void getCloudFileEditorUids(shareTarget.ownerUid, shareTarget.id).then(
-      setShareEditorUids,
-    );
-  }, [cloudFiles, currentUser, expandedCloudFileId]);
+    void getCloudFileEditorUids(shareTarget.ownerUid, shareTarget.id).then(setShareEditorUids);
+  }, [cloudFiles, currentCloudFileId, currentCloudFileOwnerUid, currentUser]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1313,6 +1314,21 @@ export default function App({ experimentalMode = false }: AppProps) {
       ownerUid: currentCloudFileOwnerUid,
     });
   }, [currentCloudFileId, currentCloudFileOwnerUid, currentUser]);
+
+  useEffect(() => {
+    if (!showFileSwitcher) {
+      return;
+    }
+
+    if (currentCloudFileId && currentCloudFileOwnerUid) {
+      setPendingSwitchFileKey(`${currentCloudFileOwnerUid}:${currentCloudFileId}`);
+      return;
+    }
+
+    if (sortedCloudFiles.length > 0) {
+      setPendingSwitchFileKey(`${sortedCloudFiles[0].ownerUid}:${sortedCloudFiles[0].id}`);
+    }
+  }, [currentCloudFileId, currentCloudFileOwnerUid, showFileSwitcher, sortedCloudFiles]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -1538,15 +1554,17 @@ export default function App({ experimentalMode = false }: AppProps) {
       ) ?? null,
     [cloudFiles, currentCloudFileId, currentCloudFileOwnerUid],
   );
+  const currentCloudFileKey = currentCloudFileSummary
+    ? `${currentCloudFileSummary.ownerUid}:${currentCloudFileSummary.id}`
+    : "";
   const shareTargetFileSummary = useMemo(
     () =>
-      cloudFiles.find(
-        (file) =>
-          file.id === expandedCloudFileId &&
-          file.ownerUid === currentUser?.uid &&
-          file.accessRole === "owner",
-      ) ?? null,
-    [cloudFiles, currentUser, expandedCloudFileId],
+      currentCloudFileSummary &&
+      currentCloudFileSummary.ownerUid === currentUser?.uid &&
+      currentCloudFileSummary.accessRole === "owner"
+        ? currentCloudFileSummary
+        : null,
+    [currentCloudFileSummary, currentUser],
   );
   const effectiveSharedEditorUids = useMemo(() => {
     const summaryEditorUids = shareTargetFileSummary?.sharedEditorUids ?? [];
@@ -1563,6 +1581,13 @@ export default function App({ experimentalMode = false }: AppProps) {
   const currentWorkspaceFileLabel = currentCloudFileSummary
     ? `${currentCloudFileSummary.academicTerm}／${currentCloudFileSummary.rosterName}`
     : "尚未開啟檔案";
+  const pendingSwitchFile = useMemo(
+    () =>
+      sortedCloudFiles.find(
+        (file) => `${file.ownerUid}:${file.id}` === pendingSwitchFileKey,
+      ) ?? null,
+    [pendingSwitchFileKey, sortedCloudFiles],
+  );
   const shareableFriends = useMemo(
     () => friends.filter((friend) => friend.friendUid !== currentUser?.uid),
     [friends, currentUser],
@@ -1607,7 +1632,6 @@ export default function App({ experimentalMode = false }: AppProps) {
       </div>
     );
   }
-
   function renderIncomingFriendAlertCard() {
     if (!currentUser || incomingFriendRequests.length === 0) {
       return null;
@@ -3615,10 +3639,6 @@ export default function App({ experimentalMode = false }: AppProps) {
     setActiveTab(nextTab);
   }
 
-  function toggleCloudFilePanel(fileId: string): void {
-    setExpandedCloudFileId(fileId);
-  }
-
   function formatInviteExpiry(dateString: string | null): string {
     if (!dateString) {
       return "短效邀請";
@@ -4570,545 +4590,312 @@ export default function App({ experimentalMode = false }: AppProps) {
                 </div>
               </div>
               {renderIncomingFriendAlertCard()}
-
-              <div className="file-list-shell">
-                <div className="file-list-head">
-                  {currentUser ? (
-                    <label className="file-sort-field">
-                      <span>排序方式</span>
-                      <select
-                        onChange={(event) => setFileSortKey(event.target.value as FileSortKey)}
-                        value={fileSortKey}
-                      >
-                        <option value="created-desc">建立時間（新到舊）</option>
-                        <option value="updated-desc">編輯時間（新到舊）</option>
-                        <option value="name-asc">檔案名稱</option>
-                        <option value="roster-asc">班級名稱</option>
-                        <option value="grade-asc">年級</option>
-                      </select>
-                    </label>
-                  ) : null}
-                </div>
-                {!currentUser ? (
+              {!currentUser ? (
+                <div className="file-list-shell">
                   <div className="friend-empty-state">
                     <strong>尚未登入</strong>
                     <p>請先註冊並登入，之後才能在自己的帳號下建立雲端檔案。</p>
                   </div>
-                ) : cloudFiles.length === 0 ? (
+                </div>
+              ) : cloudFiles.length === 0 ? (
+                <div className="file-list-shell">
                   <div className="file-list-head">
                     <p>目前還沒有檔案。</p>
                   </div>
-                ) : (
-                  <div className="file-table">
-                    {sortedCloudFiles.map((file) => (
-                      <div className="file-accordion-item" key={file.id}>
-                        <div
-                          className={
-                            file.id === currentCloudFileId &&
-                            file.ownerUid === currentCloudFileOwnerUid
-                              ? expandedCloudFileId === file.id
-                                ? "file-table-row file-table-row-body is-active is-selected"
-                                : "file-table-row file-table-row-body is-active"
-                              : expandedCloudFileId === file.id
-                                ? "file-table-row file-table-row-body is-selected"
-                                : "file-table-row file-table-row-body"
-                          }
-                          onClick={() => toggleCloudFilePanel(file.id)}
-                        >
-                          <span className="file-summary-line">
-                            <span className="file-summary-text">
-                              <span>{file.academicTerm}</span>
-                              <span className="file-summary-divider" aria-hidden="true">
-                                ／
-                              </span>
-                              <span>{file.rosterName}</span>
-                            </span>
-                          </span>
-                          {file.id === currentCloudFileId &&
-                          file.ownerUid === currentCloudFileOwnerUid ? (
-                            <span className="file-summary-status">目前使用中</span>
-                          ) : (
-                            <button
-                              className="secondary-button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleOpenCloudFile(file);
-                              }}
-                              type="button"
-                            >
-                              切換到這個檔案
-                            </button>
-                          )}
+                </div>
+              ) : (
+                <>
+                  <div className="file-current-shell">
+                    <div className="workspace-file-card file-current-card">
+                      <div>
+                        <strong>目前使用檔案</strong>
+                        <span>{currentWorkspaceFileLabel}</span>
+                      </div>
+                      <button
+                        className="secondary-button"
+                        onClick={() => setShowFileSwitcher((current) => !current)}
+                        type="button"
+                      >
+                        {showFileSwitcher ? "收合切換器" : "切換檔案"}
+                      </button>
+                    </div>
+                    {showFileSwitcher ? (
+                      <div className="file-switcher-card">
+                        <label className="file-switcher-field">
+                          <strong>選擇檔案</strong>
+                          <select
+                            onChange={(event) => setPendingSwitchFileKey(event.target.value)}
+                            value={pendingSwitchFileKey}
+                          >
+                            {sortedCloudFiles.map((file) => (
+                              <option
+                                key={`${file.ownerUid}:${file.id}`}
+                                value={`${file.ownerUid}:${file.id}`}
+                              >
+                                {file.academicTerm}／{file.rosterName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="file-switcher-actions">
+                          <button
+                            className="secondary-button"
+                            onClick={() => setShowFileSwitcher(false)}
+                            type="button"
+                          >
+                            取消
+                          </button>
+                          <button
+                            className="primary-button"
+                            disabled={
+                              !pendingSwitchFile ||
+                              `${pendingSwitchFile.ownerUid}:${pendingSwitchFile.id}` ===
+                                currentCloudFileKey
+                            }
+                            onClick={() => {
+                              if (!pendingSwitchFile) {
+                                return;
+                              }
+                              setShowFileSwitcher(false);
+                              void handleOpenCloudFile(pendingSwitchFile);
+                            }}
+                            type="button"
+                          >
+                            確認切換
+                          </button>
                         </div>
-                        {expandedCloudFileId === file.id ? (
-                          <div className="file-accordion-panel">
-                            {file.id === currentCloudFileId &&
-                            file.ownerUid === currentCloudFileOwnerUid ? (
-                              <>
-                                <div className="file-detail-grid">
-                                  <label>
-                                    <strong>學年度</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateAcademicTermPart(
-                                          "academicYear",
-                                          event.target.value,
-                                        )}
-                                      value={parseAcademicTermParts(data.academicTerm).academicYear}
-                                    >
-                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                                        <option key={year} value={year}>
-                                          民國 {year} 年
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>班級名稱</strong>
-                                    <input
-                                      onChange={(event) => updateRosterName(event.target.value)}
-                                      type="text"
-                                      value={data.rosterName}
-                                    />
-                                  </label>
-                                  <label>
-                                    <strong>年級</strong>
-                                    <select
-                                      onChange={(event) => updateGradeLabel(event.target.value)}
-                                      value={data.gradeLabel}
-                                    >
-                                      <option value="">未設定</option>
-                                      {GRADE_OPTIONS.map((grade) => (
-                                        <option key={grade} value={grade}>
-                                          {grade}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>學期</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateAcademicTermPart(
-                                          "semester",
-                                          event.target.value,
-                                        )}
-                                      value={parseAcademicTermParts(data.academicTerm).semester}
-                                    >
-                                      {TERM_OPTIONS.map((term) => (
-                                        <option key={term} value={term}>
-                                          {term}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>測驗日期</strong>
-                                    <input
-                                      onChange={(event) =>
-                                        updateSharedTestDate(event.target.value)
-                                      }
-                                      type="date"
-                                      value={data.testDate}
-                                    />
-                                  </label>
-                                  <label className="file-size-field">
-                                    <strong>班級人數</strong>
-                                    <div className="file-size-row">
-                                      <input
-                                        min={1}
-                                        onChange={(event) => setRosterSizeInput(event.target.value)}
-                                        type="number"
-                                        value={rosterSizeInput}
-                                      />
-                                      <button
-                                        className="secondary-button"
-                                        onClick={applyRosterSize}
-                                        type="button"
-                                      >
-                                        套用
-                                      </button>
-                                    </div>
-                                  </label>
-                                  <label>
-                                    <strong>檔案擁有者</strong>
-                                    <div className="static-field">
-                                      {file.ownerDisplayName || file.ownerUsername}
-                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
-                                    </div>
-                                  </label>
-                                  <label>
-                                    <strong>你的權限</strong>
-                                    <div className="static-field">
-                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
-                                    </div>
-                                  </label>
-                                </div>
-                                {file.accessRole === "owner" ? (
-                                  <div className="file-share-section">
-                                    <div className="friend-section-header">
-                                      <h4>共同編輯好友</h4>
-                                    </div>
-                                    {shareableFriends.length === 0 ? (
-                                      <div className="friend-empty-state">
-                                        <strong>目前還沒有可分享的好友</strong>
-                                        <p>先到帳號管理加入好友，之後就能把檔案分享給對方共同編輯。</p>
-                                      </div>
-                                    ) : (
-                                      <div className="file-share-controls">
-                                        {sharedEditorFriends.length > 0 ? (
-                                          <div className="file-share-current-list">
-                                            {sharedEditorFriends.map((friend) => (
-                                              <div
-                                                className="file-share-current-item"
-                                                key={friend.friendUid}
-                                              >
-                                                <span>{friend.displayName}</span>
-                                                <button
-                                                  className="secondary-button"
-                                                  onClick={() => {
-                                                    void handleRemoveFileEditor(
-                                                      file,
-                                                      friend.friendUid,
-                                                    );
-                                                  }}
-                                                  type="button"
-                                                >
-                                                  取消分享
-                                                </button>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="file-share-hint">
-                                            目前還沒有共同編輯好友。
-                                          </p>
-                                        )}
-                                        <div className="file-share-row">
-                                          <select
-                                            onChange={(event) =>
-                                              setSelectedShareFriendUid(event.target.value)
-                                            }
-                                            value={selectedShareFriendUid}
-                                          >
-                                            <option value="">選擇好友暱稱</option>
-                                            {availableShareFriends.map((friend) => (
-                                              <option
-                                                key={friend.friendUid}
-                                                value={friend.friendUid}
-                                              >
-                                                {friend.displayName}
-                                              </option>
-                                            ))}
-                                          </select>
-                                          <button
-                                            className="secondary-button"
-                                            disabled={!selectedShareFriendUid}
-                                            onClick={() => {
-                                              void handleShareFileWithFriend(file);
-                                            }}
-                                            type="button"
-                                          >
-                                            分享
-                                          </button>
-                                        </div>
-                                        {availableShareFriends.length === 0 ? (
-                                          <p className="file-share-hint">
-                                            目前沒有其他好友可再分享。
-                                          </p>
-                                        ) : null}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : null}
-                                <div className="file-status-row">
-                                  <span className="status-chip is-active">
-                                    {isCloudDirty ? "目前使用中・尚未儲存" : "目前使用中"}
-                                  </span>
-                                  <span>
-                                    最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
-                                  </span>
-                                </div>
-                                <div className="file-accordion-actions">
-                                  <button
-                                    className="primary-button"
-                                    disabled={!isCloudDirty}
-                                    onClick={() => {
-                                      void handleSaveCurrentCloudFile();
-                                    }}
-                                    type="button"
-                                  >
-                                    儲存目前檔案
-                                  </button>
-                                  {file.accessRole === "owner" ? (
-                                    <button
-                                      className="danger-button"
-                                      onClick={() => {
-                                        void handleArchiveCloudFile(file);
-                                      }}
-                                      type="button"
-                                    >
-                                      刪除檔案
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="file-list-shell">
+                    {currentCloudFileSummary ? (
+                      <>
+                        <div className="file-detail-grid">
+                          <label>
+                            <strong>學年度</strong>
+                            <select
+                              onChange={(event) =>
+                                updateAcademicTermPart("academicYear", event.target.value)
+                              }
+                              value={parseAcademicTermParts(data.academicTerm).academicYear}
+                            >
+                              {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                                <option key={year} value={year}>
+                                  民國 {year} 年
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>班級名稱</strong>
+                            <input
+                              onChange={(event) => updateRosterName(event.target.value)}
+                              type="text"
+                              value={data.rosterName}
+                            />
+                          </label>
+                          <label>
+                            <strong>學期</strong>
+                            <select
+                              onChange={(event) =>
+                                updateAcademicTermPart("semester", event.target.value)
+                              }
+                              value={parseAcademicTermParts(data.academicTerm).semester}
+                            >
+                              {TERM_OPTIONS.map((term) => (
+                                <option key={term} value={term}>
+                                  {term}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>年級</strong>
+                            <select
+                              onChange={(event) => updateGradeLabel(event.target.value)}
+                              value={data.gradeLabel}
+                            >
+                              <option value="">未設定</option>
+                              {GRADE_OPTIONS.map((grade) => (
+                                <option key={grade} value={grade}>
+                                  {grade}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>測驗日期</strong>
+                            <input
+                              onChange={(event) => updateSharedTestDate(event.target.value)}
+                              type="date"
+                              value={data.testDate}
+                            />
+                          </label>
+                          <label className="file-size-field">
+                            <strong>班級人數</strong>
+                            <div className="file-size-row">
+                              <input
+                                min={1}
+                                onChange={(event) => setRosterSizeInput(event.target.value)}
+                                type="number"
+                                value={rosterSizeInput}
+                              />
+                              <button
+                                className="secondary-button"
+                                onClick={applyRosterSize}
+                                type="button"
+                              >
+                                套用
+                              </button>
+                            </div>
+                          </label>
+                          <label>
+                            <strong>檔案擁有者</strong>
+                            <div className="static-field">
+                              {currentCloudFileSummary.ownerDisplayName ||
+                                currentCloudFileSummary.ownerUsername}
+                              {currentCloudFileSummary.ownerUid === currentUser?.uid ? "（你）" : ""}
+                            </div>
+                          </label>
+                          <label>
+                            <strong>你的權限</strong>
+                            <div className="static-field">
+                              {currentCloudFileSummary.accessRole === "owner" ? "擁有者" : "共同編輯"}
+                            </div>
+                          </label>
+                        </div>
+                        {currentCloudFileSummary.accessRole === "owner" ? (
+                          <div className="file-share-section">
+                            <div className="friend-section-header">
+                              <h4>共同編輯好友</h4>
+                            </div>
+                            {shareableFriends.length === 0 ? (
+                              <div className="friend-empty-state">
+                                <strong>目前還沒有可分享的好友</strong>
+                                <p>先到帳號管理加入好友，之後就能把檔案分享給對方共同編輯。</p>
+                              </div>
                             ) : (
-                              <>
-                                <div className="file-detail-grid">
-                                  <label>
-                                    <strong>學年度</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateCloudFileDraftTermPart(
-                                          file.id,
-                                          "academicYear",
-                                          event.target.value,
-                                        )}
-                                      value={parseAcademicTermParts(
-                                        cloudFileDrafts[file.id]?.academicTerm ?? file.academicTerm,
-                                      ).academicYear}
-                                    >
-                                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                                        <option key={year} value={year}>
-                                          民國 {year} 年
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>班級名稱</strong>
-                                    <input
-                                      onChange={(event) =>
-                                        updateCloudFileDraft(
-                                          file.id,
-                                          "rosterName",
-                                          event.target.value,
-                                        )}
-                                      type="text"
-                                      value={cloudFileDrafts[file.id]?.rosterName ?? file.rosterName}
-                                    />
-                                  </label>
-                                  <label>
-                                    <strong>年級</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateCloudFileDraft(
-                                          file.id,
-                                          "gradeLabel",
-                                          event.target.value,
-                                        )}
-                                      value={cloudFileDrafts[file.id]?.gradeLabel ?? file.gradeLabel}
-                                    >
-                                      <option value="">未設定</option>
-                                      {GRADE_OPTIONS.map((grade) => (
-                                        <option key={grade} value={grade}>
-                                          {grade}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>學期</strong>
-                                    <select
-                                      onChange={(event) =>
-                                        updateCloudFileDraftTermPart(
-                                          file.id,
-                                          "semester",
-                                          event.target.value,
-                                        )}
-                                      value={parseAcademicTermParts(
-                                        cloudFileDrafts[file.id]?.academicTerm ?? file.academicTerm,
-                                      ).semester}
-                                    >
-                                      {TERM_OPTIONS.map((term) => (
-                                        <option key={term} value={term}>
-                                          {term}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label>
-                                    <strong>測驗日期</strong>
-                                    <input
-                                      onChange={(event) =>
-                                        updateCloudFileDraft(
-                                          file.id,
-                                          "testDate",
-                                          event.target.value,
-                                        )
-                                      }
-                                      type="date"
-                                      value={cloudFileDrafts[file.id]?.testDate ?? file.testDate}
-                                    />
-                                  </label>
-                                  <label className="file-size-field">
-                                    <strong>班級人數</strong>
-                                    <div className="static-field">
-                                      {file.rosterCount} 人
-                                    </div>
-                                  </label>
-                                  <label>
-                                    <strong>檔案擁有者</strong>
-                                    <div className="static-field">
-                                      {file.ownerDisplayName || file.ownerUsername}
-                                      {file.ownerUid === currentUser?.uid ? "（你）" : ""}
-                                    </div>
-                                  </label>
-                                  <label>
-                                    <strong>你的權限</strong>
-                                    <div className="static-field">
-                                      {file.accessRole === "owner" ? "擁有者" : "共同編輯"}
-                                    </div>
-                                  </label>
-                                </div>
-                                {file.accessRole === "owner" ? (
-                                  <div className="file-share-section">
-                                    <div className="friend-section-header">
-                                      <h4>共同編輯好友</h4>
-                                    </div>
-                                    {shareableFriends.length === 0 ? (
-                                      <div className="friend-empty-state">
-                                        <strong>目前還沒有可分享的好友</strong>
-                                        <p>先到帳號管理加入好友，之後就能把檔案分享給對方共同編輯。</p>
+                              <div className="file-share-controls">
+                                {sharedEditorFriends.length > 0 ? (
+                                  <div className="file-share-current-list">
+                                    {sharedEditorFriends.map((friend) => (
+                                      <div className="file-share-current-item" key={friend.friendUid}>
+                                        <span>{friend.displayName}</span>
+                                        <button
+                                          className="secondary-button"
+                                          onClick={() => {
+                                            void handleRemoveFileEditor(
+                                              currentCloudFileSummary,
+                                              friend.friendUid,
+                                            );
+                                          }}
+                                          type="button"
+                                        >
+                                          取消分享
+                                        </button>
                                       </div>
-                                    ) : (
-                                      <div className="file-share-controls">
-                                        {sharedEditorFriends.length > 0 ? (
-                                          <div className="file-share-current-list">
-                                            {sharedEditorFriends.map((friend) => (
-                                              <div
-                                                className="file-share-current-item"
-                                                key={friend.friendUid}
-                                              >
-                                                <span>{friend.displayName}</span>
-                                                <button
-                                                  className="secondary-button"
-                                                  onClick={() => {
-                                                    void handleRemoveFileEditor(
-                                                      file,
-                                                      friend.friendUid,
-                                                    );
-                                                  }}
-                                                  type="button"
-                                                >
-                                                  取消分享
-                                                </button>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="file-share-hint">
-                                            目前還沒有共同編輯好友。
-                                          </p>
-                                        )}
-                                        <div className="file-share-row">
-                                          <select
-                                            onChange={(event) =>
-                                              setSelectedShareFriendUid(event.target.value)
-                                            }
-                                            value={selectedShareFriendUid}
-                                          >
-                                            <option value="">選擇好友暱稱</option>
-                                            {availableShareFriends.map((friend) => (
-                                              <option
-                                                key={friend.friendUid}
-                                                value={friend.friendUid}
-                                              >
-                                                {friend.displayName}
-                                              </option>
-                                            ))}
-                                          </select>
-                                          <button
-                                            className="secondary-button"
-                                            disabled={!selectedShareFriendUid}
-                                            onClick={() => {
-                                              void handleShareFileWithFriend(file);
-                                            }}
-                                            type="button"
-                                          >
-                                            分享
-                                          </button>
-                                        </div>
-                                        {availableShareFriends.length === 0 ? (
-                                          <p className="file-share-hint">
-                                            目前沒有其他好友可再分享。
-                                          </p>
-                                        ) : null}
-                                      </div>
-                                    )}
+                                    ))}
                                   </div>
-                                ) : null}
-                                <div className="file-status-row">
-                                  <span className="status-chip">
-                                    {file.accessRole === "owner" ? "未使用中" : "由好友分享"}
-                                  </span>
-                                  <span>
-                                    最近更新 {file.updatedAt ? formatActivityDate(file.updatedAt) : "剛建立"}
-                                  </span>
-                                </div>
-                                {debugSettings.showFileOpenTrace && fileOpenTraceEntries.length > 0 ? (
-                                  <div className="friend-alert-card file-open-trace-card">
-                                    <div className="friend-alert-card-head">
-                                      <strong>切換檔案除錯資訊</strong>
-                                      <span>最近 {fileOpenTraceEntries.length} 筆</span>
-                                    </div>
-                                    <div className="friend-alert-list">
-                                      {fileOpenTraceEntries.map((entry, index) => (
-                                        <div className="friend-alert-item" key={`${entry.timestamp}-${index}`}>
-                                          <div className="friend-alert-copy">
-                                            <strong>
-                                              [{new Date(entry.timestamp).toLocaleTimeString("zh-TW")}]
-                                            </strong>
-                                            <small>{entry.detail}</small>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : null}
-                                <div className="file-accordion-actions">
+                                ) : (
+                                  <p className="file-share-hint">目前還沒有共同編輯好友。</p>
+                                )}
+                                <div className="file-share-row">
+                                  <select
+                                    onChange={(event) =>
+                                      setSelectedShareFriendUid(event.target.value)
+                                    }
+                                    value={selectedShareFriendUid}
+                                  >
+                                    <option value="">選擇好友暱稱</option>
+                                    {availableShareFriends.map((friend) => (
+                                      <option key={friend.friendUid} value={friend.friendUid}>
+                                        {friend.displayName}
+                                      </option>
+                                    ))}
+                                  </select>
                                   <button
-                                    className="primary-button"
+                                    className="secondary-button"
+                                    disabled={!selectedShareFriendUid}
                                     onClick={() => {
-                                      void handleOpenCloudFile(file);
+                                      void handleShareFileWithFriend(currentCloudFileSummary);
                                     }}
                                     type="button"
                                   >
-                                    切換到這個檔案
+                                    分享
                                   </button>
-                                  {file.accessRole === "owner" ? (
-                                    <>
-                                      <button
-                                        className="secondary-button"
-                                        onClick={() => {
-                                          void handleSaveCloudFileInfo(file);
-                                        }}
-                                        type="button"
-                                      >
-                                        儲存檔案資訊
-                                      </button>
-                                      <button
-                                        className="danger-button"
-                                        onClick={() => {
-                                          void handleArchiveCloudFile(file);
-                                        }}
-                                        type="button"
-                                      >
-                                        刪除檔案
-                                      </button>
-                                    </>
-                                  ) : null}
                                 </div>
-                              </>
+                                {availableShareFriends.length === 0 ? (
+                                  <p className="file-share-hint">目前沒有其他好友可再分享。</p>
+                                ) : null}
+                              </div>
                             )}
                           </div>
                         ) : null}
+                        <div className="file-status-row">
+                          <span className={isCloudDirty ? "status-chip is-active" : "status-chip"}>
+                            {isCloudDirty ? "目前使用中・尚未儲存" : "目前使用中"}
+                          </span>
+                          <span>
+                            最近更新{" "}
+                            {currentCloudFileSummary.updatedAt
+                              ? formatActivityDate(currentCloudFileSummary.updatedAt)
+                              : "剛建立"}
+                          </span>
+                        </div>
+                        {debugSettings.showFileOpenTrace && fileOpenTraceEntries.length > 0 ? (
+                          <div className="friend-alert-card file-open-trace-card">
+                            <div className="friend-alert-card-head">
+                              <strong>切換檔案除錯資訊</strong>
+                              <span>最近 {fileOpenTraceEntries.length} 筆</span>
+                            </div>
+                            <div className="friend-alert-list">
+                              {fileOpenTraceEntries.map((entry, index) => (
+                                <div className="friend-alert-item" key={`${entry.timestamp}-${index}`}>
+                                  <div className="friend-alert-copy">
+                                    <strong>
+                                      [{new Date(entry.timestamp).toLocaleTimeString("zh-TW")}]
+                                    </strong>
+                                    <small>{entry.detail}</small>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        <div className="file-accordion-actions">
+                          <button
+                            className="primary-button"
+                            disabled={!isCloudDirty}
+                            onClick={() => {
+                              void handleSaveCurrentCloudFile();
+                            }}
+                            type="button"
+                          >
+                            儲存目前檔案
+                          </button>
+                          {currentCloudFileSummary.accessRole === "owner" ? (
+                            <button
+                              className="danger-button"
+                              onClick={() => {
+                                void handleArchiveCloudFile(currentCloudFileSummary);
+                              }}
+                              type="button"
+                            >
+                              刪除檔案
+                            </button>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="friend-empty-state">
+                        <strong>尚未開啟檔案</strong>
+                        <p>請先建立新檔案，或從切換檔案選單中選取一份檔案。</p>
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </section>
           </>
         ) : null}
