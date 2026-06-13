@@ -109,6 +109,15 @@ type FriendInviteTraceEntry = {
   detail: string;
 };
 
+type NewCloudFileDraft = {
+  academicYear: string;
+  semester: string;
+  rosterName: string;
+  gradeLabel: string;
+  testDate: string;
+  rosterCount: string;
+};
+
 type FileOpenTraceEntry = {
   timestamp: string;
   status: "info" | "success" | "error";
@@ -393,6 +402,18 @@ function makeEmptyRosterEntry(): RosterEntry {
     height: "",
     weight: "",
     studentGradeLabel: "大班",
+  };
+}
+
+function makeNewCloudFileDraft(source: AppData): NewCloudFileDraft {
+  const parts = parseAcademicTermParts(source.academicTerm);
+  return {
+    academicYear: parts.academicYear || String(CURRENT_ROC_YEAR),
+    semester: parts.semester || TERM_OPTIONS[1],
+    rosterName: "",
+    gradeLabel: source.gradeLabel || GRADE_OPTIONS[0] || "",
+    testDate: source.testDate || new Date().toISOString().slice(0, 10),
+    rosterCount: "1",
   };
 }
 
@@ -785,6 +806,10 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [expandedCloudFileId, setExpandedCloudFileId] = useState<string | null>(null);
   const [showFileSwitcher, setShowFileSwitcher] = useState(false);
   const [pendingSwitchFileKey, setPendingSwitchFileKey] = useState("");
+  const [showCreateFilePage, setShowCreateFilePage] = useState(false);
+  const [newCloudFileDraft, setNewCloudFileDraft] = useState<NewCloudFileDraft>(() =>
+    makeNewCloudFileDraft(defaultAppData),
+  );
   const [shareEditorUids, setShareEditorUids] = useState<string[]>([]);
   const [selectedShareFriendUid, setSelectedShareFriendUid] = useState("");
   const [tabShowcaseSelections, setTabShowcaseSelections] = useState<Record<string, string>>(
@@ -1329,6 +1354,14 @@ export default function App({ experimentalMode = false }: AppProps) {
       setPendingSwitchFileKey(`${sortedCloudFiles[0].ownerUid}:${sortedCloudFiles[0].id}`);
     }
   }, [currentCloudFileId, currentCloudFileOwnerUid, showFileSwitcher, sortedCloudFiles]);
+
+  useEffect(() => {
+    if (!showCreateFilePage) {
+      return;
+    }
+
+    setNewCloudFileDraft(makeNewCloudFileDraft(data));
+  }, [data, showCreateFilePage]);
 
   useEffect(() => {
     setRosterDraft(data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()]);
@@ -3154,6 +3187,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setExpandedCloudFileId(fileId);
       setIsCloudDirty(false);
       setShareEditorUids([]);
+      setShowCreateFilePage(false);
       setMessage("已在你的帳號下建立新的雲端檔案。");
     } catch (error) {
       const nextMessage =
@@ -3166,6 +3200,111 @@ export default function App({ experimentalMode = false }: AppProps) {
           rosterName: data.rosterName,
           gradeLabel: data.gradeLabel,
           academicTerm: data.academicTerm,
+        },
+      });
+      setMessage(`建立雲端檔案失敗：${nextMessage}`);
+    }
+  }
+
+  function updateNewCloudFileDraft(
+    field: keyof NewCloudFileDraft,
+    value: string,
+  ): void {
+    setNewCloudFileDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function buildAppDataForNewCloudFile(): AppData {
+    const rosterCount = Math.max(1, Math.floor(Number(newCloudFileDraft.rosterCount) || 0));
+    const gradeLabel = newCloudFileDraft.gradeLabel || GRADE_OPTIONS[0] || "";
+    const testDate = newCloudFileDraft.testDate || new Date().toISOString().slice(0, 10);
+    const academicTerm = `民國 ${newCloudFileDraft.academicYear} 年${newCloudFileDraft.semester}`;
+    const studentGradeLabel = resolveStudentGradeLabel(gradeLabel, "");
+    const rosterEntries = Array.from({ length: rosterCount }, () => ({
+      ...makeEmptyRosterEntry(),
+      studentGradeLabel,
+    }));
+
+    return {
+      ...defaultAppData,
+      testDate,
+      academicTerm,
+      rosterName: newCloudFileDraft.rosterName.trim() || "未命名班級",
+      gradeLabel,
+      rosterEntries,
+      records: [],
+    };
+  }
+
+  async function handleCreateCloudFileFromDraft(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先註冊並登入，才能在 Firebase 建立自己的檔案。");
+      return;
+    }
+
+    const nextData = buildAppDataForNewCloudFile();
+    const rosterName = nextData.rosterName.trim();
+    if (!rosterName) {
+      setMessage("請先輸入班級名稱。");
+      return;
+    }
+
+    try {
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_created",
+        phase: "started",
+        message: "開始建立雲端檔案。",
+        payload: {
+          rosterName: nextData.rosterName,
+          gradeLabel: nextData.gradeLabel,
+          academicTerm: nextData.academicTerm,
+        },
+      });
+      const fileId = await createCloudFile({
+        uid: currentUser.uid,
+        username: currentUsername,
+        displayName: currentProfile?.displayNickname ?? null,
+        data: nextData,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "file_created",
+        phase: "completed",
+        ownerUid: currentUser.uid,
+        fileId,
+        fileName: `${nextData.academicTerm} / ${nextData.rosterName || "未命名班級"}`,
+        message: "已建立雲端檔案。",
+      });
+      skipNextCloudDirtyRef.current = true;
+      setData(nextData);
+      setCurrentCloudFileId(fileId);
+      setCurrentCloudFileOwnerUid(currentUser.uid);
+      setExpandedCloudFileId(fileId);
+      setIsCloudDirty(false);
+      setShareEditorUids([]);
+      setSelectedId("");
+      setDraftRecord(makeEmptyRecord(nextData.testDate));
+      setRosterDraft(
+        nextData.rosterEntries.length ? nextData.rosterEntries : [makeEmptyRosterEntry()],
+      );
+      setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+      setShowCreateFilePage(false);
+      setMessage("已建立新的雲端檔案。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "建立雲端檔案失敗。";
+      await writeAppSystemLog({
+        actionType: "file_created",
+        phase: "failed",
+        message: nextMessage,
+        payload: {
+          rosterName: nextData.rosterName,
+          gradeLabel: nextData.gradeLabel,
+          academicTerm: nextData.academicTerm,
         },
       });
       setMessage(`建立雲端檔案失敗：${nextMessage}`);
@@ -4661,7 +4800,8 @@ export default function App({ experimentalMode = false }: AppProps) {
                     className="primary-button"
                     disabled={!currentUser}
                     onClick={() => {
-                      void handleCreateCloudFile();
+                      setShowFileSwitcher(false);
+                      setShowCreateFilePage(true);
                     }}
                     type="button"
                   >
@@ -4749,7 +4889,111 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </div>
 
                   <div className="file-list-shell">
-                    {currentCloudFileSummary ? (
+                    {showCreateFilePage ? (
+                      <>
+                        <div className="panel-header">
+                          <div>
+                            <h3>建立新檔案</h3>
+                          </div>
+                        </div>
+                        <div className="file-detail-grid">
+                          <label>
+                            <strong>學年度</strong>
+                            <select
+                              onChange={(event) =>
+                                updateNewCloudFileDraft("academicYear", event.target.value)
+                              }
+                              value={newCloudFileDraft.academicYear}
+                            >
+                              {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                                <option key={year} value={year}>
+                                  民國 {year} 年
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>班級名稱</strong>
+                            <input
+                              onChange={(event) =>
+                                updateNewCloudFileDraft("rosterName", event.target.value)
+                              }
+                              type="text"
+                              value={newCloudFileDraft.rosterName}
+                            />
+                          </label>
+                          <label>
+                            <strong>學期</strong>
+                            <select
+                              onChange={(event) =>
+                                updateNewCloudFileDraft("semester", event.target.value)
+                              }
+                              value={newCloudFileDraft.semester}
+                            >
+                              {TERM_OPTIONS.map((term) => (
+                                <option key={term} value={term}>
+                                  {term}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>年級</strong>
+                            <select
+                              onChange={(event) =>
+                                updateNewCloudFileDraft("gradeLabel", event.target.value)
+                              }
+                              value={newCloudFileDraft.gradeLabel}
+                            >
+                              {GRADE_OPTIONS.map((grade) => (
+                                <option key={grade} value={grade}>
+                                  {grade}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <strong>測驗日期</strong>
+                            <input
+                              onChange={(event) =>
+                                updateNewCloudFileDraft("testDate", event.target.value)
+                              }
+                              type="date"
+                              value={newCloudFileDraft.testDate}
+                            />
+                          </label>
+                          <label className="file-size-field">
+                            <strong>班級人數</strong>
+                            <input
+                              min={1}
+                              onChange={(event) =>
+                                updateNewCloudFileDraft("rosterCount", event.target.value)
+                              }
+                              type="number"
+                              value={newCloudFileDraft.rosterCount}
+                            />
+                          </label>
+                        </div>
+                        <div className="file-accordion-actions">
+                          <button
+                            className="secondary-button"
+                            onClick={() => setShowCreateFilePage(false)}
+                            type="button"
+                          >
+                            取消
+                          </button>
+                          <button
+                            className="primary-button"
+                            onClick={() => {
+                              void handleCreateCloudFileFromDraft();
+                            }}
+                            type="button"
+                          >
+                            建立新檔案
+                          </button>
+                        </div>
+                      </>
+                    ) : currentCloudFileSummary ? (
                       <>
                         <div className="file-detail-grid">
                           <label>
