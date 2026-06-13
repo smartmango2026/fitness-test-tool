@@ -4712,7 +4712,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                                 key={`${file.ownerUid}:${file.id}`}
                                 value={`${file.ownerUid}:${file.id}`}
                               >
-                                {file.accessRole === "owner" ? "【我的】" : "【共享】"} {file.academicTerm}／{file.rosterName}
+                                {file.accessRole === "owner" ? "" : "【共享】"}{file.academicTerm}／{file.rosterName}
                               </option>
                             ))}
                           </select>
@@ -4755,6 +4755,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           <label>
                             <strong>學年度</strong>
                             <select
+                              disabled={!currentCloudFileIsOwner}
                               onChange={(event) =>
                                 updateAcademicTermPart("academicYear", event.target.value)
                               }
@@ -4770,6 +4771,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           <label>
                             <strong>班級名稱</strong>
                             <input
+                              disabled={!currentCloudFileIsOwner}
                               onChange={(event) => updateRosterName(event.target.value)}
                               type="text"
                               value={data.rosterName}
@@ -4778,6 +4780,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           <label>
                             <strong>學期</strong>
                             <select
+                              disabled={!currentCloudFileIsOwner}
                               onChange={(event) =>
                                 updateAcademicTermPart("semester", event.target.value)
                               }
@@ -4793,6 +4796,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           <label>
                             <strong>年級</strong>
                             <select
+                              disabled={!currentCloudFileIsOwner}
                               onChange={(event) => updateGradeLabel(event.target.value)}
                               value={data.gradeLabel}
                             >
@@ -4807,6 +4811,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           <label>
                             <strong>測驗日期</strong>
                             <input
+                              disabled={!currentCloudFileIsOwner}
                               onChange={(event) => updateSharedTestDate(event.target.value)}
                               type="date"
                               value={data.testDate}
@@ -4816,6 +4821,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                             <strong>班級人數</strong>
                             <div className="file-size-row">
                               <input
+                                disabled={!currentCloudFileIsOwner}
                                 min={1}
                                 onBlur={(event) => applyRosterSize(event.target.value)}
                                 onChange={(event) => setRosterSizeInput(event.target.value)}
