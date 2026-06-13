@@ -279,8 +279,8 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "files", label: "編輯檔案" },
   { key: "roster", label: "學員名單" },
   { key: "metric", label: "測驗項目" },
-  { key: "table", label: "測驗報告" },
-  { key: "pdf", label: "檢視報表" },
+  { key: "table", label: "測驗總表" },
+  { key: "pdf", label: "測驗報告" },
 ];
 
 const experimentalTabs: Array<{ key: TabKey; label: string }> = [
@@ -4577,7 +4577,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>測驗報告</h2>
+                  <h2>測驗總表</h2>
                 </div>
               </div>
               {renderIncomingFriendAlertCard()}
@@ -6078,7 +6078,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             <section className="panel">
               <div className="panel-header">
                 <div>
-                  <h2>檢視報表</h2>
+                  <h2>測驗報告</h2>
                 </div>
               </div>
               {renderIncomingFriendAlertCard()}
