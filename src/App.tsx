@@ -439,6 +439,31 @@ function normalizeRosterEntriesForFile(
   }));
 }
 
+function comparableRosterEntriesForDirtyCheck(
+  entries: RosterEntry[],
+  fileGradeLabel: string,
+): Array<Omit<RosterEntry, "id">> {
+  const comparableEntries = normalizeRosterEntriesForFile(entries, fileGradeLabel).map(
+    ({ studentName, height, weight, studentGradeLabel }) => ({
+      studentName,
+      height,
+      weight,
+      studentGradeLabel,
+    }),
+  );
+
+  while (comparableEntries.length > 0) {
+    const lastEntry = comparableEntries[comparableEntries.length - 1];
+    if (!lastEntry || lastEntry.studentName || lastEntry.height || lastEntry.weight) {
+      break;
+    }
+
+    comparableEntries.pop();
+  }
+
+  return comparableEntries;
+}
+
 function makeNewCloudFileDraft(source: AppData): NewCloudFileDraft {
   const parts = parseAcademicTermParts(source.academicTerm);
   return {
@@ -1544,15 +1569,19 @@ export default function App({ experimentalMode = false }: AppProps) {
     () => normalizeRosterEntriesForFile(rosterDraft, data.gradeLabel),
     [data.gradeLabel, rosterDraft],
   );
-  const normalizedSavedRosterEntries = useMemo(
-    () => normalizeRosterEntriesForFile(data.rosterEntries, data.gradeLabel),
+  const comparableRosterDraft = useMemo(
+    () => comparableRosterEntriesForDirtyCheck(rosterDraft, data.gradeLabel),
+    [data.gradeLabel, rosterDraft],
+  );
+  const comparableSavedRosterEntries = useMemo(
+    () => comparableRosterEntriesForDirtyCheck(data.rosterEntries, data.gradeLabel),
     [data.gradeLabel, data.rosterEntries],
   );
   const hasRosterDraftChanges = useMemo(
     () =>
-      JSON.stringify(normalizedRosterDraft) !==
-      JSON.stringify(normalizedSavedRosterEntries),
-    [normalizedRosterDraft, normalizedSavedRosterEntries],
+      JSON.stringify(comparableRosterDraft) !==
+      JSON.stringify(comparableSavedRosterEntries),
+    [comparableRosterDraft, comparableSavedRosterEntries],
   );
   function getRecordGradeLabel(record: FitnessRecord | null): string {
     if (!record) {
@@ -3948,7 +3977,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       toLabel: tabLabelByKey[nextTab] ?? nextTab,
     });
 
-    if (activeTab === "roster" && hasRosterDraftChanges) {
+    if (activeTab === "roster" && currentCloudFileId && hasRosterDraftChanges) {
       const shouldSave = window.confirm(
         "目前學員名單有未儲存變更。按「確定」會先儲存，再切換頁面。",
       );
