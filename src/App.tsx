@@ -6622,13 +6622,11 @@ export default function App({ experimentalMode = false }: AppProps) {
                       >
                         <colgroup>
                           <col style={{ width: "160px" }} />
-                          {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "120px" }} /> : null}
                           <col style={{ width: "160px" }} />
                         </colgroup>
                         <thead>
                           <tr>
                             <th className="sticky-left-0">學生姓名</th>
-                            {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
                             <th>{activeMetricLabel}</th>
                           </tr>
                         </thead>
@@ -6640,9 +6638,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                               onClick={() => selectRecord(record)}
                             >
                               <td className="sticky-left-0">{record.studentName}</td>
-                              {isMixedAgeClass(data.gradeLabel) ? (
-                                <td>{record.studentGradeLabel}</td>
-                              ) : null}
                               <td>
                                 {renderTableCell(record, activeMetric, record[activeMetric], {
                                   inputType:
