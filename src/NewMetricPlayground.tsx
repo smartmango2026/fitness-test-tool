@@ -74,7 +74,7 @@ export default function NewMetricPlayground({
     const cellElement = event.currentTarget;
     if (cellElement && viewportRef.current) {
       const viewport = viewportRef.current;
-      const stickyWidth = 160; // 姓名欄固定寬度為 160px
+      const stickyWidth = 90; // 姓名欄固定寬度為 90px
       const cellLeft = cellElement.offsetLeft;
       const cellWidth = cellElement.offsetWidth;
       const scrollLeft = viewport.scrollLeft;
@@ -126,7 +126,7 @@ export default function NewMetricPlayground({
           const nextCell = document.getElementById(`cell-${nextRecord.id}`);
           if (nextCell && viewportRef.current) {
             const viewport = viewportRef.current;
-            const stickyWidth = 160;
+            const stickyWidth = 90;
             const cellLeft = (nextCell as HTMLElement).offsetLeft;
             const cellWidth = (nextCell as HTMLElement).offsetWidth;
             const scrollLeft = viewport.scrollLeft;
@@ -264,7 +264,7 @@ export default function NewMetricPlayground({
         .nmp-sticky-name {
           position: sticky;
           left: 0;
-          width: 160px;
+          width: 90px;
           background: #ffffff !important;
           z-index: 5;
           text-align: left !important;
@@ -351,8 +351,8 @@ export default function NewMetricPlayground({
       <div className="nmp-viewport" ref={viewportRef}>
         <table className="nmp-table">
           <colgroup>
-            <col style={{ width: "160px" }} />
-            <col style={{ width: "160px" }} />
+            <col style={{ width: "90px" }} />
+            <col style={{ width: "100px" }} />
           </colgroup>
 
           <thead>

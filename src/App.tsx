@@ -5699,12 +5699,12 @@ export default function App({ experimentalMode = false }: AppProps) {
                     ref={tableTableRef}
                   >
                     <colgroup>
-                      <col style={{ width: "120px" }} />
-                      {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "100px" }} /> : null}
-                      <col style={{ width: "80px" }} />
-                      <col style={{ width: "80px" }} />
+                      <col style={{ width: "90px" }} />
+                      {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "90px" }} /> : null}
+                      <col style={{ width: "70px" }} />
+                      <col style={{ width: "70px" }} />
                       {scoreFields.map((field) => (
-                        <col key={field} style={{ width: "90px" }} />
+                        <col key={field} style={{ width: "80px" }} />
                       ))}
                     </colgroup>
                     <thead>
@@ -6621,8 +6621,8 @@ export default function App({ experimentalMode = false }: AppProps) {
                         ref={metricTableRef}
                       >
                         <colgroup>
-                          <col style={{ width: "160px" }} />
-                          <col style={{ width: "160px" }} />
+                          <col style={{ width: "90px" }} />
+                          <col style={{ width: "100px" }} />
                         </colgroup>
                         <thead>
                           <tr>
@@ -6796,10 +6796,10 @@ export default function App({ experimentalMode = false }: AppProps) {
                     >
                       <colgroup>
                         <col style={{ width: "40px" }} />
-                        <col style={{ width: "120px" }} />
-                        <col style={{ width: "100px" }} />
-                        <col style={{ width: "100px" }} />
-                        {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "120px" }} /> : null}
+                        <col style={{ width: "90px" }} />
+                        <col style={{ width: "80px" }} />
+                        <col style={{ width: "80px" }} />
+                        {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "100px" }} /> : null}
                       </colgroup>
                       <thead>
                         <tr>
