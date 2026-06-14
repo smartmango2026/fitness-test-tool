@@ -45,10 +45,20 @@ export default function NewMetricPlayground({
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
 
-  // 1. 當切換編輯儲存格時，將焦點移至輸入元件，並防止瀏覽器畫面產生跳動
+  // 1. 當切換編輯儲存格時，將焦點移至輸入元件，並防止瀏覽器畫面產生跳動，同時在行動裝置與電腦上自動全選內容
   useEffect(() => {
     if (editingRecordId && activeInputRef.current) {
-      activeInputRef.current.focus({ preventScroll: true });
+      const element = activeInputRef.current;
+      element.focus({ preventScroll: true });
+      if (element instanceof HTMLInputElement) {
+        // 使用 setTimeout 確保在行動裝置鍵盤與觸碰事件結束後執行全選
+        setTimeout(() => {
+          element.select();
+          try {
+            element.setSelectionRange(0, element.value.length);
+          } catch (e) {}
+        }, 50);
+      }
     }
   }, [editingRecordId]);
 
@@ -406,6 +416,15 @@ export default function NewMetricPlayground({
                             setEditingRecordId(null);
                           }}
                           onChange={(e) => setEditValue(e.target.value)}
+                          onFocus={(e) => {
+                            const target = e.currentTarget;
+                            setTimeout(() => {
+                              target.select();
+                              try {
+                                target.setSelectionRange(0, target.value.length);
+                              } catch (err) {}
+                            }, 50);
+                          }}
                           onKeyDown={(e) => handleKeyDown(e, record.id, rIdx)}
                           ref={activeInputRef as React.RefObject<HTMLInputElement>}
                           type="number"
