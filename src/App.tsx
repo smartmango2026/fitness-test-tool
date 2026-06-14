@@ -38,8 +38,10 @@ import {
   getDiagnosticEnvironment,
   getDiagnosticBrowserId,
   getDiagnosticEvents,
+  getUserActionEvents,
   installDiagnosticErrorListeners,
   recordDiagnosticEvent,
+  recordUserAction,
   submitDiagnosticReport,
 } from "./diagnostics";
 import {
@@ -1689,6 +1691,10 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
+  const tabLabelByKey = useMemo(
+    () => Object.fromEntries(visibleTabs.map((tab) => [tab.key, tab.label])) as Record<TabKey, string>,
+    [visibleTabs],
+  );
   const currentUsername =
     currentProfile?.username ||
     currentUser?.displayName ||
@@ -1708,6 +1714,45 @@ export default function App({ experimentalMode = false }: AppProps) {
       saveFileOpenTrace(next);
       return next;
     });
+  }
+
+  function recordInputAction(label: string, value: string | number): void {
+    recordUserAction(`輸入「${label}」。`, {
+      field: label,
+      value,
+    });
+  }
+
+  function recordSensitiveInputAction(label: string, value: string): void {
+    recordUserAction(`輸入「${label}」。`, {
+      field: label,
+      hasValue: value.length > 0,
+      length: value.length,
+    });
+  }
+
+  function getEditableFieldLabel(field: keyof FitnessRecord): string {
+    if (field === "studentName") {
+      return "學生姓名";
+    }
+    if (field === "height") {
+      return "身高";
+    }
+    if (field === "weight") {
+      return "體重";
+    }
+    if (field === "studentGradeLabel") {
+      return "年級";
+    }
+    if (field === "comment") {
+      return "評語";
+    }
+    const scoreIndex = scoreFields.indexOf(field as FitnessField);
+    return scoreIndex >= 0 ? resolvedItemLabels[scoreIndex] ?? field : field;
+  }
+
+  function getRosterFieldLabel(columnIndex: number): string {
+    return ["姓名", "身高", "體重", "年級"][columnIndex] ?? `第 ${columnIndex + 1} 欄`;
   }
 
   function getFriendDisplayName(friend: FriendRecord) {
@@ -2061,6 +2106,10 @@ export default function App({ experimentalMode = false }: AppProps) {
   }, [activeTab, data.records, activeMetric, metricZoomMode, activeMetricLabel]);
 
   function selectRecord(record: FitnessRecord): void {
+    recordUserAction(`選擇學生「${record.studentName || "未命名學生"}」。`, {
+      recordId: record.id,
+      studentName: record.studentName,
+    });
     setSelectedId(record.id);
     setDraftRecord(record);
   }
@@ -2069,6 +2118,13 @@ export default function App({ experimentalMode = false }: AppProps) {
     field: keyof FitnessRecord,
     value: string | number,
   ): void {
+    recordUserAction(`在單筆編輯修改「${getEditableFieldLabel(field)}」。`, {
+      recordId: draftRecord.id,
+      studentName: draftRecord.studentName,
+      field,
+      fieldLabel: getEditableFieldLabel(field),
+      value,
+    });
     setDraftRecord((current) => ({
       ...current,
       [field]: value,
@@ -2092,6 +2148,10 @@ export default function App({ experimentalMode = false }: AppProps) {
     setSelectedId(normalized.id);
     setDraftRecord(normalized);
     setActiveTab("table");
+    recordUserAction(`儲存單筆資料「${normalized.studentName}」。`, {
+      recordId: normalized.id,
+      studentName: normalized.studentName,
+    });
     setMessage("資料已儲存。");
   }
 
@@ -2107,6 +2167,10 @@ export default function App({ experimentalMode = false }: AppProps) {
     setData((current) => ({ ...current, records: nextRecords }));
     setSelectedId(nextRecords[0]?.id ?? "");
     setDraftRecord(nextRecords[0] ?? makeEmptyRecord(data.testDate));
+    recordUserAction(`刪除學生「${selectedRecord.studentName}」。`, {
+      recordId: selectedRecord.id,
+      studentName: selectedRecord.studentName,
+    });
     setMessage("資料已刪除。");
   }
 
@@ -2118,6 +2182,9 @@ export default function App({ experimentalMode = false }: AppProps) {
     }));
     setSelectedId(nextRecord.id);
     setDraftRecord(nextRecord);
+    recordUserAction("按下「新增列」按鈕。", {
+      recordId: nextRecord.id,
+    });
     setMessage("已新增一筆空白資料。");
   }
 
@@ -2126,6 +2193,14 @@ export default function App({ experimentalMode = false }: AppProps) {
     field: EditableField,
     value: string,
   ): void {
+    const targetRecord = data.records.find((record) => record.id === recordId);
+    recordUserAction(`在總表編輯「${targetRecord?.studentName || "未命名學生"}」的「${getEditableFieldLabel(field)}」。`, {
+      recordId,
+      studentName: targetRecord?.studentName ?? "",
+      field,
+      fieldLabel: getEditableFieldLabel(field),
+      value,
+    });
     setData((current) => ({
       ...current,
       records: current.records.map((record) => {
@@ -2149,6 +2224,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function updateSharedTestDate(nextDate: string): void {
+    recordUserAction(`修改本次測驗日期為「${nextDate}」。`, {
+      value: nextDate,
+    });
     setData((current) => ({
       ...current,
       testDate: nextDate,
@@ -2160,6 +2238,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function updateRosterName(nextName: string): void {
+    recordUserAction(`修改班級名稱為「${nextName}」。`, {
+      value: nextName,
+    });
     setData((current) => ({
       ...current,
       rosterName: nextName,
@@ -2167,6 +2248,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function updateGradeLabel(nextGrade: string): void {
+    recordUserAction(`修改班級年級為「${nextGrade}」。`, {
+      value: nextGrade,
+    });
     setData((current) => ({
       ...current,
       gradeLabel: nextGrade,
@@ -2192,6 +2276,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function updateAcademicTerm(nextTerm: string): void {
+    recordUserAction(`修改學期為「${nextTerm}」。`, {
+      value: nextTerm,
+    });
     setData((current) => ({
       ...current,
       academicTerm: nextTerm,
@@ -2225,6 +2312,13 @@ export default function App({ experimentalMode = false }: AppProps) {
       return;
     }
 
+    recordUserAction(`在名冊編輯第 ${rowIndex + 1} 列的「${getRosterFieldLabel(columnIndex)}」。`, {
+      rowIndex,
+      columnIndex,
+      field: targetField,
+      fieldLabel: getRosterFieldLabel(columnIndex),
+      value,
+    });
     setRosterDraft((current) =>
       current.map((entry, currentRowIndex) =>
         currentRowIndex === rowIndex
@@ -2479,6 +2573,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   function importRosterToRecords(): void {
+    recordUserAction("按下「儲存名冊」按鈕。", {
+      rosterRows: rosterDraft.length,
+    });
     applyRosterDraftToCurrentData(true);
   }
 
@@ -2536,11 +2633,19 @@ export default function App({ experimentalMode = false }: AppProps) {
       return;
     }
 
+    recordUserAction(`按下「下載 ${selectedRecord.studentName} 的 PDF」按鈕。`, {
+      recordId: selectedRecord.id,
+      studentName: selectedRecord.studentName,
+    });
     await pdfCanvasRef.current?.downloadCurrentPdf();
     setMessage(`已下載 ${selectedRecord.studentName} 的報告。`);
   }
 
   async function handleDownloadAllPdfs(): Promise<void> {
+    recordUserAction("按下「下載全班 PDF」按鈕。", {
+      rosterName: data.rosterName,
+      recordCount: data.records.length,
+    });
     await exportAllReportsPdf({
       abilityProfile: currentAbilityProfile,
       abilityRulesConfig,
@@ -2599,6 +2704,9 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     try {
       const operationId = createSystemLogOperationId();
+      recordUserAction("按下「登入」按鈕。", {
+        username: normalizeUsername(loginUsername.trim()),
+      });
       recordDiagnosticEvent("auth.sign-in-clicked", "使用者嘗試登入。", {
         username: normalizeUsername(loginUsername.trim()),
       });
@@ -2646,6 +2754,9 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     try {
       const operationId = createSystemLogOperationId();
+      recordUserAction("按下「註冊」按鈕。", {
+        username: normalizeUsername(loginUsername.trim()),
+      });
       recordDiagnosticEvent("auth.register-clicked", "使用者嘗試註冊。", {
         username: normalizeUsername(loginUsername.trim()),
       });
@@ -2678,6 +2789,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   async function handleSignOut(): Promise<void> {
     try {
       const operationId = createSystemLogOperationId();
+      recordUserAction("按下「登出」按鈕。", {
+        username: currentUsername,
+      });
       recordDiagnosticEvent("auth.sign-out-clicked", "使用者嘗試登出。", {
         uid: currentUser?.uid ?? null,
         username: currentUsername,
@@ -2719,6 +2833,12 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     setDiagnosticSubmitting(true);
+    recordUserAction("按下「送出回報」按鈕。", {
+      title: diagnosticTitle.trim(),
+      description: diagnosticDescription.trim(),
+      expected: diagnosticExpected.trim(),
+      actual: diagnosticActual.trim(),
+    });
     recordDiagnosticEvent("diagnostic.submit-started", "使用者送出問題回報。", {
       uid: currentUser?.uid ?? null,
       username: currentUser ? currentUsername : null,
@@ -3437,6 +3557,11 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     try {
+      recordUserAction("按下「新增雲端檔案」按鈕。", {
+        rosterName: data.rosterName,
+        gradeLabel: data.gradeLabel,
+        academicTerm: data.academicTerm,
+      });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -3536,6 +3661,12 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     try {
+      recordUserAction("按下「建立新檔案」按鈕。", {
+        rosterName: nextData.rosterName,
+        gradeLabel: nextData.gradeLabel,
+        academicTerm: nextData.academicTerm,
+        rosterCount: nextData.rosterEntries.length,
+      });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -3602,6 +3733,13 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     try {
+      recordUserAction("按下「儲存目前檔案」按鈕。", {
+        fileId: currentCloudFileId,
+        ownerUid: currentCloudFileOwnerUid,
+        rosterName: data.rosterName,
+        recordCount: data.records.length,
+        rosterCount: data.rosterEntries.length,
+      });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -3684,6 +3822,13 @@ export default function App({ experimentalMode = false }: AppProps) {
     if (nextTab === activeTab) {
       return;
     }
+
+    recordUserAction(`切換到「${tabLabelByKey[nextTab] ?? nextTab}」分頁。`, {
+      fromTab: activeTab,
+      fromLabel: tabLabelByKey[activeTab] ?? activeTab,
+      toTab: nextTab,
+      toLabel: tabLabelByKey[nextTab] ?? nextTab,
+    });
 
     if (activeTab === "roster" && hasRosterDraftChanges) {
       const shouldSave = window.confirm(
@@ -3770,6 +3915,11 @@ export default function App({ experimentalMode = false }: AppProps) {
       saveFileOpenTrace([]);
       pushFileOpenTrace("info", `開始切換檔案：${file.fileName}`);
       const operationId = createSystemLogOperationId();
+      recordUserAction(`開啟檔案「${file.fileName}」。`, {
+        fileId: file.id,
+        ownerUid: file.ownerUid,
+        accessRole: file.accessRole,
+      });
       recordDiagnosticEvent("cloud.open-started", "使用者手動開啟檔案。", {
         uid: currentUser.uid,
         currentCloudFileId,
@@ -3916,6 +4066,11 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     try {
+      recordUserAction(`按下「儲存檔案資訊」按鈕：${file.fileName}。`, {
+        fileId: file.id,
+        ownerUid: file.ownerUid,
+        fileName: file.fileName,
+      });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -4645,7 +4800,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   const isScannedInviteAlreadyFriend =
     Boolean(scannedFriendInvite) &&
     friends.some((friend) => friend.username === scannedFriendInvite?.issuedByUsername);
-  const diagnosticEventsPreview = getDiagnosticEvents().slice(0, 8);
+  const diagnosticEventsPreview = getUserActionEvents().slice(0, 8);
   const diagnosticEnvironmentPreview = getDiagnosticEnvironment();
   const diagnosticBrowserId = getDiagnosticBrowserId();
 
@@ -4675,6 +4830,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                 <button
                   className="secondary-button"
                   onClick={() => {
+                    recordUserAction(`${showDiagnosticPanel ? "關閉" : "開啟"}「回報問題」面板。`);
                     recordDiagnosticEvent("diagnostic.panel-toggled", "使用者開啟或關閉問題回報面板。", {
                       nextVisible: !showDiagnosticPanel,
                       uid: currentUser?.uid ?? null,
@@ -4694,6 +4850,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                       className="primary-button"
                       disabled={!authReady}
                       onClick={() => {
+                        recordUserAction("按下頁首「登入」按鈕。");
                         setAuthMode("login");
                         setShowLoginPanel((current) =>
                           authMode === "login" ? !current : true,
@@ -4707,6 +4864,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                       className="secondary-button"
                       disabled={!authReady}
                       onClick={() => {
+                        recordUserAction("按下頁首「註冊」按鈕。");
                         setAuthMode("register");
                         setShowLoginPanel((current) =>
                           authMode === "register" ? !current : true,
@@ -4721,7 +4879,12 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <div className="account-menu-shell">
                     <button
                       className="secondary-button header-account-button"
-                      onClick={() => setShowAccountMenu((current) => !current)}
+                      onClick={() => {
+                        recordUserAction(`${showAccountMenu ? "關閉" : "開啟"}帳號選單。`, {
+                          username: currentUsername,
+                        });
+                        setShowAccountMenu((current) => !current);
+                      }}
                       type="button"
                     >
                       {`帳號：${currentDisplayName || "未命名使用者"}`}
@@ -4755,12 +4918,14 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="auth-form-grid">
                 <input
                   onChange={(event) => setLoginUsername(event.target.value)}
+                  onBlur={(event) => recordInputAction("登入帳號", event.target.value)}
                   placeholder="帳號（例如 teacher01）"
                   type="text"
                   value={loginUsername}
                 />
                 <input
                   onChange={(event) => setLoginPassword(event.target.value)}
+                  onBlur={(event) => recordSensitiveInputAction("密碼", event.target.value)}
                   placeholder="密碼"
                   type="password"
                   value={loginPassword}
@@ -4797,6 +4962,7 @@ export default function App({ experimentalMode = false }: AppProps) {
               <div className="auth-form-grid diagnostic-form-grid">
                 <input
                   onChange={(event) => setDiagnosticTitle(event.target.value)}
+                  onBlur={(event) => recordInputAction("問題標題", event.target.value)}
                   placeholder="問題標題（選填）"
                   type="text"
                   value={diagnosticTitle}
@@ -4804,18 +4970,21 @@ export default function App({ experimentalMode = false }: AppProps) {
                 <textarea
                   className="diagnostic-textarea"
                   onChange={(event) => setDiagnosticDescription(event.target.value)}
+                  onBlur={(event) => recordInputAction("問題描述", event.target.value)}
                   placeholder="請描述發生了什麼事，例如：B 老師登入後仍看到 A 老師的檔案。"
                   value={diagnosticDescription}
                 />
                 <textarea
                   className="diagnostic-textarea"
                   onChange={(event) => setDiagnosticExpected(event.target.value)}
+                  onBlur={(event) => recordInputAction("預期結果", event.target.value)}
                   placeholder="預期結果（選填）"
                   value={diagnosticExpected}
                 />
                 <textarea
                   className="diagnostic-textarea"
                   onChange={(event) => setDiagnosticActual(event.target.value)}
+                  onBlur={(event) => recordInputAction("實際結果", event.target.value)}
                   placeholder="實際結果（選填）"
                   value={diagnosticActual}
                 />
@@ -4834,14 +5003,13 @@ export default function App({ experimentalMode = false }: AppProps) {
                       ，{diagnosticEnvironmentPreview.device.estimatedDeviceType}
                     </span>
                     <span>最近事件</span>
-                    <span>{diagnosticEventsPreview.length} 筆</span>
+                    <span>{diagnosticEventsPreview.length} 筆使用者操作，另含技術紀錄</span>
                   </div>
                   {diagnosticEventsPreview.length > 0 ? (
                     <ol className="diagnostic-event-preview">
                       {diagnosticEventsPreview.map((event) => (
                         <li key={`${event.timestamp}-${event.type}`}>
-                          <code>{event.type}</code>
-                          <span>{event.message}</span>
+                          <span>{event.label ?? event.message}</span>
                         </li>
                       ))}
                     </ol>

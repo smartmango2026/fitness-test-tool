@@ -13,6 +13,8 @@ export type DiagnosticEvent = {
   timestamp: string;
   type: string;
   message: string;
+  audience?: "user" | "developer";
+  label?: string;
   payload?: Record<string, unknown>;
 };
 
@@ -143,8 +145,29 @@ export function recordDiagnosticEvent(
   writeStoredEvents([event, ...readStoredEvents()]);
 }
 
+export function recordUserAction(
+  label: string,
+  payload?: Record<string, unknown>,
+): void {
+  const event: DiagnosticEvent = {
+    timestamp: new Date().toISOString(),
+    type: "user.action",
+    message: label,
+    audience: "user",
+    label,
+    payload: payload ? (sanitizeDiagnosticValue(payload) as Record<string, unknown>) : undefined,
+  };
+  writeStoredEvents([event, ...readStoredEvents()]);
+}
+
 export function getDiagnosticEvents(): DiagnosticEvent[] {
   return readStoredEvents();
+}
+
+export function getUserActionEvents(): DiagnosticEvent[] {
+  return readStoredEvents().filter(
+    (event) => event.audience === "user" || event.type === "user.action",
+  );
 }
 
 export function getDiagnosticBrowserId(): string {
@@ -262,6 +285,7 @@ export async function submitDiagnosticReport(
     ...input,
     browserId: getDiagnosticBrowserId(),
     environment: getDiagnosticEnvironment(),
+    userActions: getUserActionEvents(),
     diagnostics: getDiagnosticEvents(),
     createdAt: serverTimestamp(),
     schemaVersion: 1,
