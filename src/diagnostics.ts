@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 
 const DIAGNOSTIC_STORAGE_KEY = "fitness-test-tool:diagnostic-events";
+const DIAGNOSTIC_BROWSER_ID_KEY = "fitness-test-tool:diagnostic-browser-id";
 const MAX_DIAGNOSTIC_EVENTS = 100;
 
 export type DiagnosticEvent = {
@@ -41,7 +42,7 @@ export type DiagnosticEnvironment = {
 };
 
 export type DiagnosticReportInput = {
-  reporterUid: string;
+  reporterUid: string | null;
   reporterUsername: string | null;
   reporterDisplayName: string | null;
   userMessage: {
@@ -90,7 +91,7 @@ function readStoredEvents(): DiagnosticEvent[] {
   }
 
   try {
-    const raw = window.sessionStorage.getItem(DIAGNOSTIC_STORAGE_KEY);
+    const raw = window.localStorage.getItem(DIAGNOSTIC_STORAGE_KEY);
     if (!raw) {
       return [];
     }
@@ -119,7 +120,7 @@ function writeStoredEvents(events: DiagnosticEvent[]): void {
   }
 
   try {
-    window.sessionStorage.setItem(
+    window.localStorage.setItem(
       DIAGNOSTIC_STORAGE_KEY,
       JSON.stringify(events.slice(0, MAX_DIAGNOSTIC_EVENTS)),
     );
@@ -144,6 +145,25 @@ export function recordDiagnosticEvent(
 
 export function getDiagnosticEvents(): DiagnosticEvent[] {
   return readStoredEvents();
+}
+
+export function getDiagnosticBrowserId(): string {
+  if (typeof window === "undefined") {
+    return "server";
+  }
+
+  try {
+    const existingId = window.localStorage.getItem(DIAGNOSTIC_BROWSER_ID_KEY);
+    if (existingId) {
+      return existingId;
+    }
+
+    const nextId = crypto.randomUUID();
+    window.localStorage.setItem(DIAGNOSTIC_BROWSER_ID_KEY, nextId);
+    return nextId;
+  } catch {
+    return "unavailable";
+  }
 }
 
 function estimateDeviceType(width: number, maxTouchPoints: number): "desktop" | "tablet" | "mobile" {
@@ -240,6 +260,7 @@ export async function submitDiagnosticReport(
 ): Promise<string> {
   const reportRef = await addDoc(collection(db, "diagnosticReports"), {
     ...input,
+    browserId: getDiagnosticBrowserId(),
     environment: getDiagnosticEnvironment(),
     diagnostics: getDiagnosticEvents(),
     createdAt: serverTimestamp(),

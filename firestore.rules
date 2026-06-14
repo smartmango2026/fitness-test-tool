@@ -142,8 +142,14 @@ service cloud.firestore {
 
     match /diagnosticReports/{reportId} {
       allow create: if
-        isSignedIn() &&
-        request.resource.data.reporterUid == request.auth.uid;
+        (
+          isSignedIn() &&
+          request.resource.data.reporterUid == request.auth.uid
+        ) ||
+        (
+          !isSignedIn() &&
+          request.resource.data.reporterUid == null
+        );
       allow read: if
         isSignedIn() &&
         resource.data.reporterUid == request.auth.uid;

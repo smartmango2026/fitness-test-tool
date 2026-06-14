@@ -36,6 +36,7 @@ import {
 import { db } from "./firebase";
 import {
   getDiagnosticEnvironment,
+  getDiagnosticBrowserId,
   getDiagnosticEvents,
   installDiagnosticErrorListeners,
   recordDiagnosticEvent,
@@ -2712,12 +2713,6 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   async function handleSubmitDiagnosticReport(): Promise<void> {
-    if (!currentUser) {
-      setMessage("請先登入，再送出問題回報。");
-      setShowDiagnosticPanel(true);
-      return;
-    }
-
     if (!diagnosticDescription.trim()) {
       setMessage("請先輸入問題描述。");
       return;
@@ -2725,8 +2720,8 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     setDiagnosticSubmitting(true);
     recordDiagnosticEvent("diagnostic.submit-started", "使用者送出問題回報。", {
-      uid: currentUser.uid,
-      username: currentUsername,
+      uid: currentUser?.uid ?? null,
+      username: currentUser ? currentUsername : null,
       currentCloudFileId,
       currentCloudFileOwnerUid,
       currentFileName: currentCloudFileSummary?.fileName ?? null,
@@ -2734,9 +2729,9 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     try {
       const reportId = await submitDiagnosticReport(db, {
-        reporterUid: currentUser.uid,
-        reporterUsername: currentUsername,
-        reporterDisplayName: currentDisplayName,
+        reporterUid: currentUser?.uid ?? null,
+        reporterUsername: currentUser ? currentUsername : null,
+        reporterDisplayName: currentUser ? currentDisplayName : null,
         userMessage: {
           title: diagnosticTitle.trim(),
           description: diagnosticDescription.trim(),
@@ -2744,10 +2739,10 @@ export default function App({ experimentalMode = false }: AppProps) {
           actual: diagnosticActual.trim(),
         },
         authSnapshot: {
-          uid: currentUser.uid,
-          email: currentUser.email,
-          username: currentUsername,
-          displayName: currentUser.displayName,
+          uid: currentUser?.uid ?? null,
+          email: currentUser?.email ?? null,
+          username: currentUser ? currentUsername : null,
+          displayName: currentUser?.displayName ?? null,
           profileNickname: currentProfile?.displayNickname ?? null,
         },
         currentFileSnapshot: {
@@ -4652,6 +4647,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     friends.some((friend) => friend.username === scannedFriendInvite?.issuedByUsername);
   const diagnosticEventsPreview = getDiagnosticEvents().slice(0, 8);
   const diagnosticEnvironmentPreview = getDiagnosticEnvironment();
+  const diagnosticBrowserId = getDiagnosticBrowserId();
 
   return (
     <div
@@ -4682,6 +4678,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                     recordDiagnosticEvent("diagnostic.panel-toggled", "使用者開啟或關閉問題回報面板。", {
                       nextVisible: !showDiagnosticPanel,
                       uid: currentUser?.uid ?? null,
+                      browserId: diagnosticBrowserId,
                       currentCloudFileId,
                       currentCloudFileOwnerUid,
                     });
@@ -4795,7 +4792,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             <section className="auth-panel diagnostic-panel">
               <h2>回報問題</h2>
               <p className="auth-help">
-                請描述你遇到的狀況。系統會一併送出最近操作紀錄、登入狀態、目前檔案資訊與瀏覽器版面資料；不會送出密碼、token 或 cookie。
+                請描述你遇到的狀況。系統會一併送出這個瀏覽器最近操作紀錄、登入狀態變化、目前檔案資訊與瀏覽器版面資料；不會送出密碼、token 或 cookie。
               </p>
               <div className="auth-form-grid diagnostic-form-grid">
                 <input
@@ -4826,7 +4823,9 @@ export default function App({ experimentalMode = false }: AppProps) {
                   <strong>即將附上的診斷摘要</strong>
                   <div className="diagnostic-summary-grid">
                     <span>登入帳號</span>
-                    <span>{currentUser ? `${currentUsername} / ${currentUser.uid}` : "尚未登入"}</span>
+                    <span>{currentUser ? `${currentUsername} / ${currentUser.uid}` : "尚未登入，會以匿名回報送出"}</span>
+                    <span>瀏覽器紀錄 ID</span>
+                    <span>{diagnosticBrowserId}</span>
                     <span>目前檔案</span>
                     <span>{currentCloudFileSummary?.fileName ?? currentWorkspaceFileLabel}</span>
                     <span>版面大小</span>
@@ -4851,7 +4850,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                 <div className="button-row">
                   <button
                     className="primary-button"
-                    disabled={diagnosticSubmitting || !currentUser}
+                    disabled={diagnosticSubmitting}
                     onClick={handleSubmitDiagnosticReport}
                     type="button"
                   >
@@ -4867,7 +4866,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </button>
                 </div>
                 {!currentUser ? (
-                  <p className="auth-help">請先登入，才能把問題回報送到雲端。</p>
+                  <p className="auth-help">目前尚未登入，回報會以匿名方式送出，但仍會包含這個瀏覽器最近的操作流程。</p>
                 ) : null}
               </div>
             </section>
