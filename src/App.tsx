@@ -1738,6 +1738,14 @@ export default function App({ experimentalMode = false }: AppProps) {
     });
   }
 
+  function showAuthAlert(title: string, detail: string): void {
+    recordUserAction(`看到「${title}」提示。`, {
+      title,
+      detail,
+    });
+    window.alert(`${title}\n\n${detail}`);
+  }
+
   function getEditableFieldLabel(field: keyof FitnessRecord): string {
     if (field === "studentName") {
       return "學生姓名";
@@ -2722,12 +2730,16 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   async function handleSignIn(): Promise<void> {
     if (!loginUsername.trim() || !loginPassword) {
-      setMessage("請輸入帳號與密碼。");
+      const nextMessage = "請輸入帳號與密碼。";
+      showAuthAlert("登入資料不完整", nextMessage);
+      setMessage(nextMessage);
       return;
     }
 
     if (!isValidUsername(loginUsername)) {
-      setMessage("帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。");
+      const nextMessage = "帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。";
+      showAuthAlert("帳號格式不正確", nextMessage);
+      setMessage(nextMessage);
       return;
     }
 
@@ -2761,23 +2773,30 @@ export default function App({ experimentalMode = false }: AppProps) {
         username: normalizeUsername(loginUsername.trim()),
         error: nextMessage,
       });
+      showAuthAlert("登入失敗", nextMessage);
       setMessage(`帳號登入失敗：${nextMessage}`);
     }
   }
 
   async function handleRegister(): Promise<void> {
     if (!loginUsername.trim() || !loginPassword) {
-      setMessage("請輸入帳號與密碼。");
+      const nextMessage = "請輸入帳號與密碼。";
+      showAuthAlert("註冊資料不完整", nextMessage);
+      setMessage(nextMessage);
       return;
     }
 
     if (!isValidUsername(loginUsername)) {
-      setMessage("帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。");
+      const nextMessage = "帳號請使用 3 到 32 碼的小寫英數，可包含 .、_、-。";
+      showAuthAlert("帳號格式不正確", nextMessage);
+      setMessage(nextMessage);
       return;
     }
 
     if (loginPassword.length < 6) {
-      setMessage("密碼至少需要 6 個字元。");
+      const nextMessage = "密碼至少需要 6 個字元。";
+      showAuthAlert("密碼太短", nextMessage);
+      setMessage(nextMessage);
       return;
     }
 
@@ -2811,6 +2830,7 @@ export default function App({ experimentalMode = false }: AppProps) {
         username: normalizeUsername(loginUsername.trim()),
         error: nextMessage,
       });
+      showAuthAlert("註冊失敗", nextMessage);
       setMessage(`註冊失敗：${nextMessage}`);
     }
   }
