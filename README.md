@@ -73,6 +73,22 @@ git push origin main
 gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 ```
 
+### Diagnostic Reports
+
+Use the local script to read teacher-submitted issue reports from Firestore without asking Codex to query them manually.
+
+```bash
+pnpm reports
+pnpm reports -- --details
+pnpm reports -- --id <reportId> --details
+pnpm reports -- --refresh
+```
+
+- The script reads Firebase CLI credentials from the local Firebase configstore.
+- Run `pnpm dlx firebase-tools login` first if the local Firebase CLI session has expired.
+- `--refresh` forces a short-lived access token refresh and updates the local Firebase CLI token cache.
+- The default Firebase project is `fitness-test-tool-42789`; override with `FIREBASE_PROJECT_ID=<projectId>` if needed.
+
 ### Report Debug URLs
 
 - Report-only debug mode is enabled by URL params, not by visible UI buttons

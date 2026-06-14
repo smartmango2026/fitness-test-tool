@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "reports": "node scripts/list-diagnostic-reports.mjs"
   },
   "dependencies": {
     "echarts": "^6.0.0",
