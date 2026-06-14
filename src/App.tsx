@@ -100,6 +100,7 @@ import {
   type SystemLogEntry,
 } from "./system-logs";
 import SpreadsheetPlayground from "./SpreadsheetPlayground";
+import NewMetricPlayground from "./NewMetricPlayground";
 
 type TabKey =
   | "files"
@@ -111,7 +112,8 @@ type TabKey =
   | "analysis"
   | "pdf"
   | "tablab"
-  | "playground";
+  | "playground"
+  | "newMetric";
 
 type EditableField = keyof FitnessRecord;
 type FriendInviteActionState = {
@@ -303,6 +305,7 @@ const experimentalTabs: Array<{ key: TabKey; label: string }> = [
   ...tabs,
   { key: "tablab", label: "Tab 元件展示" },
   { key: "playground", label: "試算表 Playground" },
+  { key: "newMetric", label: "新版測驗項目" },
 ];
 
 const tabShowcaseSamples = [
@@ -7100,6 +7103,39 @@ export default function App({ experimentalMode = false }: AppProps) {
         {activeTab === "playground" ? (
           <>
             <SpreadsheetPlayground />
+          </>
+        ) : null}
+
+        {activeTab === "newMetric" ? (
+          <>
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2>新版測驗項目</h2>
+                  <p>使用類似 Excel 試算表之固定寬度與字型表格，僅保留「學生姓名」與「測驗數值」兩個欄位。點擊欄位按 Tab 或上下鍵可自動切換並進行鍵盤編輯，支援網頁不跳動焦點。</p>
+                </div>
+              </div>
+              {renderIncomingFriendAlertCard()}
+              {renderWorkspaceFileCard()}
+              {data.records.length === 0 ? renderNoStudentsCard("新版測驗項目") : null}
+              {data.records.length > 0 ? (
+                <NewMetricPlayground
+                  data={data}
+                  activeMetric={activeMetric}
+                  setActiveMetric={setActiveMetric}
+                  scoreFields={scoreFields}
+                  resolvedItemLabels={resolvedItemLabels}
+                  updateTableField={updateTableField}
+                  getMetricRule={getMetricRule}
+                  getMetricDisplayValue={getMetricDisplayValue}
+                  getMetricSelectOptions={getMetricSelectOptions}
+                  getMetricRangeHint={getMetricRangeHint}
+                  isCloudDirty={isCloudDirty}
+                  currentCloudFileId={currentCloudFileId}
+                  handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
+                />
+              ) : null}
+            </section>
           </>
         ) : null}
 
