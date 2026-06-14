@@ -15,6 +15,7 @@ interface NewMetricPlaygroundProps {
   getMetricDisplayValue: (record: FitnessRecord, field: FitnessField) => string;
   getMetricSelectOptions: (field: FitnessField, record: FitnessRecord | null) => Array<{ value: number | string; label: string }>;
   getMetricRangeHint: (field: FitnessField) => string;
+  getMetricUnitLabel: (field: FitnessField) => string;
   isCloudDirty: boolean;
   currentCloudFileId: string | null;
   handleSaveCurrentCloudFile: (data: AppData, msg: string) => Promise<boolean>;
@@ -37,6 +38,7 @@ export default function NewMetricPlayground({
   getMetricDisplayValue,
   getMetricSelectOptions,
   getMetricRangeHint,
+  getMetricUnitLabel,
   isCloudDirty,
   currentCloudFileId,
   handleSaveCurrentCloudFile,
@@ -60,6 +62,20 @@ export default function NewMetricPlayground({
   // 取得當前選擇的指標名稱與 index
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
+  const activeMetricUnit = getMetricUnitLabel(activeMetric);
+
+  function renderMetricLabel(label: string): ReactNode {
+    const parts = label.split(" / ");
+    if (parts.length <= 1) {
+      return label;
+    }
+
+    return parts.map((part, index) => (
+      <span className="nmp-label-line" key={`${label}-${index}`}>
+        {part}
+      </span>
+    ));
+  }
 
   // 1. 當切換編輯儲存格時，將焦點移至輸入元件，並防止瀏覽器畫面產生跳動，同時在行動裝置與電腦上自動全選內容
   useEffect(() => {
@@ -230,6 +246,8 @@ export default function NewMetricPlayground({
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          white-space: normal;
+          line-height: 1.3;
         }
         .nmp-pill:hover {
           background: #e2e8f0;
@@ -328,6 +346,22 @@ export default function NewMetricPlayground({
           color: #64748b;
           margin-top: 4px;
         }
+        .nmp-label-line {
+          display: block;
+        }
+        .nmp-header-label {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          line-height: 1.25;
+        }
+        .nmp-header-unit {
+          display: block;
+          margin-top: 4px;
+          font-size: 12px;
+          font-weight: 500;
+          color: #64748b;
+        }
       `}</style>
 
       {/* 頂部切換與操作工具列 */}
@@ -343,7 +377,7 @@ export default function NewMetricPlayground({
               }}
               type="button"
             >
-              {resolvedItemLabels[index]}
+              {renderMetricLabel(resolvedItemLabels[index])}
             </button>
           ))}
         </div>
@@ -373,13 +407,20 @@ export default function NewMetricPlayground({
           <table className="nmp-table" ref={tableRef}>
           <colgroup>
             <col style={{ width: "90px" }} />
-            <col style={{ width: "100px" }} />
+            <col style={{ width: "150px" }} />
           </colgroup>
 
           <thead>
             <tr>
               <th className="nmp-sticky-name">學生姓名</th>
-              <th>{activeMetricLabel}</th>
+              <th>
+                <span className="nmp-header-label">
+                  {renderMetricLabel(activeMetricLabel)}
+                </span>
+                {activeMetricUnit ? (
+                  <small className="nmp-header-unit">單位：{activeMetricUnit}</small>
+                ) : null}
+              </th>
             </tr>
           </thead>
 

@@ -24,7 +24,11 @@ import {
   defaultAbilityRulesConfig,
   type AbilityRulesConfig,
 } from "./ability-settings";
-import { abilityRulesByGradeGroup, schoolGradeOptions } from "./ability-rules";
+import {
+  abilityRulesByGradeGroup,
+  schoolGradeOptions,
+  type AbilityRule,
+} from "./ability-rules";
 import {
   loadDebugSettings,
   type DebugSettings,
@@ -4710,6 +4714,56 @@ export default function App({ experimentalMode = false }: AppProps) {
     return highLabel || lowLabel;
   }
 
+  function inferMetricUnitLabel(rule: AbilityRule | null | undefined): string {
+    if (!rule) {
+      return "";
+    }
+
+    if (rule.kind === "rubric") {
+      return "五級評分";
+    }
+
+    const label = rule.metricLabel;
+    if (
+      label.includes("跳遠") ||
+      label.includes("體前彎") ||
+      label.includes("擲遠")
+    ) {
+      return "公分";
+    }
+
+    if (label.includes("公尺")) {
+      return "公尺";
+    }
+
+    if (label.includes("秒")) {
+      return "秒";
+    }
+
+    return "次";
+  }
+
+  function getMetricUnitLabel(field: FitnessField): string {
+    if (!isMixedAgeClass(data.gradeLabel)) {
+      return inferMetricUnitLabel(getMetricRule(field, selectedRecord));
+    }
+
+    const juniorUnit = inferMetricUnitLabel(abilityRulesByGradeGroup.junior[field]);
+    const middleSeniorUnit = inferMetricUnitLabel(
+      abilityRulesByGradeGroup.middleSenior[field],
+    );
+
+    if (
+      juniorUnit &&
+      middleSeniorUnit &&
+      juniorUnit !== middleSeniorUnit
+    ) {
+      return `${middleSeniorUnit} / ${juniorUnit}`;
+    }
+
+    return middleSeniorUnit || juniorUnit;
+  }
+
   function getTopLabel(record: FitnessRecord): string {
     const values = getAbilityScores(record, getProfileForRecord(record));
     const maxValue = Math.max(...values);
@@ -6530,6 +6584,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   getMetricRangeHint={getMetricRangeHint}
                   getMetricRule={getMetricRule}
                   getMetricSelectOptions={getMetricSelectOptions}
+                  getMetricUnitLabel={getMetricUnitLabel}
                   handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
                   isCloudDirty={isCloudDirty}
                   resolvedItemLabels={resolvedItemLabels}
@@ -6834,6 +6889,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   getMetricDisplayValue={getMetricDisplayValue}
                   getMetricSelectOptions={getMetricSelectOptions}
                   getMetricRangeHint={getMetricRangeHint}
+                  getMetricUnitLabel={getMetricUnitLabel}
                   isCloudDirty={isCloudDirty}
                   currentCloudFileId={currentCloudFileId}
                   handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
