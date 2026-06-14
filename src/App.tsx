@@ -882,6 +882,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   );
   const reportDebugFileLoadedRef = useRef<string | null>(null);
   const autoOpenedLastCloudFileRef = useRef<string | null>(null);
+  const activeAuthUidRef = useRef<string | null>(null);
   const shareRepairSignatureRef = useRef<string | null>(null);
   const rosterViewportRef = useRef<HTMLDivElement | null>(null);
   const tableViewportRef = useRef<HTMLDivElement | null>(null);
@@ -929,6 +930,31 @@ export default function App({ experimentalMode = false }: AppProps) {
     });
   };
 
+  function resetCloudSessionState(nextData: AppData = defaultAppData): void {
+    reportDebugFileLoadedRef.current = null;
+    autoOpenedLastCloudFileRef.current = null;
+    shareRepairSignatureRef.current = null;
+    skipNextCloudDirtyRef.current = true;
+    setData(nextData);
+    setCloudFiles([]);
+    setCloudFileDrafts({});
+    setCurrentCloudFileId(null);
+    setCurrentCloudFileOwnerUid(null);
+    setExpandedCloudFileId(null);
+    setShowFileSwitcher(false);
+    setPendingSwitchFileKey("");
+    setShowCreateFilePage(false);
+    setIsCloudDirty(false);
+    setShareEditorUids([]);
+    setSelectedShareFriendUid("");
+    setSelectedId(nextData.records[0]?.id ?? "");
+    setDraftRecord(nextData.records[0] ?? makeEmptyRecord(nextData.testDate));
+    setRosterDraft(
+      nextData.rosterEntries.length ? nextData.rosterEntries : [makeEmptyRosterEntry()],
+    );
+    setRosterSizeInput(String(nextData.rosterEntries.length || 1));
+  }
+
   async function writeAppSystemLog(
     entry: Omit<SystemLogEntry, "actorUid" | "actorUsername" | "actorDisplayName"> & {
       actorUid?: string | null;
@@ -948,6 +974,12 @@ export default function App({ experimentalMode = false }: AppProps) {
     updateLoadCheckpoint("auth", "loading", "正在確認目前是否已登入。");
 
     const unsubscribe = subscribeToAuthState((user) => {
+      const nextUid = user?.uid ?? null;
+      if (activeAuthUidRef.current !== nextUid) {
+        activeAuthUidRef.current = nextUid;
+        resetCloudSessionState();
+      }
+
       if (user) {
         void ensureUserProfile(user);
         setActiveTab((current) =>
@@ -1014,9 +1046,6 @@ export default function App({ experimentalMode = false }: AppProps) {
 
   useEffect(() => {
     if (!currentUser) {
-      reportDebugFileLoadedRef.current = null;
-      autoOpenedLastCloudFileRef.current = null;
-      shareRepairSignatureRef.current = null;
       setCurrentProfile(null);
       setNicknameDraft("");
       setFriendNicknameDrafts({});
@@ -1024,12 +1053,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setFriends([]);
       setIncomingFriendRequests([]);
       setOutgoingFriendRequests([]);
-      setCloudFiles([]);
       setAbilityRulesConfig(defaultAbilityRulesConfig);
-      setCurrentCloudFileId(null);
-      setCurrentCloudFileOwnerUid(null);
-      setIsCloudDirty(false);
-      setShareEditorUids([]);
       setFrontendIssues([]);
       return;
     }
