@@ -33,6 +33,14 @@ import {
   readFirebaseConnectionTest,
   writeFirebaseConnectionTest,
 } from "./firebase-test";
+import { db } from "./firebase";
+import {
+  getDiagnosticEnvironment,
+  getDiagnosticEvents,
+  installDiagnosticErrorListeners,
+  recordDiagnosticEvent,
+  submitDiagnosticReport,
+} from "./diagnostics";
 import {
   emailToUsername,
   isValidUsername,
@@ -782,6 +790,12 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
+  const [diagnosticTitle, setDiagnosticTitle] = useState("");
+  const [diagnosticDescription, setDiagnosticDescription] = useState("");
+  const [diagnosticExpected, setDiagnosticExpected] = useState("");
+  const [diagnosticActual, setDiagnosticActual] = useState("");
+  const [diagnosticSubmitting, setDiagnosticSubmitting] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [nicknameDraft, setNicknameDraft] = useState("");
@@ -931,6 +945,11 @@ export default function App({ experimentalMode = false }: AppProps) {
   };
 
   function resetCloudSessionState(nextData: AppData = defaultAppData): void {
+    recordDiagnosticEvent("cloud.session-reset", "已重置目前雲端檔案 session 狀態。", {
+      recordCount: nextData.records.length,
+      rosterCount: nextData.rosterEntries.length,
+      rosterName: nextData.rosterName,
+    });
     reportDebugFileLoadedRef.current = null;
     autoOpenedLastCloudFileRef.current = null;
     shareRepairSignatureRef.current = null;
@@ -971,16 +990,60 @@ export default function App({ experimentalMode = false }: AppProps) {
   }
 
   useEffect(() => {
+    recordDiagnosticEvent("app.start", "前端 App 已啟動。", {
+      environment: getDiagnosticEnvironment(),
+    });
+    return installDiagnosticErrorListeners();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let lastLoggedAt = 0;
+    const handleResize = () => {
+      const now = Date.now();
+      if (now - lastLoggedAt < 1000) {
+        return;
+      }
+
+      lastLoggedAt = now;
+      recordDiagnosticEvent("environment.resize", "瀏覽器版面大小改變。", {
+        environment: getDiagnosticEnvironment(),
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
     updateLoadCheckpoint("auth", "loading", "正在確認目前是否已登入。");
 
     const unsubscribe = subscribeToAuthState((user) => {
       const nextUid = user?.uid ?? null;
       if (activeAuthUidRef.current !== nextUid) {
+        recordDiagnosticEvent("auth.uid-changed", "登入使用者 uid 已改變，重置目前檔案狀態。", {
+          previousUid: activeAuthUidRef.current,
+          nextUid,
+          nextUsername: user ? emailToUsername(user.email) || user.displayName || null : null,
+        });
         activeAuthUidRef.current = nextUid;
         resetCloudSessionState();
       }
 
       if (user) {
+        recordDiagnosticEvent("auth.signed-in", "Firebase 回報目前已登入。", {
+          uid: user.uid,
+          email: user.email,
+          username: emailToUsername(user.email),
+          displayName: user.displayName,
+        });
         void ensureUserProfile(user);
         setActiveTab((current) =>
           isReportDebugMode ? "pdf" : current === "account" ? "files" : current,
@@ -1035,6 +1098,7 @@ export default function App({ experimentalMode = false }: AppProps) {
             detail: "登入後才會嘗試恢復上次使用的檔案。",
           },
         }));
+        recordDiagnosticEvent("auth.signed-out", "Firebase 回報目前未登入。");
       }
       setCurrentUser(user);
       setAuthReady(true);
@@ -1265,6 +1329,10 @@ export default function App({ experimentalMode = false }: AppProps) {
       if (lastSelection) {
         writeLastCloudFileSelection(currentUser.uid, null);
         autoOpenedLastCloudFileRef.current = lastFileKey;
+        recordDiagnosticEvent("cloud.auto-restore-missing", "找不到上次使用的檔案，已清除本機記憶。", {
+          uid: currentUser.uid,
+          lastSelection,
+        });
       }
       return;
     }
@@ -1282,6 +1350,14 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     autoOpenedLastCloudFileRef.current = `${targetFile.ownerUid}:${targetFile.id}`;
     updateLoadCheckpoint("restoreFile", "loading", `正在開啟檔案：${targetFile.fileName}`);
+    recordDiagnosticEvent("cloud.auto-restore-started", "開始自動開啟檔案。", {
+      uid: currentUser.uid,
+      targetFileId: targetFile.id,
+      targetOwnerUid: targetFile.ownerUid,
+      targetFileName: targetFile.fileName,
+      lastSelection,
+      cloudFileCount: cloudFiles.length,
+    });
     void loadCloudFile(targetFile.ownerUid, targetFile.id)
       .then((nextData) => {
         skipNextCloudDirtyRef.current = true;
@@ -1309,6 +1385,15 @@ export default function App({ experimentalMode = false }: AppProps) {
             : `已自動開啟最新建立的檔案：${targetFile.fileName}`,
         );
         updateLoadCheckpoint("restoreFile", "success", `已開啟檔案：${targetFile.fileName}`);
+        recordDiagnosticEvent("cloud.auto-restore-completed", "自動開啟檔案完成。", {
+          uid: currentUser.uid,
+          targetFileId: targetFile.id,
+          targetOwnerUid: targetFile.ownerUid,
+          targetFileName: targetFile.fileName,
+          recordCount: nextData.records.length,
+          rosterCount: nextData.rosterEntries.length,
+          rosterName: nextData.rosterName,
+        });
       })
       .catch((error) => {
         const nextMessage =
@@ -1316,6 +1401,13 @@ export default function App({ experimentalMode = false }: AppProps) {
         setMessage(`自動開啟檔案失敗：${nextMessage}`);
         updateLoadCheckpoint("restoreFile", "error", nextMessage);
         pushFrontendIssue(`自動開啟檔案失敗：${nextMessage}`);
+        recordDiagnosticEvent("cloud.auto-restore-failed", "自動開啟檔案失敗。", {
+          uid: currentUser.uid,
+          targetFileId: targetFile.id,
+          targetOwnerUid: targetFile.ownerUid,
+          targetFileName: targetFile.fileName,
+          error: nextMessage,
+        });
       });
   }, [cloudFiles, currentCloudFileId, currentUser, isReportDebugMode]);
 
@@ -1668,6 +1760,22 @@ export default function App({ experimentalMode = false }: AppProps) {
   const currentWorkspaceFileLabel = currentCloudFileSummary
     ? `${currentCloudFileSummary.accessRole === "owner" ? "" : "【共享】"}${currentCloudFileSummary.academicTerm}／${currentCloudFileSummary.rosterName}`
     : "尚未開啟檔案";
+  useEffect(() => {
+    recordDiagnosticEvent("cloud.current-file-state", "目前開啟檔案狀態已更新。", {
+      currentUserUid: currentUser?.uid ?? null,
+      currentCloudFileId,
+      currentCloudFileOwnerUid,
+      currentFileName: currentCloudFileSummary?.fileName ?? null,
+      currentFileAccessRole: currentCloudFileSummary?.accessRole ?? null,
+      cloudFileCount: cloudFiles.length,
+    });
+  }, [
+    cloudFiles.length,
+    currentCloudFileId,
+    currentCloudFileOwnerUid,
+    currentCloudFileSummary,
+    currentUser,
+  ]);
   const pendingSwitchFile = useMemo(
     () =>
       sortedCloudFiles.find(
@@ -2490,6 +2598,9 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     try {
       const operationId = createSystemLogOperationId();
+      recordDiagnosticEvent("auth.sign-in-clicked", "使用者嘗試登入。", {
+        username: normalizeUsername(loginUsername.trim()),
+      });
       const user = await signInWithUsername(loginUsername.trim(), loginPassword);
       setShowLoginPanel(false);
       setLoginPassword("");
@@ -2508,6 +2619,10 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage(`已登入 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "帳號登入失敗。");
+      recordDiagnosticEvent("auth.sign-in-failed", "使用者登入失敗。", {
+        username: normalizeUsername(loginUsername.trim()),
+        error: nextMessage,
+      });
       setMessage(`帳號登入失敗：${nextMessage}`);
     }
   }
@@ -2530,6 +2645,9 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     try {
       const operationId = createSystemLogOperationId();
+      recordDiagnosticEvent("auth.register-clicked", "使用者嘗試註冊。", {
+        username: normalizeUsername(loginUsername.trim()),
+      });
       const user = await registerWithUsername(loginUsername.trim(), loginPassword);
       setShowLoginPanel(false);
       setLoginPassword("");
@@ -2548,6 +2666,10 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage(`已建立帳號 ${user.displayName || emailToUsername(user.email) || "使用者"}。`);
     } catch (error) {
       const nextMessage = formatAuthError(error, "註冊失敗。");
+      recordDiagnosticEvent("auth.register-failed", "使用者註冊失敗。", {
+        username: normalizeUsername(loginUsername.trim()),
+        error: nextMessage,
+      });
       setMessage(`註冊失敗：${nextMessage}`);
     }
   }
@@ -2555,6 +2677,12 @@ export default function App({ experimentalMode = false }: AppProps) {
   async function handleSignOut(): Promise<void> {
     try {
       const operationId = createSystemLogOperationId();
+      recordDiagnosticEvent("auth.sign-out-clicked", "使用者嘗試登出。", {
+        uid: currentUser?.uid ?? null,
+        username: currentUsername,
+        currentCloudFileId,
+        currentCloudFileOwnerUid,
+      });
       await writeAppSystemLog({
         operationId,
         actionType: "user_signed_out",
@@ -2580,6 +2708,78 @@ export default function App({ experimentalMode = false }: AppProps) {
         message: nextMessage,
       });
       setMessage(`登出失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleSubmitDiagnosticReport(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再送出問題回報。");
+      setShowDiagnosticPanel(true);
+      return;
+    }
+
+    if (!diagnosticDescription.trim()) {
+      setMessage("請先輸入問題描述。");
+      return;
+    }
+
+    setDiagnosticSubmitting(true);
+    recordDiagnosticEvent("diagnostic.submit-started", "使用者送出問題回報。", {
+      uid: currentUser.uid,
+      username: currentUsername,
+      currentCloudFileId,
+      currentCloudFileOwnerUid,
+      currentFileName: currentCloudFileSummary?.fileName ?? null,
+    });
+
+    try {
+      const reportId = await submitDiagnosticReport(db, {
+        reporterUid: currentUser.uid,
+        reporterUsername: currentUsername,
+        reporterDisplayName: currentDisplayName,
+        userMessage: {
+          title: diagnosticTitle.trim(),
+          description: diagnosticDescription.trim(),
+          expected: diagnosticExpected.trim(),
+          actual: diagnosticActual.trim(),
+        },
+        authSnapshot: {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          username: currentUsername,
+          displayName: currentUser.displayName,
+          profileNickname: currentProfile?.displayNickname ?? null,
+        },
+        currentFileSnapshot: {
+          fileId: currentCloudFileId,
+          ownerUid: currentCloudFileOwnerUid,
+          fileName: currentCloudFileSummary?.fileName ?? null,
+          rosterName: currentCloudFileSummary?.rosterName ?? data.rosterName,
+          academicTerm: currentCloudFileSummary?.academicTerm ?? data.academicTerm,
+          accessRole: currentCloudFileSummary?.accessRole ?? null,
+          recordCount: data.records.length,
+          rosterCount: data.rosterEntries.length,
+        },
+        frontendIssues,
+      });
+      recordDiagnosticEvent("diagnostic.submit-completed", "問題回報已送出。", {
+        reportId,
+      });
+      setDiagnosticTitle("");
+      setDiagnosticDescription("");
+      setDiagnosticExpected("");
+      setDiagnosticActual("");
+      setShowDiagnosticPanel(false);
+      setMessage(`問題回報已送出，編號：${reportId}`);
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "送出問題回報失敗。";
+      recordDiagnosticEvent("diagnostic.submit-failed", "問題回報送出失敗。", {
+        error: nextMessage,
+      });
+      setMessage(`問題回報送出失敗：${nextMessage}`);
+    } finally {
+      setDiagnosticSubmitting(false);
     }
   }
 
@@ -3548,12 +3748,25 @@ export default function App({ experimentalMode = false }: AppProps) {
   async function handleOpenCloudFile(file: CloudFileSummary): Promise<void> {
     if (!currentUser) {
       pushFileOpenTrace("error", "未登入，無法切換檔案。");
+      recordDiagnosticEvent("cloud.open-blocked", "未登入，無法切換檔案。", {
+        targetFileId: file.id,
+        targetOwnerUid: file.ownerUid,
+        targetFileName: file.fileName,
+      });
       setMessage("請先登入，再開啟雲端檔案。");
       return;
     }
 
     if (!confirmDiscardCloudChanges()) {
       pushFileOpenTrace("info", `已取消切換「${file.fileName}」，因為目前檔案仍有未儲存變更。`);
+      recordDiagnosticEvent("cloud.open-cancelled", "使用者取消切換檔案。", {
+        uid: currentUser.uid,
+        currentCloudFileId,
+        currentCloudFileOwnerUid,
+        targetFileId: file.id,
+        targetOwnerUid: file.ownerUid,
+        targetFileName: file.fileName,
+      });
       return;
     }
 
@@ -3562,6 +3775,15 @@ export default function App({ experimentalMode = false }: AppProps) {
       saveFileOpenTrace([]);
       pushFileOpenTrace("info", `開始切換檔案：${file.fileName}`);
       const operationId = createSystemLogOperationId();
+      recordDiagnosticEvent("cloud.open-started", "使用者手動開啟檔案。", {
+        uid: currentUser.uid,
+        currentCloudFileId,
+        currentCloudFileOwnerUid,
+        targetFileId: file.id,
+        targetOwnerUid: file.ownerUid,
+        targetFileName: file.fileName,
+        targetAccessRole: file.accessRole,
+      });
       await writeAppSystemLog({
         operationId,
         actionType: "file_opened",
@@ -3577,6 +3799,15 @@ export default function App({ experimentalMode = false }: AppProps) {
         "success",
         `已從雲端讀到檔案內容，名冊 ${nextData.rosterEntries.length} 人，測驗紀錄 ${nextData.records.length} 筆。`,
       );
+      recordDiagnosticEvent("cloud.open-loaded", "已從雲端讀到檔案內容。", {
+        uid: currentUser.uid,
+        targetFileId: file.id,
+        targetOwnerUid: file.ownerUid,
+        targetFileName: file.fileName,
+        rosterName: nextData.rosterName,
+        recordCount: nextData.records.length,
+        rosterCount: nextData.rosterEntries.length,
+      });
       skipNextCloudDirtyRef.current = true;
       setData(nextData);
       pushFileOpenTrace("info", "已更新目前畫面資料。");
@@ -3610,11 +3841,24 @@ export default function App({ experimentalMode = false }: AppProps) {
         message: "已開啟雲端檔案。",
       });
       pushFileOpenTrace("success", "已寫入 systemLogs completed，檔案切換完成。");
+      recordDiagnosticEvent("cloud.open-completed", "手動開啟檔案完成。", {
+        uid: currentUser.uid,
+        targetFileId: file.id,
+        targetOwnerUid: file.ownerUid,
+        targetFileName: file.fileName,
+      });
       setMessage(`已切換到檔案：${file.fileName}`);
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "開啟雲端檔案失敗。";
       pushFileOpenTrace("error", `切換失敗：${nextMessage}`);
+      recordDiagnosticEvent("cloud.open-failed", "手動開啟檔案失敗。", {
+        uid: currentUser.uid,
+        targetFileId: file.id,
+        targetOwnerUid: file.ownerUid,
+        targetFileName: file.fileName,
+        error: nextMessage,
+      });
       await writeAppSystemLog({
         actionType: "file_opened",
         phase: "failed",
@@ -4406,6 +4650,8 @@ export default function App({ experimentalMode = false }: AppProps) {
   const isScannedInviteAlreadyFriend =
     Boolean(scannedFriendInvite) &&
     friends.some((friend) => friend.username === scannedFriendInvite?.issuedByUsername);
+  const diagnosticEventsPreview = getDiagnosticEvents().slice(0, 8);
+  const diagnosticEnvironmentPreview = getDiagnosticEnvironment();
 
   return (
     <div
@@ -4430,6 +4676,21 @@ export default function App({ experimentalMode = false }: AppProps) {
             </div>
             <div className="hero-auth">
               <div className="shared-date-field auth-entry">
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    recordDiagnosticEvent("diagnostic.panel-toggled", "使用者開啟或關閉問題回報面板。", {
+                      nextVisible: !showDiagnosticPanel,
+                      uid: currentUser?.uid ?? null,
+                      currentCloudFileId,
+                      currentCloudFileOwnerUid,
+                    });
+                    setShowDiagnosticPanel((current) => !current);
+                  }}
+                  type="button"
+                >
+                  回報問題
+                </button>
                 {!currentUser ? (
                   <div className="button-row">
                     <button
@@ -4527,6 +4788,87 @@ export default function App({ experimentalMode = false }: AppProps) {
                     取消
                   </button>
                 </div>
+              </div>
+            </section>
+          ) : null}
+          {showDiagnosticPanel ? (
+            <section className="auth-panel diagnostic-panel">
+              <h2>回報問題</h2>
+              <p className="auth-help">
+                請描述你遇到的狀況。系統會一併送出最近操作紀錄、登入狀態、目前檔案資訊與瀏覽器版面資料；不會送出密碼、token 或 cookie。
+              </p>
+              <div className="auth-form-grid diagnostic-form-grid">
+                <input
+                  onChange={(event) => setDiagnosticTitle(event.target.value)}
+                  placeholder="問題標題（選填）"
+                  type="text"
+                  value={diagnosticTitle}
+                />
+                <textarea
+                  className="diagnostic-textarea"
+                  onChange={(event) => setDiagnosticDescription(event.target.value)}
+                  placeholder="請描述發生了什麼事，例如：B 老師登入後仍看到 A 老師的檔案。"
+                  value={diagnosticDescription}
+                />
+                <textarea
+                  className="diagnostic-textarea"
+                  onChange={(event) => setDiagnosticExpected(event.target.value)}
+                  placeholder="預期結果（選填）"
+                  value={diagnosticExpected}
+                />
+                <textarea
+                  className="diagnostic-textarea"
+                  onChange={(event) => setDiagnosticActual(event.target.value)}
+                  placeholder="實際結果（選填）"
+                  value={diagnosticActual}
+                />
+                <div className="diagnostic-summary">
+                  <strong>即將附上的診斷摘要</strong>
+                  <div className="diagnostic-summary-grid">
+                    <span>登入帳號</span>
+                    <span>{currentUser ? `${currentUsername} / ${currentUser.uid}` : "尚未登入"}</span>
+                    <span>目前檔案</span>
+                    <span>{currentCloudFileSummary?.fileName ?? currentWorkspaceFileLabel}</span>
+                    <span>版面大小</span>
+                    <span>
+                      {diagnosticEnvironmentPreview.viewport.width} × {diagnosticEnvironmentPreview.viewport.height}
+                      ，{diagnosticEnvironmentPreview.device.estimatedDeviceType}
+                    </span>
+                    <span>最近事件</span>
+                    <span>{diagnosticEventsPreview.length} 筆</span>
+                  </div>
+                  {diagnosticEventsPreview.length > 0 ? (
+                    <ol className="diagnostic-event-preview">
+                      {diagnosticEventsPreview.map((event) => (
+                        <li key={`${event.timestamp}-${event.type}`}>
+                          <code>{event.type}</code>
+                          <span>{event.message}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={diagnosticSubmitting || !currentUser}
+                    onClick={handleSubmitDiagnosticReport}
+                    type="button"
+                  >
+                    {diagnosticSubmitting ? "送出中" : "送出回報"}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={diagnosticSubmitting}
+                    onClick={() => setShowDiagnosticPanel(false)}
+                    type="button"
+                  >
+                    取消
+                  </button>
+                </div>
+                {!currentUser ? (
+                  <p className="auth-help">請先登入，才能把問題回報送到雲端。</p>
+                ) : null}
               </div>
             </section>
           ) : null}

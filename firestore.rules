@@ -140,6 +140,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /diagnosticReports/{reportId} {
+      allow create: if
+        isSignedIn() &&
+        request.resource.data.reporterUid == request.auth.uid;
+      allow read: if
+        isSignedIn() &&
+        resource.data.reporterUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
