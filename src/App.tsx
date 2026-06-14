@@ -2607,7 +2607,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     setRosterActiveCell({ rowIndex: nextRowIndex, columnIndex: nextColumnIndex });
   }
 
-  function applyRosterDraftToCurrentData(showMessage = true): boolean {
+  function buildDataWithRosterDraft(): AppData {
     const normalizedRosterEntries = normalizedRosterDraft.filter(
       (entry) => entry.studentName,
     );
@@ -2638,26 +2638,32 @@ export default function App({ experimentalMode = false }: AppProps) {
       };
     });
 
-    setData((current) => ({
-      ...current,
+    return {
+      ...data,
       rosterEntries: normalizedRosterEntries,
       records: nextRecords,
-    }));
+    };
+  }
+
+  function applyRosterDraftToCurrentData(showMessage = true): AppData {
+    const nextData = buildDataWithRosterDraft();
+    const nextRecords = nextData.records;
+    setData(nextData);
     setRosterDraft(
-      normalizedRosterEntries.length
-        ? normalizedRosterEntries
+      nextData.rosterEntries.length
+        ? nextData.rosterEntries
         : [makeEmptyRosterEntry()],
     );
     setSelectedId(nextRecords[0]?.id ?? "");
     setDraftRecord(nextRecords[0] ?? makeEmptyRecord(data.testDate));
     if (showMessage) {
       setMessage(
-        normalizedRosterEntries.length
+        nextData.rosterEntries.length
           ? "已將名冊匯入目前資料。"
           : "已儲存學員名單，目前沒有學員。",
       );
     }
-    return true;
+    return nextData;
   }
 
   function discardRosterDraftChanges(showMessage = true): void {
@@ -2671,11 +2677,22 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
   }
 
-  function importRosterToRecords(): void {
+  async function importRosterToRecords(): Promise<void> {
     recordUserAction("按下「儲存名冊」按鈕。", {
       rosterRows: rosterDraft.length,
     });
-    applyRosterDraftToCurrentData(true);
+    const nextData = applyRosterDraftToCurrentData(false);
+    if (!currentCloudFileId || !currentCloudFileOwnerUid) {
+      setMessage("已儲存學員名單到目前畫面。請先開啟檔案，才能同步到雲端。");
+      return;
+    }
+
+    const saved = await handleSaveCurrentCloudFile(nextData, "按下「儲存名冊」並同步雲端。");
+    setMessage(
+      saved
+        ? "學員名單已儲存並同步到雲端。"
+        : "學員名單已套用到目前畫面，但同步雲端失敗，請稍後再按「儲存目前檔案」。",
+    );
   }
 
   function beginCellEdit(recordId: string, field: EditableField): void {
@@ -2909,6 +2926,28 @@ export default function App({ experimentalMode = false }: AppProps) {
         currentCloudFileId,
         currentCloudFileOwnerUid,
       });
+      if (currentCloudFileId && isCloudDirty) {
+        const shouldSaveBeforeSignOut = window.confirm(
+          "目前檔案有尚未儲存到雲端的變更。按「確定」會先儲存再登出；按「取消」會留在目前畫面。",
+        );
+        if (!shouldSaveBeforeSignOut) {
+          recordUserAction("取消登出，因為目前檔案尚未儲存。", {
+            fileId: currentCloudFileId,
+            ownerUid: currentCloudFileOwnerUid,
+          });
+          setMessage("已取消登出，請先確認目前檔案是否需要儲存。");
+          return;
+        }
+
+        const saved = await handleSaveCurrentCloudFile(
+          data,
+          "登出前儲存目前檔案到雲端。",
+        );
+        if (!saved) {
+          setMessage("檔案尚未成功儲存，因此已取消登出。");
+          return;
+        }
+      }
       await writeAppSystemLog({
         operationId,
         actionType: "user_signed_out",
@@ -3933,19 +3972,22 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
   }
 
-  async function handleSaveCurrentCloudFile(): Promise<boolean> {
+  async function handleSaveCurrentCloudFile(
+    dataToSave: AppData = data,
+    actionLabel = "按下「儲存目前檔案」按鈕。",
+  ): Promise<boolean> {
     if (!currentUser || !currentCloudFileId || !currentCloudFileOwnerUid) {
       setMessage("請先開啟一份雲端檔案，再儲存。");
       return false;
     }
 
     try {
-      recordUserAction("按下「儲存目前檔案」按鈕。", {
+      recordUserAction(actionLabel, {
         fileId: currentCloudFileId,
         ownerUid: currentCloudFileOwnerUid,
-        rosterName: data.rosterName,
-        recordCount: data.records.length,
-        rosterCount: data.rosterEntries.length,
+        rosterName: dataToSave.rosterName,
+        recordCount: dataToSave.records.length,
+        rosterCount: dataToSave.rosterEntries.length,
       });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
@@ -3954,9 +3996,9 @@ export default function App({ experimentalMode = false }: AppProps) {
         phase: "started",
         ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
-        fileName: data.academicTerm
-          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
-          : data.rosterName || "未命名班級",
+        fileName: dataToSave.academicTerm
+          ? `${dataToSave.academicTerm} / ${dataToSave.rosterName || "未命名班級"}`
+          : dataToSave.rosterName || "未命名班級",
         message: "開始儲存雲端檔案。",
       });
       await saveCloudFileData({
@@ -3964,7 +4006,7 @@ export default function App({ experimentalMode = false }: AppProps) {
         fileId: currentCloudFileId,
         username: currentUsername,
         displayName: currentProfile?.displayNickname ?? null,
-        data,
+        data: dataToSave,
       });
       await writeAppSystemLog({
         operationId,
@@ -3972,9 +4014,9 @@ export default function App({ experimentalMode = false }: AppProps) {
         phase: "completed",
         ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
-        fileName: data.academicTerm
-          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
-          : data.rosterName || "未命名班級",
+        fileName: dataToSave.academicTerm
+          ? `${dataToSave.academicTerm} / ${dataToSave.rosterName || "未命名班級"}`
+          : dataToSave.rosterName || "未命名班級",
         message: "已儲存雲端檔案。",
       });
       setIsCloudDirty(false);
@@ -4043,7 +4085,13 @@ export default function App({ experimentalMode = false }: AppProps) {
       );
 
       if (shouldSave) {
-        applyRosterDraftToCurrentData(false);
+        const nextData = applyRosterDraftToCurrentData(false);
+        const saved = currentCloudFileId
+          ? await handleSaveCurrentCloudFile(nextData, "切換分頁前儲存學員名單並同步雲端。")
+          : false;
+        if (!saved && currentCloudFileId) {
+          return;
+        }
         setMessage("已儲存學員名單，正在切換頁面。");
         setActiveTab(nextTab);
         return;
