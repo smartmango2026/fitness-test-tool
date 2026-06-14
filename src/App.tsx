@@ -382,6 +382,12 @@ const TABLE_SORT_OPTIONS: Array<{ value: TableSortKey; label: string }> = [
   { value: "grade-asc", label: "依年級排序（小到大）" },
 ];
 const TABLE_GRADE_CHECKBOX_OPTIONS: StudentGradeLabel[] = ["幼幼班", "小班", "中班", "大班"];
+const emptyAppData: AppData = {
+  ...defaultAppData,
+  rosterName: "",
+  rosterEntries: [],
+  records: [],
+};
 
 function hasIncompleteScore(record: FitnessRecord): boolean {
   return scoreFields.some(
@@ -948,7 +954,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     });
   };
 
-  function resetCloudSessionState(nextData: AppData = defaultAppData): void {
+  function resetCloudSessionState(nextData: AppData = emptyAppData): void {
     recordDiagnosticEvent("cloud.session-reset", "已重置目前雲端檔案 session 狀態。", {
       recordCount: nextData.records.length,
       rosterCount: nextData.rosterEntries.length,
@@ -1893,6 +1899,28 @@ export default function App({ experimentalMode = false }: AppProps) {
             type="button"
           >
             前往學員名單
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderNoOpenFileCard(pageLabel: string) {
+    return (
+      <div className="friend-empty-state no-students-card">
+        <strong>尚未開啟檔案</strong>
+        <p>
+          {pageLabel}目前沒有內容，因為這個帳號尚未開啟任何檔案。請先建立新檔案，或從檔案清單中選擇一份檔案。
+        </p>
+        <div className="button-row">
+          <button
+            className="primary-button"
+            onClick={() => {
+              void handleTabChange("files");
+            }}
+            type="button"
+          >
+            前往編輯檔案
           </button>
         </div>
       </div>
@@ -3655,6 +3683,12 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     const nextData = buildAppDataForNewCloudFile();
+    recordUserAction("按下建立表單內的「建立新檔案」按鈕。", {
+      rosterName: nextData.rosterName,
+      gradeLabel: nextData.gradeLabel,
+      academicTerm: nextData.academicTerm,
+      rosterCount: nextData.rosterEntries.length,
+    });
     const rosterName = nextData.rosterName.trim();
     if (!rosterName) {
       setMessage("請先輸入班級名稱。");
@@ -3662,12 +3696,6 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     try {
-      recordUserAction("按下「建立新檔案」按鈕。", {
-        rosterName: nextData.rosterName,
-        gradeLabel: nextData.gradeLabel,
-        academicTerm: nextData.academicTerm,
-        rosterCount: nextData.rosterEntries.length,
-      });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -5441,6 +5469,10 @@ export default function App({ experimentalMode = false }: AppProps) {
                     className="primary-button"
                     disabled={!currentUser}
                     onClick={() => {
+                      recordUserAction("按下「建立新檔案」入口按鈕。", {
+                        currentCloudFileId,
+                        cloudFileCount: cloudFiles.length,
+                      });
                       setShowFileSwitcher(false);
                       setShowCreateFilePage(true);
                     }}
@@ -5458,7 +5490,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                     <p>請先註冊並登入，之後才能在自己的帳號下建立雲端檔案。</p>
                   </div>
                 </div>
-              ) : cloudFiles.length === 0 ? (
+              ) : cloudFiles.length === 0 && !showCreateFilePage ? (
                 <div className="file-list-shell">
                   <div className="file-list-head">
                     <p>目前還沒有檔案。</p>
@@ -6414,6 +6446,7 @@ export default function App({ experimentalMode = false }: AppProps) {
               {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
 
+              {!currentCloudFileId ? renderNoOpenFileCard("學員名單") : (
               <div className="roster-editor">
                 <div className="sheet-shell">
                   {debugSettings.showSheetDebug
@@ -6609,6 +6642,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </button>
                 </div>
               </div>
+              )}
             </section>
           </>
         ) : null}
