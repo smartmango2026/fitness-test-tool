@@ -405,6 +405,22 @@ function makeEmptyRosterEntry(): RosterEntry {
   };
 }
 
+function normalizeRosterEntriesForFile(
+  entries: RosterEntry[],
+  fileGradeLabel: string,
+): RosterEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    studentName: entry.studentName.trim(),
+    height: entry.height.trim(),
+    weight: entry.weight.trim(),
+    studentGradeLabel: resolveStudentGradeLabel(
+      fileGradeLabel,
+      entry.studentGradeLabel,
+    ),
+  }));
+}
+
 function makeNewCloudFileDraft(source: AppData): NewCloudFileDraft {
   const parts = parseAcademicTermParts(source.academicTerm);
   return {
@@ -1389,6 +1405,20 @@ export default function App({ experimentalMode = false }: AppProps) {
     () => data.records.find((record) => record.id === selectedId) ?? null,
     [data.records, selectedId],
   );
+  const normalizedRosterDraft = useMemo(
+    () => normalizeRosterEntriesForFile(rosterDraft, data.gradeLabel),
+    [data.gradeLabel, rosterDraft],
+  );
+  const normalizedSavedRosterEntries = useMemo(
+    () => normalizeRosterEntriesForFile(data.rosterEntries, data.gradeLabel),
+    [data.gradeLabel, data.rosterEntries],
+  );
+  const hasRosterDraftChanges = useMemo(
+    () =>
+      JSON.stringify(normalizedRosterDraft) !==
+      JSON.stringify(normalizedSavedRosterEntries),
+    [normalizedRosterDraft, normalizedSavedRosterEntries],
+  );
   function getRecordGradeLabel(record: FitnessRecord | null): string {
     if (!record) {
       return data.gradeLabel;
@@ -1667,6 +1697,29 @@ export default function App({ experimentalMode = false }: AppProps) {
       </div>
     );
   }
+
+  function renderNoStudentsCard(pageLabel: string) {
+    return (
+      <div className="friend-empty-state no-students-card">
+        <strong>目前沒有學員</strong>
+        <p>
+          {pageLabel}目前沒有內容，因為這份檔案還沒有學員。請先到學員名單輸入並儲存學員資料。
+        </p>
+        <div className="button-row">
+          <button
+            className="primary-button"
+            onClick={() => {
+              void handleTabChange("roster");
+            }}
+            type="button"
+          >
+            前往學員名單
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   function renderIncomingFriendAlertCard() {
     if (!currentUser || incomingFriendRequests.length === 0) {
       return null;
@@ -2228,24 +2281,10 @@ export default function App({ experimentalMode = false }: AppProps) {
     setRosterActiveCell({ rowIndex: nextRowIndex, columnIndex: nextColumnIndex });
   }
 
-  function importRosterToRecords(): void {
-    const normalizedRosterEntries = rosterDraft
-      .map((entry) => ({
-        ...entry,
-        studentName: entry.studentName.trim(),
-        height: entry.height.trim(),
-        weight: entry.weight.trim(),
-        studentGradeLabel: resolveStudentGradeLabel(
-          data.gradeLabel,
-          entry.studentGradeLabel,
-        ),
-      }))
-      .filter((entry) => entry.studentName);
-
-    if (!normalizedRosterEntries.length) {
-      setMessage("目前名冊是空的。");
-      return;
-    }
+  function applyRosterDraftToCurrentData(showMessage = true): boolean {
+    const normalizedRosterEntries = normalizedRosterDraft.filter(
+      (entry) => entry.studentName,
+    );
 
     const existingMap = new Map(
       data.records.map((record) => [record.studentName, record] as const),
@@ -2278,10 +2317,36 @@ export default function App({ experimentalMode = false }: AppProps) {
       rosterEntries: normalizedRosterEntries,
       records: nextRecords,
     }));
-    setRosterDraft(normalizedRosterEntries);
+    setRosterDraft(
+      normalizedRosterEntries.length
+        ? normalizedRosterEntries
+        : [makeEmptyRosterEntry()],
+    );
     setSelectedId(nextRecords[0]?.id ?? "");
     setDraftRecord(nextRecords[0] ?? makeEmptyRecord(data.testDate));
-    setMessage("已將名冊匯入目前資料。");
+    if (showMessage) {
+      setMessage(
+        normalizedRosterEntries.length
+          ? "已將名冊匯入目前資料。"
+          : "已儲存學員名單，目前沒有學員。",
+      );
+    }
+    return true;
+  }
+
+  function discardRosterDraftChanges(showMessage = true): void {
+    setRosterDraft(
+      data.rosterEntries.length ? data.rosterEntries : [makeEmptyRosterEntry()],
+    );
+    setRosterSizeInput(String(Math.max(data.rosterEntries.length, 1)));
+    setRosterActiveCell(null);
+    if (showMessage) {
+      setMessage("已放棄學員名單的未儲存變更。");
+    }
+  }
+
+  function importRosterToRecords(): void {
+    applyRosterDraftToCurrentData(true);
   }
 
   function beginCellEdit(recordId: string, field: EditableField): void {
@@ -3399,6 +3464,30 @@ export default function App({ experimentalMode = false }: AppProps) {
   async function handleTabChange(nextTab: TabKey): Promise<void> {
     if (nextTab === activeTab) {
       return;
+    }
+
+    if (activeTab === "roster" && hasRosterDraftChanges) {
+      const shouldSave = window.confirm(
+        "目前學員名單有未儲存變更。按「確定」會先儲存，再切換頁面。",
+      );
+
+      if (shouldSave) {
+        applyRosterDraftToCurrentData(false);
+        setMessage("已儲存學員名單，正在切換頁面。");
+        setActiveTab(nextTab);
+        return;
+      }
+
+      const shouldDiscard = window.confirm(
+        "要放棄目前學員名單的未儲存變更並切換頁面嗎？",
+      );
+
+      if (!shouldDiscard) {
+        return;
+      }
+
+      discardRosterDraftChanges(false);
+      setMessage("已放棄學員名單變更，正在切換頁面。");
     }
 
     if (activeTab === "files" && currentCloudFileId && isCloudDirty) {
@@ -4596,7 +4685,8 @@ export default function App({ experimentalMode = false }: AppProps) {
                   {showTableFilters ? "收起篩選器" : "展開篩選器"}
                 </button>
               </div>
-              {showTableFilters ? (
+              {data.records.length === 0 ? renderNoStudentsCard("測驗總表") : null}
+              {data.records.length > 0 && showTableFilters ? (
                 <div className="table-filter-panel">
                   {isMixedAgeClass(data.gradeLabel) ? (
                     <div className="table-filter-section">
@@ -4669,6 +4759,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </div>
                 </div>
               ) : null}
+              {data.records.length > 0 ? (
               <div className="sheet-shell">
                 {debugSettings.showSheetDebug
                   ? renderSheetDebugInfo({
@@ -4773,6 +4864,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                   </div>
                 </div>
               </div>
+              ) : null}
             </section>
           </>
         ) : null}
@@ -5566,94 +5658,99 @@ export default function App({ experimentalMode = false }: AppProps) {
               </div>
               {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
+              {data.records.length === 0 ? renderNoStudentsCard("測驗項目") : null}
 
-              <div className="metric-toolbar">
-                {scoreFields.map((field, index) => (
-                  <button
-                    className={field === activeMetric ? "metric-pill is-active" : "metric-pill"}
-                    key={field}
-                    onClick={() => setActiveMetric(field)}
-                    type="button"
-                  >
-                    {resolvedItemLabels[index]}
-                  </button>
-                ))}
-              </div>
-
-              <div className="sheet-shell">
-                {debugSettings.showSheetDebug
-                  ? renderSheetDebugInfo({
-                      viewportWidth: metricViewportWidth,
-                      naturalWidth: metricNaturalWidth,
-                      scale: metricScale,
-                      scrollLeft: metricViewportRef.current?.scrollLeft ?? 0,
-                    })
-                  : null}
-                <div
-                  className="sheet-viewport sheet-viewport-capped table-wrap"
-                  onScroll={() =>
-                    handleViewportScroll(
-                      metricViewportRef.current,
-                      metricNaturalWidth * metricScale,
-                    )
-                  }
-                  ref={metricViewportRef}
-                  style={{ maxHeight: getViewportMaxHeight(54) }}
-                >
-                  <div
-                    className="sheet-zoom-stage"
-                    style={{
-                      width: `${metricNaturalWidth * metricScale}px`,
-                      height: "100%",
-                    }}
-                  >
-                    <table
-                      className="table-editor metric-editor sheet-playground summary-sheet"
-                      ref={metricTableRef}
-                      style={{
-                        transform: `scale(${metricScale})`,
-                        transformOrigin: "top left",
-                      }}
-                    >
-                      <thead>
-                        <tr>
-                          <th className="is-frozen-column">學生姓名</th>
-                          {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
-                          <th>{activeMetricLabel}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.records.map((record) => (
-                          <tr
-                            className={record.id === selectedId ? "is-selected" : ""}
-                            key={record.id}
-                            onClick={() => selectRecord(record)}
-                          >
-                            <td className="is-frozen-column">{record.studentName}</td>
-                            {isMixedAgeClass(data.gradeLabel) ? (
-                              <td>{record.studentGradeLabel}</td>
-                            ) : null}
-                            <td>
-                              {renderTableCell(record, activeMetric, record[activeMetric], {
-                                inputType:
-                                  getMetricRule(activeMetric, record)?.kind === "rubric"
-                                    ? "select"
-                                    : "number",
-                                min: 0,
-                                navigationFields: [activeMetric],
-                                step: 1,
-                                className: "cell-input-number",
-                                displayValue: getMetricDisplayValue(record, activeMetric),
-                                selectOptions: getMetricSelectOptions(activeMetric, record),
-                              })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {data.records.length > 0 ? (
+                <>
+                  <div className="metric-toolbar">
+                    {scoreFields.map((field, index) => (
+                      <button
+                        className={field === activeMetric ? "metric-pill is-active" : "metric-pill"}
+                        key={field}
+                        onClick={() => setActiveMetric(field)}
+                        type="button"
+                      >
+                        {resolvedItemLabels[index]}
+                      </button>
+                    ))}
                   </div>
-                </div>
-              </div>
+
+                  <div className="sheet-shell">
+                    {debugSettings.showSheetDebug
+                      ? renderSheetDebugInfo({
+                          viewportWidth: metricViewportWidth,
+                          naturalWidth: metricNaturalWidth,
+                          scale: metricScale,
+                          scrollLeft: metricViewportRef.current?.scrollLeft ?? 0,
+                        })
+                      : null}
+                    <div
+                      className="sheet-viewport sheet-viewport-capped table-wrap"
+                      onScroll={() =>
+                        handleViewportScroll(
+                          metricViewportRef.current,
+                          metricNaturalWidth * metricScale,
+                        )
+                      }
+                      ref={metricViewportRef}
+                      style={{ maxHeight: getViewportMaxHeight(54) }}
+                    >
+                      <div
+                        className="sheet-zoom-stage"
+                        style={{
+                          width: `${metricNaturalWidth * metricScale}px`,
+                          height: "100%",
+                        }}
+                      >
+                        <table
+                          className="table-editor metric-editor sheet-playground summary-sheet"
+                          ref={metricTableRef}
+                          style={{
+                            transform: `scale(${metricScale})`,
+                            transformOrigin: "top left",
+                          }}
+                        >
+                          <thead>
+                            <tr>
+                              <th className="is-frozen-column">學生姓名</th>
+                              {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
+                              <th>{activeMetricLabel}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {data.records.map((record) => (
+                              <tr
+                                className={record.id === selectedId ? "is-selected" : ""}
+                                key={record.id}
+                                onClick={() => selectRecord(record)}
+                              >
+                                <td className="is-frozen-column">{record.studentName}</td>
+                                {isMixedAgeClass(data.gradeLabel) ? (
+                                  <td>{record.studentGradeLabel}</td>
+                                ) : null}
+                                <td>
+                                  {renderTableCell(record, activeMetric, record[activeMetric], {
+                                    inputType:
+                                      getMetricRule(activeMetric, record)?.kind === "rubric"
+                                        ? "select"
+                                        : "number",
+                                    min: 0,
+                                    navigationFields: [activeMetric],
+                                    step: 1,
+                                    className: "cell-input-number",
+                                    displayValue: getMetricDisplayValue(record, activeMetric),
+                                    selectOptions: getMetricSelectOptions(activeMetric, record),
+                                  })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </section>
           </>
         ) : null}
@@ -6083,48 +6180,52 @@ export default function App({ experimentalMode = false }: AppProps) {
               </div>
               {renderIncomingFriendAlertCard()}
               {renderWorkspaceFileCard()}
-              <div className="report-preview-toolbar">
-                <label className="shared-date-field report-student-picker">
-                  選擇學生
-                  <select
-                    className="search-input"
-                    onChange={(event) => {
-                      const nextRecord = data.records.find(
-                        (record) => record.id === event.target.value,
-                      );
-                      if (nextRecord) {
-                        selectRecord(nextRecord);
-                      }
-                    }}
-                    value={selectedId}
-                  >
-                    {data.records.map((record, index) => (
-                      <option key={record.id} value={record.id}>
-                        {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="primary-button"
-                  onClick={handleDownloadAllPdfs}
-                  type="button"
-                >
-                  下載全班 PDF
-                </button>
-              </div>
-              <A4CanvasBoard
-                ref={pdfCanvasRef}
-                abilityProfile={currentAbilityProfile}
-                abilityRulesConfig={abilityRulesConfig}
-                abilityLevelLabels={selectedAbilityLevelLabels}
-                abilityScores={selectedAbilityScores}
-                labels={selectedRecordItemLabels}
-                record={selectedRecord}
-                rosterName={data.rosterName}
-                seatNumber={selectedSeatNumber}
-                testDate={data.testDate}
-              />
+              {data.records.length === 0 ? renderNoStudentsCard("測驗報告") : (
+                <>
+                  <div className="report-preview-toolbar">
+                    <label className="shared-date-field report-student-picker">
+                      選擇學生
+                      <select
+                        className="search-input"
+                        onChange={(event) => {
+                          const nextRecord = data.records.find(
+                            (record) => record.id === event.target.value,
+                          );
+                          if (nextRecord) {
+                            selectRecord(nextRecord);
+                          }
+                        }}
+                        value={selectedId}
+                      >
+                        {data.records.map((record, index) => (
+                          <option key={record.id} value={record.id}>
+                            {`${index + 1} 號 ${record.studentName || "未命名學生"}`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="primary-button"
+                      onClick={handleDownloadAllPdfs}
+                      type="button"
+                    >
+                      下載全班 PDF
+                    </button>
+                  </div>
+                  <A4CanvasBoard
+                    ref={pdfCanvasRef}
+                    abilityProfile={currentAbilityProfile}
+                    abilityRulesConfig={abilityRulesConfig}
+                    abilityLevelLabels={selectedAbilityLevelLabels}
+                    abilityScores={selectedAbilityScores}
+                    labels={selectedRecordItemLabels}
+                    record={selectedRecord}
+                    rosterName={data.rosterName}
+                    seatNumber={selectedSeatNumber}
+                    testDate={data.testDate}
+                  />
+                </>
+              )}
             </section>
           </>
         ) : null}

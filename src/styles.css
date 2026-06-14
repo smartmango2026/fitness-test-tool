@@ -730,6 +730,10 @@ button {
   margin: 0;
 }
 
+.no-students-card .button-row {
+  margin-top: 8px;
+}
+
 .friend-list {
   display: grid;
   gap: 10px;
