@@ -2632,3 +2632,148 @@ tbody tr.is-selected {
     font-size: 0.88rem;
   }
 }
+
+/* ----------------------------------------------------
+   Fixed Spreadsheet Component Styles
+   ---------------------------------------------------- */
+.fixed-sheet-viewport {
+  width: 100%;
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.fixed-sheet-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: 100%;
+  font-family: inherit;
+}
+
+.fixed-sheet-table th, 
+.fixed-sheet-table td {
+  font-size: 16px !important;
+  box-sizing: border-box;
+  height: 44px;
+  text-align: center;
+  vertical-align: middle;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 6px;
+}
+
+.fixed-sheet-table th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  font-weight: 600;
+  z-index: 10;
+  color: #334155;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+/* Sticky left offsets for frozen columns */
+.fixed-sheet-table .sticky-left-0 {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: #ffffff !important;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.fixed-sheet-table .sticky-left-40 {
+  position: sticky;
+  left: 40px;
+  z-index: 5;
+  background: #ffffff !important;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.fixed-sheet-table .sticky-left-120 {
+  position: sticky;
+  left: 120px;
+  z-index: 5;
+  background: #ffffff !important;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.fixed-sheet-table .sticky-left-160 {
+  position: sticky;
+  left: 160px;
+  z-index: 5;
+  background: #ffffff !important;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+/* Header sticky overrides */
+.fixed-sheet-table th.sticky-left-0 {
+  z-index: 20;
+  background: #e2e8f0 !important;
+}
+
+.fixed-sheet-table th.sticky-left-40 {
+  z-index: 20;
+  background: #e2e8f0 !important;
+}
+
+.fixed-sheet-table th.sticky-left-120 {
+  z-index: 20;
+  background: #e2e8f0 !important;
+}
+
+.fixed-sheet-table th.sticky-left-160 {
+  z-index: 20;
+  background: #e2e8f0 !important;
+}
+
+/* Row Hover & Selection */
+.fixed-sheet-table tr:hover td {
+  background-color: #f8fafc !important;
+}
+
+.fixed-sheet-table tr.is-selected td {
+  background-color: #ecfeff !important;
+}
+
+/* Input Fields inside fixed sheet */
+.fixed-sheet-input,
+.fixed-sheet-select {
+  width: 100%;
+  height: 32px;
+  border: 2px solid #3b82f6;
+  border-radius: 6px;
+  outline: none;
+  padding: 0 6px;
+  box-sizing: border-box;
+  font-size: 16px !important;
+  text-align: center;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.fixed-sheet-select {
+  text-align-last: center;
+}
+
+.fixed-sheet-cell-interactive {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fixed-sheet-cell-interactive:hover {
+  background: #eff6ff !important;
+}
+
+.fixed-sheet-cell-editing {
+  padding: 2px !important;
+  background: #eff6ff !important;
+}
+

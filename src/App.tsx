@@ -5690,98 +5690,89 @@ export default function App({ experimentalMode = false }: AppProps) {
                     })
                   : null}
                 <div
-                  className="sheet-viewport sheet-viewport-capped table-wrap"
-                  onScroll={() =>
-                    handleViewportScroll(
-                      tableViewportRef.current,
-                      tableNaturalWidth * tableScale,
-                    )
-                  }
+                  className="fixed-sheet-viewport table-wrap"
                   ref={tableViewportRef}
                   style={{ maxHeight: getViewportMaxHeight(54) }}
                 >
-                  <div
-                    className="sheet-zoom-stage"
-                    style={{
-                      width: `${tableNaturalWidth * tableScale}px`,
-                      height: "100%",
-                    }}
+                  <table
+                    className="fixed-sheet-table"
+                    ref={tableTableRef}
                   >
-                    <table
-                      className="table-editor sheet-playground summary-sheet"
-                      ref={tableTableRef}
-                      style={{
-                        transform: `scale(${tableScale})`,
-                        transformOrigin: "top left",
-                      }}
-                    >
-                      <thead>
-                        <tr>
-                          <th className="is-frozen-column">學生姓名</th>
-                          {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
-                          <th>身高</th>
-                          <th>體重</th>
-                          {scoreFields.map((field, index) => (
-                            <th key={field}>
-                              <span className="metric-header-title">
-                                {resolvedItemLabels[index]}
-                              </span>
-                              <small className="metric-header-range">
-                                {getMetricRangeHint(field)}
-                              </small>
-                            </th>
+                    <colgroup>
+                      <col style={{ width: "120px" }} />
+                      {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "100px" }} /> : null}
+                      <col style={{ width: "80px" }} />
+                      <col style={{ width: "80px" }} />
+                      {scoreFields.map((field) => (
+                        <col key={field} style={{ width: "90px" }} />
+                      ))}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th className="sticky-left-0">學生姓名</th>
+                        {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
+                        <th>身高</th>
+                        <th>體重</th>
+                        {scoreFields.map((field, index) => (
+                          <th key={field}>
+                            <span className="metric-header-title">
+                              {resolvedItemLabels[index]}
+                            </span>
+                            <small className="metric-header-range">
+                              {getMetricRangeHint(field)}
+                            </small>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableRecords.map((record) => (
+                        <tr
+                          className={record.id === selectedId ? "is-selected" : ""}
+                          key={record.id}
+                          onClick={() => selectRecord(record)}
+                        >
+                          <td className="sticky-left-0">
+                            {renderTableCell(record, "studentName", record.studentName)}
+                          </td>
+                          {isMixedAgeClass(data.gradeLabel) ? (
+                            <td>
+                              {renderTableCell(
+                                record,
+                                "studentGradeLabel",
+                                record.studentGradeLabel,
+                                {
+                                  inputType: "select",
+                                  displayValue: record.studentGradeLabel,
+                                  selectOptions: STUDENT_GRADE_OPTIONS.map((grade) => ({
+                                    value: grade,
+                                    label: grade,
+                                  })),
+                                },
+                              )}
+                            </td>
+                          ) : null}
+                          <td>{renderTableCell(record, "height", record.height)}</td>
+                          <td>{renderTableCell(record, "weight", record.weight)}</td>
+                          {scoreFields.map((field) => (
+                            <td key={field}>
+                              {renderTableCell(record, field, record[field], {
+                                inputType:
+                                  getMetricRule(field, record)?.kind === "rubric"
+                                    ? "select"
+                                    : "number",
+                                min: 0,
+                                step: 1,
+                                className: "cell-input-number",
+                                displayValue: getMetricDisplayValue(record, field),
+                                selectOptions: getMetricSelectOptions(field, record),
+                              })}
+                            </td>
                           ))}
                         </tr>
-                      </thead>
-                      <tbody>
-                        {tableRecords.map((record) => (
-                          <tr
-                            className={record.id === selectedId ? "is-selected" : ""}
-                            key={record.id}
-                            onClick={() => selectRecord(record)}
-                          >
-                            <td className="is-frozen-column">
-                              {renderTableCell(record, "studentName", record.studentName)}
-                            </td>
-                            {isMixedAgeClass(data.gradeLabel) ? (
-                              <td>
-                                {renderTableCell(
-                                  record,
-                                  "studentGradeLabel",
-                                  record.studentGradeLabel,
-                                  {
-                                    inputType: "select",
-                                    displayValue: record.studentGradeLabel,
-                                    selectOptions: STUDENT_GRADE_OPTIONS.map((grade) => ({
-                                      value: grade,
-                                      label: grade,
-                                    })),
-                                  },
-                                )}
-                              </td>
-                            ) : null}
-                            <td>{renderTableCell(record, "height", record.height)}</td>
-                            <td>{renderTableCell(record, "weight", record.weight)}</td>
-                            {scoreFields.map((field) => (
-                              <td key={field}>
-                                {renderTableCell(record, field, record[field], {
-                                  inputType:
-                                    getMetricRule(field, record)?.kind === "rubric"
-                                      ? "select"
-                                      : "number",
-                                  min: 0,
-                                  step: 1,
-                                  className: "cell-input-number",
-                                  displayValue: getMetricDisplayValue(record, field),
-                                  selectOptions: getMetricSelectOptions(field, record),
-                                })}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
               ) : null}
@@ -6621,68 +6612,55 @@ export default function App({ experimentalMode = false }: AppProps) {
                         })
                       : null}
                     <div
-                      className="sheet-viewport sheet-viewport-capped table-wrap"
-                      onScroll={() =>
-                        handleViewportScroll(
-                          metricViewportRef.current,
-                          metricNaturalWidth * metricScale,
-                        )
-                      }
+                      className="fixed-sheet-viewport table-wrap"
                       ref={metricViewportRef}
                       style={{ maxHeight: getViewportMaxHeight(54) }}
                     >
-                      <div
-                        className="sheet-zoom-stage"
-                        style={{
-                          width: `${metricNaturalWidth * metricScale}px`,
-                          height: "100%",
-                        }}
+                      <table
+                        className="fixed-sheet-table"
+                        ref={metricTableRef}
                       >
-                        <table
-                          className="table-editor metric-editor sheet-playground summary-sheet"
-                          ref={metricTableRef}
-                          style={{
-                            transform: `scale(${metricScale})`,
-                            transformOrigin: "top left",
-                          }}
-                        >
-                          <thead>
-                            <tr>
-                              <th className="is-frozen-column">學生姓名</th>
-                              {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
-                              <th>{activeMetricLabel}</th>
+                        <colgroup>
+                          <col style={{ width: "160px" }} />
+                          {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "120px" }} /> : null}
+                          <col style={{ width: "160px" }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th className="sticky-left-0">學生姓名</th>
+                            {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
+                            <th>{activeMetricLabel}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.records.map((record) => (
+                            <tr
+                              className={record.id === selectedId ? "is-selected" : ""}
+                              key={record.id}
+                              onClick={() => selectRecord(record)}
+                            >
+                              <td className="sticky-left-0">{record.studentName}</td>
+                              {isMixedAgeClass(data.gradeLabel) ? (
+                                <td>{record.studentGradeLabel}</td>
+                              ) : null}
+                              <td>
+                                {renderTableCell(record, activeMetric, record[activeMetric], {
+                                  inputType:
+                                    getMetricRule(activeMetric, record)?.kind === "rubric"
+                                      ? "select"
+                                      : "number",
+                                  min: 0,
+                                  navigationFields: [activeMetric],
+                                  step: 1,
+                                  className: "cell-input-number",
+                                  displayValue: getMetricDisplayValue(record, activeMetric),
+                                  selectOptions: getMetricSelectOptions(activeMetric, record),
+                                })}
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {data.records.map((record) => (
-                              <tr
-                                className={record.id === selectedId ? "is-selected" : ""}
-                                key={record.id}
-                                onClick={() => selectRecord(record)}
-                              >
-                                <td className="is-frozen-column">{record.studentName}</td>
-                                {isMixedAgeClass(data.gradeLabel) ? (
-                                  <td>{record.studentGradeLabel}</td>
-                                ) : null}
-                                <td>
-                                  {renderTableCell(record, activeMetric, record[activeMetric], {
-                                    inputType:
-                                      getMetricRule(activeMetric, record)?.kind === "rubric"
-                                        ? "select"
-                                        : "number",
-                                    min: 0,
-                                    navigationFields: [activeMetric],
-                                    step: 1,
-                                    className: "cell-input-number",
-                                    displayValue: getMetricDisplayValue(record, activeMetric),
-                                    selectOptions: getMetricSelectOptions(activeMetric, record),
-                                  })}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </>
@@ -6813,201 +6791,190 @@ export default function App({ experimentalMode = false }: AppProps) {
                       })
                     : null}
                   <div
-                    className="sheet-viewport sheet-viewport-capped table-wrap"
-                    onScroll={() =>
-                      handleViewportScroll(
-                        rosterViewportRef.current,
-                        rosterNaturalWidth * rosterScale,
-                      )
-                    }
+                    className="fixed-sheet-viewport roster-viewport table-wrap"
                     ref={rosterViewportRef}
                     style={{ maxHeight: getViewportMaxHeight(50) }}
                   >
-                    <div
-                      className="sheet-zoom-stage"
-                      style={{
-                        width: `${rosterNaturalWidth * rosterScale}px`,
-                        height: "100%",
-                      }}
+                    <table
+                      className="fixed-sheet-table"
+                      ref={rosterTableRef}
                     >
-                      <table
-                        className="sheet-playground roster-sheet"
-                        ref={rosterTableRef}
-                        style={{
-                          transform: `scale(${rosterScale})`,
-                          transformOrigin: "top left",
-                        }}
-                      >
-                        <thead>
-                          <tr>
-                            <th className="is-frozen-column">#</th>
-                            <th className="is-frozen-column-secondary">姓名</th>
-                            <th>身高</th>
-                            <th>體重</th>
-                            {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
+                      <colgroup>
+                        <col style={{ width: "40px" }} />
+                        <col style={{ width: "120px" }} />
+                        <col style={{ width: "100px" }} />
+                        <col style={{ width: "100px" }} />
+                        {isMixedAgeClass(data.gradeLabel) ? <col style={{ width: "120px" }} /> : null}
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th className="sticky-left-0">#</th>
+                          <th className="sticky-left-40">姓名</th>
+                          <th>身高</th>
+                          <th>體重</th>
+                          {isMixedAgeClass(data.gradeLabel) ? <th>學生年級</th> : null}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rosterDraft.map((entry, index) => (
+                          <tr key={entry.id}>
+                            <td className="sticky-left-0" style={{ fontWeight: 500, color: "#64748b" }}>{index + 1}</td>
+                            <td className="sticky-left-40">
+                              {rosterActiveCell?.rowIndex === index &&
+                              rosterActiveCell?.columnIndex === 0 ? (
+                                <input
+                                  autoFocus
+                                  className="sheet-input"
+                                  onFocus={(event) => {
+                                    const target = event.currentTarget;
+                                    setTimeout(() => {
+                                      target.select();
+                                      try {
+                                        target.setSelectionRange(0, target.value.length);
+                                      } catch (err) {}
+                                    }, 50);
+                                  }}
+                                  onBlur={() => setRosterActiveCell(null)}
+                                  onChange={(event) =>
+                                    updateRosterDraftCell(index, 0, event.target.value)
+                                  }
+                                  onKeyDown={(event) =>
+                                    handleRosterKeyDown(event, index, 0)
+                                  }
+                                  onPaste={(event) =>
+                                    handleRosterPaste(event, index, 0)
+                                  }
+                                  value={entry.studentName}
+                                />
+                              ) : (
+                                <button
+                                  className="sheet-cell"
+                                  onClick={() =>
+                                    setRosterActiveCell({ rowIndex: index, columnIndex: 0 })
+                                  }
+                                  type="button"
+                                >
+                                  {entry.studentName || "—"}
+                                </button>
+                              )}
+                            </td>
+                            <td>
+                              {rosterActiveCell?.rowIndex === index &&
+                              rosterActiveCell?.columnIndex === 1 ? (
+                                <input
+                                  autoFocus
+                                  className="sheet-input"
+                                  onFocus={(event) => {
+                                    const target = event.currentTarget;
+                                    setTimeout(() => {
+                                      target.select();
+                                      try {
+                                        target.setSelectionRange(0, target.value.length);
+                                      } catch (err) {}
+                                    }, 50);
+                                  }}
+                                  onBlur={() => setRosterActiveCell(null)}
+                                  onChange={(event) =>
+                                    updateRosterDraftCell(index, 1, event.target.value)
+                                  }
+                                  onKeyDown={(event) =>
+                                    handleRosterKeyDown(event, index, 1)
+                                  }
+                                  onPaste={(event) =>
+                                    handleRosterPaste(event, index, 1)
+                                  }
+                                  value={entry.height}
+                                />
+                              ) : (
+                                <button
+                                  className="sheet-cell"
+                                  onClick={() =>
+                                    setRosterActiveCell({ rowIndex: index, columnIndex: 1 })
+                                  }
+                                  type="button"
+                                >
+                                  {entry.height || "—"}
+                                </button>
+                              )}
+                            </td>
+                            <td>
+                              {rosterActiveCell?.rowIndex === index &&
+                              rosterActiveCell?.columnIndex === 2 ? (
+                                <input
+                                  autoFocus
+                                  className="sheet-input"
+                                  onFocus={(event) => {
+                                    const target = event.currentTarget;
+                                    setTimeout(() => {
+                                      target.select();
+                                      try {
+                                        target.setSelectionRange(0, target.value.length);
+                                      } catch (err) {}
+                                    }, 50);
+                                  }}
+                                  onBlur={() => setRosterActiveCell(null)}
+                                  onChange={(event) =>
+                                    updateRosterDraftCell(index, 2, event.target.value)
+                                  }
+                                  onKeyDown={(event) =>
+                                    handleRosterKeyDown(event, index, 2)
+                                  }
+                                  onPaste={(event) =>
+                                    handleRosterPaste(event, index, 2)
+                                  }
+                                  value={entry.weight}
+                                />
+                              ) : (
+                                <button
+                                  className="sheet-cell"
+                                  onClick={() =>
+                                    setRosterActiveCell({ rowIndex: index, columnIndex: 2 })
+                                  }
+                                  type="button"
+                                >
+                                  {entry.weight || "—"}
+                                </button>
+                              )}
+                            </td>
+                            {isMixedAgeClass(data.gradeLabel) ? (
+                              <td>
+                                {rosterActiveCell?.rowIndex === index &&
+                                rosterActiveCell?.columnIndex === 3 ? (
+                                  <select
+                                    autoFocus
+                                    className="sheet-input"
+                                    onBlur={() => setRosterActiveCell(null)}
+                                    onChange={(event) =>
+                                      updateRosterDraftCell(index, 3, event.target.value)
+                                    }
+                                    onKeyDown={(event) =>
+                                      handleRosterKeyDown(event, index, 3)
+                                    }
+                                    value={entry.studentGradeLabel}
+                                  >
+                                    {STUDENT_GRADE_OPTIONS.map((grade) => (
+                                      <option key={`${entry.id}-${grade}`} value={grade}>
+                                        {grade}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <button
+                                    className="sheet-cell"
+                                    onClick={() =>
+                                      setRosterActiveCell({ rowIndex: index, columnIndex: 3 })
+                                    }
+                                    type="button"
+                                  >
+                                    {entry.studentGradeLabel}
+                                  </button>
+                                )}
+                              </td>
+                            ) : null}
                           </tr>
-                        </thead>
-                        <tbody>
-                          {rosterDraft.map((entry, index) => (
-                            <tr key={entry.id}>
-                              <td className="is-frozen-column">{index + 1}</td>
-                              <td className="is-frozen-column-secondary">
-                                {rosterActiveCell?.rowIndex === index &&
-                                rosterActiveCell?.columnIndex === 0 ? (
-                                  <input
-                                    autoFocus
-                                    className="sheet-input"
-                                    onFocus={(event) => {
-                                      const target = event.currentTarget;
-                                      setTimeout(() => {
-                                        target.select();
-                                        try {
-                                          target.setSelectionRange(0, target.value.length);
-                                        } catch (err) {}
-                                      }, 50);
-                                    }}
-                                    onBlur={() => setRosterActiveCell(null)}
-                                    onChange={(event) =>
-                                      updateRosterDraftCell(index, 0, event.target.value)
-                                    }
-                                    onKeyDown={(event) =>
-                                      handleRosterKeyDown(event, index, 0)
-                                    }
-                                    onPaste={(event) =>
-                                      handleRosterPaste(event, index, 0)
-                                    }
-                                    value={entry.studentName}
-                                  />
-                                ) : (
-                                  <button
-                                    className="sheet-cell"
-                                    onClick={() =>
-                                      setRosterActiveCell({ rowIndex: index, columnIndex: 0 })
-                                    }
-                                    type="button"
-                                  >
-                                    {entry.studentName || "—"}
-                                  </button>
-                                )}
-                              </td>
-                              <td>
-                                {rosterActiveCell?.rowIndex === index &&
-                                rosterActiveCell?.columnIndex === 1 ? (
-                                  <input
-                                    autoFocus
-                                    className="sheet-input"
-                                    onFocus={(event) => {
-                                      const target = event.currentTarget;
-                                      setTimeout(() => {
-                                        target.select();
-                                        try {
-                                          target.setSelectionRange(0, target.value.length);
-                                        } catch (err) {}
-                                      }, 50);
-                                    }}
-                                    onBlur={() => setRosterActiveCell(null)}
-                                    onChange={(event) =>
-                                      updateRosterDraftCell(index, 1, event.target.value)
-                                    }
-                                    onKeyDown={(event) =>
-                                      handleRosterKeyDown(event, index, 1)
-                                    }
-                                    onPaste={(event) =>
-                                      handleRosterPaste(event, index, 1)
-                                    }
-                                    value={entry.height}
-                                  />
-                                ) : (
-                                  <button
-                                    className="sheet-cell"
-                                    onClick={() =>
-                                      setRosterActiveCell({ rowIndex: index, columnIndex: 1 })
-                                    }
-                                    type="button"
-                                  >
-                                    {entry.height || "—"}
-                                  </button>
-                                )}
-                              </td>
-                              <td>
-                                {rosterActiveCell?.rowIndex === index &&
-                                rosterActiveCell?.columnIndex === 2 ? (
-                                  <input
-                                    autoFocus
-                                    className="sheet-input"
-                                    onFocus={(event) => {
-                                      const target = event.currentTarget;
-                                      setTimeout(() => {
-                                        target.select();
-                                        try {
-                                          target.setSelectionRange(0, target.value.length);
-                                        } catch (err) {}
-                                      }, 50);
-                                    }}
-                                    onBlur={() => setRosterActiveCell(null)}
-                                    onChange={(event) =>
-                                      updateRosterDraftCell(index, 2, event.target.value)
-                                    }
-                                    onKeyDown={(event) =>
-                                      handleRosterKeyDown(event, index, 2)
-                                    }
-                                    onPaste={(event) =>
-                                      handleRosterPaste(event, index, 2)
-                                    }
-                                    value={entry.weight}
-                                  />
-                                ) : (
-                                  <button
-                                    className="sheet-cell"
-                                    onClick={() =>
-                                      setRosterActiveCell({ rowIndex: index, columnIndex: 2 })
-                                    }
-                                    type="button"
-                                  >
-                                    {entry.weight || "—"}
-                                  </button>
-                                )}
-                              </td>
-                              {isMixedAgeClass(data.gradeLabel) ? (
-                                <td>
-                                  {rosterActiveCell?.rowIndex === index &&
-                                  rosterActiveCell?.columnIndex === 3 ? (
-                                    <select
-                                      autoFocus
-                                      className="sheet-input"
-                                      onBlur={() => setRosterActiveCell(null)}
-                                      onChange={(event) =>
-                                        updateRosterDraftCell(index, 3, event.target.value)
-                                      }
-                                      onKeyDown={(event) =>
-                                        handleRosterKeyDown(event, index, 3)
-                                      }
-                                      value={entry.studentGradeLabel}
-                                    >
-                                      {STUDENT_GRADE_OPTIONS.map((grade) => (
-                                        <option key={`${entry.id}-${grade}`} value={grade}>
-                                          {grade}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <button
-                                      className="sheet-cell"
-                                      onClick={() =>
-                                        setRosterActiveCell({ rowIndex: index, columnIndex: 3 })
-                                      }
-                                      type="button"
-                                    >
-                                      {entry.studentGradeLabel}
-                                    </button>
-                                  )}
-                                </td>
-                              ) : null}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
