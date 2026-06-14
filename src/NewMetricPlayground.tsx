@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { AppData, FitnessRecord, FitnessField } from "./types";
 
 type EditableField = keyof FitnessRecord;
@@ -17,6 +18,12 @@ interface NewMetricPlaygroundProps {
   isCloudDirty: boolean;
   currentCloudFileId: string | null;
   handleSaveCurrentCloudFile: (data: AppData, msg: string) => Promise<boolean>;
+  debugInfo?: ReactNode;
+  selectedId?: string;
+  selectRecord?: (record: FitnessRecord) => void;
+  viewportMaxHeight?: number | string;
+  viewportRef?: RefObject<HTMLDivElement | null>;
+  tableRef?: RefObject<HTMLTableElement | null>;
 }
 
 export default function NewMetricPlayground({
@@ -33,13 +40,22 @@ export default function NewMetricPlayground({
   isCloudDirty,
   currentCloudFileId,
   handleSaveCurrentCloudFile,
+  debugInfo,
+  selectedId,
+  selectRecord,
+  viewportMaxHeight,
+  viewportRef: externalViewportRef,
+  tableRef: externalTableRef,
 }: NewMetricPlaygroundProps) {
   // 編輯單元格狀態：紀錄哪個學生的 id 正在編輯
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
 
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const internalViewportRef = useRef<HTMLDivElement>(null);
+  const viewportRef = externalViewportRef ?? internalViewportRef;
   const activeInputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+  const internalTableRef = useRef<HTMLTableElement>(null);
+  const tableRef = externalTableRef ?? internalTableRef;
 
   // 取得當前選擇的指標名稱與 index
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
@@ -348,8 +364,13 @@ export default function NewMetricPlayground({
       </div>
 
       {/* 試算表容器 */}
-      <div className="nmp-viewport" ref={viewportRef}>
-        <table className="nmp-table">
+        {debugInfo}
+        <div
+          className="nmp-viewport"
+          ref={viewportRef}
+          style={viewportMaxHeight ? { maxHeight: viewportMaxHeight } : undefined}
+        >
+          <table className="nmp-table" ref={tableRef}>
           <colgroup>
             <col style={{ width: "90px" }} />
             <col style={{ width: "100px" }} />
@@ -370,7 +391,11 @@ export default function NewMetricPlayground({
               const displayVal = getMetricDisplayValue(record, activeMetric);
 
               return (
-                <tr key={record.id}>
+                <tr
+                  className={record.id === selectedId ? "is-selected" : ""}
+                  key={record.id}
+                  onClick={() => selectRecord?.(record)}
+                >
                   {/* Column 1: 學生姓名 (唯讀) */}
                   <td className="nmp-sticky-name">
                     {record.studentName}
