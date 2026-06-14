@@ -40,10 +40,12 @@ import {
   getDiagnosticEvents,
   getBrowserDiagnosticReportReferences,
   getUserActionEvents,
+  fetchVisibleDiagnosticReportReferences,
   installDiagnosticErrorListeners,
   recordDiagnosticEvent,
   recordUserAction,
   submitDiagnosticReport,
+  type DiagnosticReportReference,
 } from "./diagnostics";
 import {
   emailToUsername,
@@ -840,6 +842,12 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [diagnosticExpected, setDiagnosticExpected] = useState("");
   const [diagnosticActual, setDiagnosticActual] = useState("");
   const [diagnosticSubmitting, setDiagnosticSubmitting] = useState(false);
+  const [diagnosticPanelTab, setDiagnosticPanelTab] = useState<"new" | "history">("new");
+  const [diagnosticReportHistory, setDiagnosticReportHistory] = useState<
+    DiagnosticReportReference[]
+  >([]);
+  const [diagnosticHistoryLoading, setDiagnosticHistoryLoading] = useState(false);
+  const [diagnosticHistoryMessage, setDiagnosticHistoryMessage] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [nicknameDraft, setNicknameDraft] = useState("");
@@ -1065,6 +1073,14 @@ export default function App({ experimentalMode = false }: AppProps) {
       window.removeEventListener("orientationchange", handleResize);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showDiagnosticPanel || diagnosticPanelTab !== "history") {
+      return;
+    }
+
+    void refreshDiagnosticReportHistory(false);
+  }, [currentUser?.uid, diagnosticPanelTab, showDiagnosticPanel]);
 
   useEffect(() => {
     updateLoadCheckpoint("auth", "loading", "正在確認目前是否已登入。");
@@ -2971,7 +2987,8 @@ export default function App({ experimentalMode = false }: AppProps) {
       setDiagnosticDescription("");
       setDiagnosticExpected("");
       setDiagnosticActual("");
-      setShowDiagnosticPanel(false);
+      await refreshDiagnosticReportHistory(false);
+      setDiagnosticPanelTab("history");
       setMessage(`問題回報已送出，編號：${reportId}`);
     } catch (error) {
       const nextMessage =
@@ -2982,6 +2999,41 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage(`問題回報送出失敗：${nextMessage}`);
     } finally {
       setDiagnosticSubmitting(false);
+    }
+  }
+
+  async function refreshDiagnosticReportHistory(showMessage = true): Promise<void> {
+    setDiagnosticHistoryLoading(true);
+    setDiagnosticHistoryMessage("");
+    try {
+      const reports = await fetchVisibleDiagnosticReportReferences(
+        db,
+        currentUser?.uid ?? null,
+      );
+      setDiagnosticReportHistory(reports);
+      setDiagnosticHistoryMessage(
+        reports.length
+          ? `已找到 ${reports.length} 筆曾回報問題。`
+          : "目前沒有查到曾回報的問題。",
+      );
+      if (showMessage) {
+        recordUserAction("重新整理「曾回報問題」清單。", {
+          reportCount: reports.length,
+          browserId: getDiagnosticBrowserId(),
+          uid: currentUser?.uid ?? null,
+        });
+      }
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "讀取曾回報問題失敗。";
+      setDiagnosticHistoryMessage(`讀取失敗：${nextMessage}`);
+      recordDiagnosticEvent("diagnostic.history-load-failed", "讀取曾回報問題失敗。", {
+        error: nextMessage,
+        uid: currentUser?.uid ?? null,
+        browserId: getDiagnosticBrowserId(),
+      });
+    } finally {
+      setDiagnosticHistoryLoading(false);
     }
   }
 
@@ -5104,101 +5156,175 @@ export default function App({ experimentalMode = false }: AppProps) {
           {showDiagnosticPanel ? (
             <section className="auth-panel diagnostic-panel">
               <h2>回報問題</h2>
-              <p className="auth-help">
-                請描述你遇到的狀況。系統會一併送出這個瀏覽器最近操作紀錄、登入狀態變化、目前檔案資訊與瀏覽器版面資料；不會送出密碼、token 或 cookie。
-              </p>
-              <div className="auth-form-grid diagnostic-form-grid">
-                <input
-                  onChange={(event) => setDiagnosticTitle(event.target.value)}
-                  onBlur={(event) => recordInputAction("問題標題", event.target.value)}
-                  placeholder="問題標題（選填）"
-                  type="text"
-                  value={diagnosticTitle}
-                />
-                <textarea
-                  className="diagnostic-textarea"
-                  onChange={(event) => setDiagnosticDescription(event.target.value)}
-                  onBlur={(event) => recordInputAction("問題描述", event.target.value)}
-                  placeholder="請描述發生了什麼事，例如：B 老師登入後仍看到 A 老師的檔案。"
-                  value={diagnosticDescription}
-                />
-                <textarea
-                  className="diagnostic-textarea"
-                  onChange={(event) => setDiagnosticExpected(event.target.value)}
-                  onBlur={(event) => recordInputAction("預期結果", event.target.value)}
-                  placeholder="預期結果（選填）"
-                  value={diagnosticExpected}
-                />
-                <textarea
-                  className="diagnostic-textarea"
-                  onChange={(event) => setDiagnosticActual(event.target.value)}
-                  onBlur={(event) => recordInputAction("實際結果", event.target.value)}
-                  placeholder="實際結果（選填）"
-                  value={diagnosticActual}
-                />
-                <div className="diagnostic-summary">
-                  <strong>即將附上的診斷摘要</strong>
-                  <div className="diagnostic-summary-grid">
-                    <span>登入帳號</span>
-                    <span>{currentUser ? `${currentUsername} / ${currentUser.uid}` : "尚未登入，會以匿名回報送出"}</span>
-                    <span>瀏覽器紀錄 ID</span>
-                    <span>{diagnosticBrowserId}</span>
-                    <span>目前檔案</span>
-                    <span>{currentCloudFileSummary?.fileName ?? currentWorkspaceFileLabel}</span>
-                    <span>版面大小</span>
-                    <span>
-                      {diagnosticEnvironmentPreview.viewport.width} × {diagnosticEnvironmentPreview.viewport.height}
-                      ，{diagnosticEnvironmentPreview.device.estimatedDeviceType}
-                    </span>
-                    <span>最近事件</span>
-                    <span>{diagnosticEventsPreview.length} 筆使用者操作，另含技術紀錄</span>
-                    <span>本瀏覽器回報</span>
-                    <span>{browserDiagnosticReports.length} 筆</span>
-                  </div>
-                  {browserDiagnosticReports.length > 0 ? (
-                    <ol className="diagnostic-event-preview">
-                      {browserDiagnosticReports.map((report) => (
-                        <li key={report.reportId}>
-                          <span>
-                            {report.statusLabel}：{report.title || report.description || report.reportId}
-                          </span>
-                          <code>{report.reportId}</code>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                  {diagnosticEventsPreview.length > 0 ? (
-                    <ol className="diagnostic-event-preview">
-                      {diagnosticEventsPreview.map((event) => (
-                        <li key={`${event.timestamp}-${event.type}`}>
-                          <span>{event.label ?? event.message}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                </div>
-                <div className="button-row">
-                  <button
-                    className="primary-button"
-                    disabled={diagnosticSubmitting}
-                    onClick={handleSubmitDiagnosticReport}
-                    type="button"
-                  >
-                    {diagnosticSubmitting ? "送出中" : "送出回報"}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={diagnosticSubmitting}
-                    onClick={() => setShowDiagnosticPanel(false)}
-                    type="button"
-                  >
-                    取消
-                  </button>
-                </div>
-                {!currentUser ? (
-                  <p className="auth-help">目前尚未登入，回報會以匿名方式送出，但仍會包含這個瀏覽器最近的操作流程。</p>
-                ) : null}
+              <div className="diagnostic-tabs" role="tablist" aria-label="問題回報分頁">
+                <button
+                  className={`diagnostic-tab ${diagnosticPanelTab === "new" ? "is-active" : ""}`}
+                  onClick={() => {
+                    recordUserAction("切換到「填寫回報」分頁。");
+                    setDiagnosticPanelTab("new");
+                  }}
+                  type="button"
+                >
+                  填寫回報
+                </button>
+                <button
+                  className={`diagnostic-tab ${diagnosticPanelTab === "history" ? "is-active" : ""}`}
+                  onClick={() => {
+                    recordUserAction("切換到「曾回報問題」分頁。");
+                    setDiagnosticPanelTab("history");
+                  }}
+                  type="button"
+                >
+                  曾回報問題
+                </button>
               </div>
+
+              {diagnosticPanelTab === "new" ? (
+                <>
+                  <p className="auth-help">
+                    請描述你遇到的狀況。系統會一併送出這個瀏覽器最近操作紀錄、登入狀態變化、目前檔案資訊與瀏覽器版面資料；不會送出密碼、token 或 cookie。
+                  </p>
+                  <div className="auth-form-grid diagnostic-form-grid">
+                    <input
+                      onChange={(event) => setDiagnosticTitle(event.target.value)}
+                      onBlur={(event) => recordInputAction("問題標題", event.target.value)}
+                      placeholder="問題標題（選填）"
+                      type="text"
+                      value={diagnosticTitle}
+                    />
+                    <textarea
+                      className="diagnostic-textarea"
+                      onChange={(event) => setDiagnosticDescription(event.target.value)}
+                      onBlur={(event) => recordInputAction("問題描述", event.target.value)}
+                      placeholder="請描述發生了什麼事，例如：B 老師登入後仍看到 A 老師的檔案。"
+                      value={diagnosticDescription}
+                    />
+                    <textarea
+                      className="diagnostic-textarea"
+                      onChange={(event) => setDiagnosticExpected(event.target.value)}
+                      onBlur={(event) => recordInputAction("預期結果", event.target.value)}
+                      placeholder="預期結果（選填）"
+                      value={diagnosticExpected}
+                    />
+                    <textarea
+                      className="diagnostic-textarea"
+                      onChange={(event) => setDiagnosticActual(event.target.value)}
+                      onBlur={(event) => recordInputAction("實際結果", event.target.value)}
+                      placeholder="實際結果（選填）"
+                      value={diagnosticActual}
+                    />
+                    <div className="diagnostic-summary">
+                      <strong>即將附上的診斷摘要</strong>
+                      <div className="diagnostic-summary-grid">
+                        <span>登入帳號</span>
+                        <span>{currentUser ? `${currentUsername} / ${currentUser.uid}` : "尚未登入，會以匿名回報送出"}</span>
+                        <span>瀏覽器紀錄 ID</span>
+                        <span>{diagnosticBrowserId}</span>
+                        <span>目前檔案</span>
+                        <span>{currentCloudFileSummary?.fileName ?? currentWorkspaceFileLabel}</span>
+                        <span>版面大小</span>
+                        <span>
+                          {diagnosticEnvironmentPreview.viewport.width} × {diagnosticEnvironmentPreview.viewport.height}
+                          ，{diagnosticEnvironmentPreview.device.estimatedDeviceType}
+                        </span>
+                        <span>最近事件</span>
+                        <span>{diagnosticEventsPreview.length} 筆使用者操作，另含技術紀錄</span>
+                        <span>本瀏覽器回報</span>
+                        <span>{browserDiagnosticReports.length} 筆</span>
+                      </div>
+                      {diagnosticEventsPreview.length > 0 ? (
+                        <ol className="diagnostic-event-preview">
+                          {diagnosticEventsPreview.map((event) => (
+                            <li key={`${event.timestamp}-${event.type}`}>
+                              <span>{event.label ?? event.message}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                    </div>
+                    <div className="button-row">
+                      <button
+                        className="primary-button"
+                        disabled={diagnosticSubmitting}
+                        onClick={handleSubmitDiagnosticReport}
+                        type="button"
+                      >
+                        {diagnosticSubmitting ? "送出中" : "送出回報"}
+                      </button>
+                      <button
+                        className="secondary-button"
+                        disabled={diagnosticSubmitting}
+                        onClick={() => setShowDiagnosticPanel(false)}
+                        type="button"
+                      >
+                        取消
+                      </button>
+                    </div>
+                    {!currentUser ? (
+                      <p className="auth-help">目前尚未登入，回報會以匿名方式送出，但仍會包含這個瀏覽器最近的操作流程。</p>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <div className="diagnostic-history">
+                  <p className="auth-help">
+                    這裡會用本瀏覽器儲存的回報 ID 查詢公開狀態；如果已登入，也會讀取目前帳號底下的問題回報索引。
+                  </p>
+                  <div className="diagnostic-history-toolbar">
+                    <div className="diagnostic-summary-grid">
+                      <span>瀏覽器紀錄 ID</span>
+                      <span>{diagnosticBrowserId}</span>
+                      <span>目前帳號</span>
+                      <span>{currentUser ? currentUsername : "尚未登入，只查詢本瀏覽器紀錄"}</span>
+                    </div>
+                    <button
+                      className="secondary-button"
+                      disabled={diagnosticHistoryLoading}
+                      onClick={() => {
+                        void refreshDiagnosticReportHistory(true);
+                      }}
+                      type="button"
+                    >
+                      {diagnosticHistoryLoading ? "查詢中" : "重新整理"}
+                    </button>
+                  </div>
+                  {diagnosticHistoryMessage ? (
+                    <p className="auth-help">{diagnosticHistoryMessage}</p>
+                  ) : null}
+                  {diagnosticReportHistory.length > 0 ? (
+                    <div className="diagnostic-report-list">
+                      {diagnosticReportHistory.map((report) => (
+                        <article className="diagnostic-report-card" key={report.reportId}>
+                          <div>
+                            <strong>{report.title || report.description || "未命名問題"}</strong>
+                            <code>{report.reportId}</code>
+                          </div>
+                          <p>{report.description || "沒有留下問題描述。"}</p>
+                          <div className="diagnostic-report-meta">
+                            <span className={`status-chip status-chip--${report.status}`}>
+                              {report.statusLabel}
+                            </span>
+                            <span>
+                              來源：{report.source === "browser" ? "本瀏覽器" : "目前帳號"}
+                            </span>
+                            <span>
+                              建立：{formatActivityDate(report.createdAt || null)}
+                            </span>
+                            {report.statusUpdatedAt ? (
+                              <span>更新：{formatActivityDate(report.statusUpdatedAt)}</span>
+                            ) : null}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="friend-empty-state">
+                      <strong>目前沒有查到曾回報問題</strong>
+                      <p>如果曾在另一台電腦或另一個瀏覽器回報，請先登入同一個帳號後再重新整理。</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           ) : null}
         </div>

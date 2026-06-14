@@ -1,6 +1,8 @@
 import {
   collection,
   doc,
+  getDoc,
+  getDocs,
   serverTimestamp,
   writeBatch,
   type Firestore,
@@ -22,6 +24,11 @@ export type BrowserDiagnosticReportReference = {
   description: string;
   reporterUid: string | null;
   createdAt: string;
+};
+
+export type DiagnosticReportReference = BrowserDiagnosticReportReference & {
+  source: "browser" | "account";
+  statusUpdatedAt: string;
 };
 
 export type DiagnosticEvent = {
@@ -83,6 +90,35 @@ function getDiagnosticStatusLabel(status: DiagnosticReportStatus): string {
     default:
       return "已回報";
   }
+}
+
+function isDiagnosticReportStatus(value: unknown): value is DiagnosticReportStatus {
+  return value === "reported" || value === "received" || value === "resolved";
+}
+
+function timestampLikeToIso(value: unknown): string {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString() : "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  return "";
 }
 
 function sanitizeDiagnosticValue(value: unknown): unknown {
@@ -246,6 +282,125 @@ export function getBrowserDiagnosticReportReferences(): BrowserDiagnosticReportR
   } catch {
     return [];
   }
+}
+
+function normalizeDiagnosticReportReference(
+  source: "browser" | "account",
+  data: Partial<BrowserDiagnosticReportReference> & {
+    reportId?: unknown;
+    status?: unknown;
+    statusLabel?: unknown;
+    title?: unknown;
+    description?: unknown;
+    reporterUid?: unknown;
+    createdAt?: unknown;
+    statusUpdatedAt?: unknown;
+  },
+): DiagnosticReportReference | null {
+  const reportId = typeof data.reportId === "string" ? data.reportId : "";
+  if (!reportId) {
+    return null;
+  }
+
+  const status = isDiagnosticReportStatus(data.status) ? data.status : "reported";
+  return {
+    reportId,
+    status,
+    statusLabel:
+      typeof data.statusLabel === "string"
+        ? data.statusLabel
+        : getDiagnosticStatusLabel(status),
+    title: typeof data.title === "string" ? data.title : "",
+    description: typeof data.description === "string" ? data.description : "",
+    reporterUid: typeof data.reporterUid === "string" ? data.reporterUid : null,
+    createdAt: timestampLikeToIso(data.createdAt),
+    statusUpdatedAt: timestampLikeToIso(data.statusUpdatedAt),
+    source,
+  };
+}
+
+export async function fetchBrowserDiagnosticReportStatuses(
+  db: Firestore,
+): Promise<DiagnosticReportReference[]> {
+  const localReferences = getBrowserDiagnosticReportReferences();
+  const results = await Promise.all(
+    localReferences.map(async (reference) => {
+      const snapshot = await getDoc(doc(db, "diagnosticReportStatuses", reference.reportId));
+      if (!snapshot.exists()) {
+        return normalizeDiagnosticReportReference("browser", reference);
+      }
+
+      return normalizeDiagnosticReportReference("browser", {
+        ...reference,
+        ...snapshot.data(),
+        reportId: reference.reportId,
+      });
+    }),
+  );
+
+  return results.filter((reference): reference is DiagnosticReportReference => Boolean(reference));
+}
+
+export async function fetchUserDiagnosticReportReferences(
+  db: Firestore,
+  uid: string,
+): Promise<DiagnosticReportReference[]> {
+  const snapshot = await getDocs(collection(db, "users", uid, "diagnosticReports"));
+  return snapshot.docs
+    .map((documentSnapshot) =>
+      normalizeDiagnosticReportReference("account", {
+        ...documentSnapshot.data(),
+        reportId: documentSnapshot.id,
+      }),
+    )
+    .filter((reference): reference is DiagnosticReportReference => Boolean(reference));
+}
+
+export async function fetchVisibleDiagnosticReportReferences(
+  db: Firestore,
+  uid: string | null,
+): Promise<DiagnosticReportReference[]> {
+  const [browserReports, accountReports] = await Promise.all([
+    fetchBrowserDiagnosticReportStatuses(db),
+    uid ? fetchUserDiagnosticReportReferences(db, uid) : Promise.resolve([]),
+  ]);
+  const merged = new Map<string, DiagnosticReportReference>();
+
+  for (const report of [...accountReports, ...browserReports]) {
+    const existing = merged.get(report.reportId);
+    merged.set(report.reportId, {
+      ...report,
+      source:
+        existing && existing.source !== report.source
+          ? "account"
+          : report.source,
+      description: report.description || existing?.description || "",
+      title: report.title || existing?.title || "",
+      createdAt: report.createdAt || existing?.createdAt || "",
+      statusUpdatedAt: report.statusUpdatedAt || existing?.statusUpdatedAt || "",
+    });
+  }
+
+  const reportsWithFreshStatuses = await Promise.all(
+    [...merged.values()].map(async (report) => {
+      const snapshot = await getDoc(doc(db, "diagnosticReportStatuses", report.reportId));
+      if (!snapshot.exists()) {
+        return report;
+      }
+
+      return normalizeDiagnosticReportReference(report.source, {
+        ...report,
+        ...snapshot.data(),
+        reportId: report.reportId,
+      }) ?? report;
+    }),
+  );
+
+  return reportsWithFreshStatuses.sort((left, right) =>
+    (right.createdAt || right.statusUpdatedAt).localeCompare(
+      left.createdAt || left.statusUpdatedAt,
+    ),
+  );
 }
 
 function saveBrowserDiagnosticReportReference(
