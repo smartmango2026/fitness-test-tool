@@ -572,6 +572,15 @@ function buildAcademicTermValue(
   return `${academicYear}學年度${semester}`;
 }
 
+function isValidDateInput(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function getLastCloudFileStorageKey(uid: string): string {
   return `${LAST_CLOUD_FILE_STORAGE_PREFIX}${uid}`;
 }
@@ -3674,10 +3683,68 @@ export default function App({ experimentalMode = false }: AppProps) {
     }));
   }
 
-  function buildAppDataForNewCloudFile(): AppData {
-    const rosterCount = Math.max(1, Math.floor(Number(newCloudFileDraft.rosterCount) || 0));
-    const gradeLabel = newCloudFileDraft.gradeLabel || GRADE_OPTIONS[0] || "";
-    const testDate = newCloudFileDraft.testDate || new Date().toISOString().slice(0, 10);
+  function validateNewCloudFileDraft(): {
+    errors: string[];
+    rosterCount: number;
+  } {
+    const errors: string[] = [];
+    const rosterName = newCloudFileDraft.rosterName.trim();
+    const academicYear = newCloudFileDraft.academicYear.trim();
+    const rosterCountNumber = Number(newCloudFileDraft.rosterCount);
+
+    if (!academicYear) {
+      errors.push("請選擇學年度。");
+    } else if (!/^\d{2,3}$/.test(academicYear)) {
+      errors.push("學年度格式不正確，請使用民國年，例如 114。");
+    }
+
+    if (!TERM_OPTIONS.includes(newCloudFileDraft.semester as (typeof TERM_OPTIONS)[number])) {
+      errors.push("請選擇正確的學期。");
+    }
+
+    if (!rosterName) {
+      errors.push("請輸入班級名稱。");
+    } else if (rosterName.length < 2) {
+      errors.push("班級名稱太短，請至少輸入 2 個字。");
+    }
+
+    if (!(GRADE_OPTIONS as string[]).includes(newCloudFileDraft.gradeLabel)) {
+      errors.push("請選擇正確的年級。");
+    }
+
+    if (!newCloudFileDraft.testDate) {
+      errors.push("請選擇測驗日期。");
+    } else if (!isValidDateInput(newCloudFileDraft.testDate)) {
+      errors.push("測驗日期格式不正確。");
+    }
+
+    if (!newCloudFileDraft.rosterCount.trim()) {
+      errors.push("請輸入班級人數。");
+    } else if (!Number.isInteger(rosterCountNumber)) {
+      errors.push("班級人數請輸入整數。");
+    } else if (rosterCountNumber < 1) {
+      errors.push("班級人數至少需要 1 人。");
+    } else if (rosterCountNumber > 35) {
+      errors.push("班級人數看起來太多，請確認是否輸入錯誤。");
+    }
+
+    return {
+      errors,
+      rosterCount: Number.isInteger(rosterCountNumber) ? rosterCountNumber : 0,
+    };
+  }
+
+  function showCreateFileAlert(errors: string[]): void {
+    const detail = errors.map((error) => `• ${error}`).join("\n");
+    recordUserAction("看到「建立新檔案失敗」提示。", {
+      errors,
+    });
+    window.alert(`建立新檔案前請先修正以下問題：\n\n${detail}`);
+  }
+
+  function buildAppDataForNewCloudFile(rosterCount: number): AppData {
+    const gradeLabel = newCloudFileDraft.gradeLabel;
+    const testDate = newCloudFileDraft.testDate;
     const academicTerm = `民國 ${newCloudFileDraft.academicYear} 年${newCloudFileDraft.semester}`;
     const studentGradeLabel = resolveStudentGradeLabel(gradeLabel, "");
     const rosterEntries = Array.from({ length: rosterCount }, () => ({
@@ -3689,7 +3756,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       ...defaultAppData,
       testDate,
       academicTerm,
-      rosterName: newCloudFileDraft.rosterName.trim() || "未命名班級",
+      rosterName: newCloudFileDraft.rosterName.trim(),
       gradeLabel,
       rosterEntries,
       records: [],
@@ -3702,18 +3769,20 @@ export default function App({ experimentalMode = false }: AppProps) {
       return;
     }
 
-    const nextData = buildAppDataForNewCloudFile();
+    const validation = validateNewCloudFileDraft();
+    if (validation.errors.length > 0) {
+      showCreateFileAlert(validation.errors);
+      setMessage(`建立新檔案失敗：${validation.errors[0]}`);
+      return;
+    }
+
+    const nextData = buildAppDataForNewCloudFile(validation.rosterCount);
     recordUserAction("按下建立表單內的「建立新檔案」按鈕。", {
       rosterName: nextData.rosterName,
       gradeLabel: nextData.gradeLabel,
       academicTerm: nextData.academicTerm,
       rosterCount: nextData.rosterEntries.length,
     });
-    const rosterName = nextData.rosterName.trim();
-    if (!rosterName) {
-      setMessage("請先輸入班級名稱。");
-      return;
-    }
 
     try {
       const operationId = createSystemLogOperationId();
@@ -5611,6 +5680,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                               onChange={(event) =>
                                 updateNewCloudFileDraft("rosterName", event.target.value)
                               }
+                              required
                               type="text"
                               value={newCloudFileDraft.rosterName}
                             />
@@ -5658,6 +5728,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                           <label className="file-size-field">
                             <strong>班級人數</strong>
                             <input
+                              max={35}
                               min={1}
                               onChange={(event) =>
                                 updateNewCloudFileDraft("rosterCount", event.target.value)
