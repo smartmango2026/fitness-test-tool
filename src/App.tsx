@@ -99,6 +99,7 @@ import {
   writeSystemLog,
   type SystemLogEntry,
 } from "./system-logs";
+import SpreadsheetPlayground from "./SpreadsheetPlayground";
 
 type TabKey =
   | "files"
@@ -109,7 +110,8 @@ type TabKey =
   | "roster"
   | "analysis"
   | "pdf"
-  | "tablab";
+  | "tablab"
+  | "playground";
 
 type EditableField = keyof FitnessRecord;
 type FriendInviteActionState = {
@@ -300,6 +302,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 const experimentalTabs: Array<{ key: TabKey; label: string }> = [
   ...tabs,
   { key: "tablab", label: "Tab 元件展示" },
+  { key: "playground", label: "試算表 Playground" },
 ];
 
 const tabShowcaseSamples = [
@@ -815,8 +818,8 @@ export default function App({ experimentalMode = false }: AppProps) {
   const isReportDebugMode = reportDebugParams.enabled;
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     const requestedTab = readRequestedTabFromUrl();
-    if (requestedTab === "tablab" && experimentalMode) {
-      return "tablab";
+    if (requestedTab && visibleTabs.some(t => t.key === requestedTab)) {
+      return requestedTab as TabKey;
     }
 
     if (readReportDebugParamsFromUrl().enabled) {
@@ -7091,6 +7094,12 @@ export default function App({ experimentalMode = false }: AppProps) {
                 <li>橫向捲動：最省高度，對手機最友善。</li>
               </ul>
             </section>
+          </>
+        ) : null}
+
+        {activeTab === "playground" ? (
+          <>
+            <SpreadsheetPlayground />
           </>
         ) : null}
 
