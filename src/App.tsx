@@ -38,6 +38,7 @@ import {
   getDiagnosticEnvironment,
   getDiagnosticBrowserId,
   getDiagnosticEvents,
+  getBrowserDiagnosticReportReferences,
   getUserActionEvents,
   installDiagnosticErrorListeners,
   recordDiagnosticEvent,
@@ -4803,6 +4804,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   const diagnosticEventsPreview = getUserActionEvents().slice(0, 8);
   const diagnosticEnvironmentPreview = getDiagnosticEnvironment();
   const diagnosticBrowserId = getDiagnosticBrowserId();
+  const browserDiagnosticReports = getBrowserDiagnosticReportReferences().slice(0, 5);
 
   return (
     <div
@@ -5004,7 +5006,21 @@ export default function App({ experimentalMode = false }: AppProps) {
                     </span>
                     <span>最近事件</span>
                     <span>{diagnosticEventsPreview.length} 筆使用者操作，另含技術紀錄</span>
+                    <span>本瀏覽器回報</span>
+                    <span>{browserDiagnosticReports.length} 筆</span>
                   </div>
+                  {browserDiagnosticReports.length > 0 ? (
+                    <ol className="diagnostic-event-preview">
+                      {browserDiagnosticReports.map((report) => (
+                        <li key={report.reportId}>
+                          <span>
+                            {report.statusLabel}：{report.title || report.description || report.reportId}
+                          </span>
+                          <code>{report.reportId}</code>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
                   {diagnosticEventsPreview.length > 0 ? (
                     <ol className="diagnostic-event-preview">
                       {diagnosticEventsPreview.map((event) => (

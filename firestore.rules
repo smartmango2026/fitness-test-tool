@@ -73,6 +73,16 @@ service cloud.firestore {
         allow read, create, update: if isSelf(userId);
         allow delete: if false;
       }
+
+      match /diagnosticReports/{reportId} {
+        allow read: if isSelf(userId);
+        allow create: if
+          isSelf(userId) &&
+          request.resource.data.reportId == reportId &&
+          request.resource.data.reporterUid == userId &&
+          request.resource.data.status == "reported";
+        allow update, delete: if false;
+      }
     }
 
     match /friendRequests/{requestId} {
@@ -144,15 +154,36 @@ service cloud.firestore {
       allow create: if
         (
           isSignedIn() &&
-          request.resource.data.reporterUid == request.auth.uid
+          request.resource.data.reporterUid == request.auth.uid &&
+          request.resource.data.status == "reported"
         ) ||
         (
           !isSignedIn() &&
-          request.resource.data.reporterUid == null
+          request.resource.data.reporterUid == null &&
+          request.resource.data.status == "reported"
         );
       allow read: if
         isSignedIn() &&
         resource.data.reporterUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /diagnosticReportStatuses/{reportId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if
+        request.resource.data.reportId == reportId &&
+        request.resource.data.status == "reported" &&
+        (
+          (
+            isSignedIn() &&
+            request.resource.data.reporterUid == request.auth.uid
+          ) ||
+          (
+            !isSignedIn() &&
+            request.resource.data.reporterUid == null
+          )
+        );
       allow update, delete: if false;
     }
 

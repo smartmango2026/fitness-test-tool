@@ -1,13 +1,28 @@
 import {
-  addDoc,
   collection,
+  doc,
   serverTimestamp,
+  writeBatch,
   type Firestore,
 } from "firebase/firestore";
 
 const DIAGNOSTIC_STORAGE_KEY = "fitness-test-tool:diagnostic-events";
 const DIAGNOSTIC_BROWSER_ID_KEY = "fitness-test-tool:diagnostic-browser-id";
+const DIAGNOSTIC_REPORTS_STORAGE_KEY = "fitness-test-tool:diagnostic-report-refs";
 const MAX_DIAGNOSTIC_EVENTS = 100;
+const MAX_DIAGNOSTIC_REPORT_REFS = 30;
+
+export type DiagnosticReportStatus = "reported" | "received" | "resolved";
+
+export type BrowserDiagnosticReportReference = {
+  reportId: string;
+  status: DiagnosticReportStatus;
+  statusLabel: string;
+  title: string;
+  description: string;
+  reporterUid: string | null;
+  createdAt: string;
+};
 
 export type DiagnosticEvent = {
   timestamp: string;
@@ -57,6 +72,18 @@ export type DiagnosticReportInput = {
   currentFileSnapshot: Record<string, unknown>;
   frontendIssues: string[];
 };
+
+function getDiagnosticStatusLabel(status: DiagnosticReportStatus): string {
+  switch (status) {
+    case "received":
+      return "已收到";
+    case "resolved":
+      return "已解決";
+    case "reported":
+    default:
+      return "已回報";
+  }
+}
 
 function sanitizeDiagnosticValue(value: unknown): unknown {
   if (
@@ -189,6 +216,61 @@ export function getDiagnosticBrowserId(): string {
   }
 }
 
+export function getBrowserDiagnosticReportReferences(): BrowserDiagnosticReportReference[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(DIAGNOSTIC_REPORTS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (reference): reference is BrowserDiagnosticReportReference =>
+        Boolean(reference) &&
+        typeof reference === "object" &&
+        typeof reference.reportId === "string" &&
+        typeof reference.status === "string" &&
+        typeof reference.statusLabel === "string" &&
+        typeof reference.title === "string" &&
+        typeof reference.description === "string" &&
+        typeof reference.createdAt === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveBrowserDiagnosticReportReference(
+  reference: BrowserDiagnosticReportReference,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const nextReferences = [
+      reference,
+      ...getBrowserDiagnosticReportReferences().filter(
+        (current) => current.reportId !== reference.reportId,
+      ),
+    ].slice(0, MAX_DIAGNOSTIC_REPORT_REFS);
+    window.localStorage.setItem(
+      DIAGNOSTIC_REPORTS_STORAGE_KEY,
+      JSON.stringify(nextReferences),
+    );
+  } catch {
+    // Local report references are a convenience only.
+  }
+}
+
 function estimateDeviceType(width: number, maxTouchPoints: number): "desktop" | "tablet" | "mobile" {
   if (width <= 767) {
     return "mobile";
@@ -281,14 +363,59 @@ export async function submitDiagnosticReport(
   db: Firestore,
   input: DiagnosticReportInput,
 ): Promise<string> {
-  const reportRef = await addDoc(collection(db, "diagnosticReports"), {
+  const reportRef = doc(collection(db, "diagnosticReports"));
+  const status: DiagnosticReportStatus = "reported";
+  const statusLabel = getDiagnosticStatusLabel(status);
+  const browserId = getDiagnosticBrowserId();
+  const nowIso = new Date().toISOString();
+  const reportData = {
     ...input,
-    browserId: getDiagnosticBrowserId(),
+    browserId,
+    status,
+    statusLabel,
     environment: getDiagnosticEnvironment(),
     userActions: getUserActionEvents(),
     diagnostics: getDiagnosticEvents(),
     createdAt: serverTimestamp(),
+    statusUpdatedAt: serverTimestamp(),
     schemaVersion: 1,
+  };
+  const batch = writeBatch(db);
+  batch.set(reportRef, reportData);
+  batch.set(doc(db, "diagnosticReportStatuses", reportRef.id), {
+    reportId: reportRef.id,
+    browserId,
+    reporterUid: input.reporterUid,
+    status,
+    statusLabel,
+    title: input.userMessage.title,
+    createdAt: serverTimestamp(),
+    statusUpdatedAt: serverTimestamp(),
+    schemaVersion: 1,
+  });
+
+  if (input.reporterUid) {
+    batch.set(doc(db, "users", input.reporterUid, "diagnosticReports", reportRef.id), {
+      reportId: reportRef.id,
+      reporterUid: input.reporterUid,
+      status,
+      statusLabel,
+      title: input.userMessage.title,
+      createdAt: serverTimestamp(),
+      statusUpdatedAt: serverTimestamp(),
+      schemaVersion: 1,
+    });
+  }
+
+  await batch.commit();
+  saveBrowserDiagnosticReportReference({
+    reportId: reportRef.id,
+    status,
+    statusLabel,
+    title: input.userMessage.title,
+    description: input.userMessage.description,
+    reporterUid: input.reporterUid,
+    createdAt: nowIso,
   });
   return reportRef.id;
 }
