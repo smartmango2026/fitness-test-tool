@@ -1504,6 +1504,22 @@ export default function App({ experimentalMode = false }: AppProps) {
   }, [currentCloudFileId, data]);
 
   useEffect(() => {
+    if (!currentCloudFileId || !isCloudDirty) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [currentCloudFileId, isCloudDirty]);
+
+  useEffect(() => {
     const shareTarget = cloudFiles.find(
       (file) =>
         file.id === currentCloudFileId &&
@@ -4109,13 +4125,16 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage("已放棄學員名單變更，正在切換頁面。");
     }
 
-    if (activeTab === "files" && currentCloudFileId && isCloudDirty) {
+    if (currentCloudFileId && isCloudDirty) {
       const shouldSave = window.confirm(
         "目前檔案有未儲存變更。按「確定」會先儲存，再切換頁面。",
       );
 
       if (shouldSave) {
-        const saved = await handleSaveCurrentCloudFile();
+        const saved = await handleSaveCurrentCloudFile(
+          data,
+          `切換到「${tabLabelByKey[nextTab] ?? nextTab}」前儲存目前檔案。`,
+        );
         if (!saved) {
           return;
         }
@@ -5561,6 +5580,16 @@ export default function App({ experimentalMode = false }: AppProps) {
                 >
                   {showTableFilters ? "收起篩選器" : "展開篩選器"}
                 </button>
+                <button
+                  className="primary-button"
+                  disabled={!currentCloudFileId || !isCloudDirty}
+                  onClick={() => {
+                    void handleSaveCurrentCloudFile(data, "在測驗總表按下「儲存目前檔案」。");
+                  }}
+                  type="button"
+                >
+                  儲存目前檔案
+                </button>
               </div>
               {data.records.length === 0 ? renderNoStudentsCard("測驗總表") : null}
               {data.records.length > 0 && showTableFilters ? (
@@ -6556,6 +6585,16 @@ export default function App({ experimentalMode = false }: AppProps) {
                         {resolvedItemLabels[index]}
                       </button>
                     ))}
+                    <button
+                      className="primary-button"
+                      disabled={!currentCloudFileId || !isCloudDirty}
+                      onClick={() => {
+                        void handleSaveCurrentCloudFile(data, "在測驗項目按下「儲存目前檔案」。");
+                      }}
+                      type="button"
+                    >
+                      儲存目前檔案
+                    </button>
                   </div>
 
                   <div className="sheet-shell">
