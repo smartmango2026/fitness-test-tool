@@ -2745,22 +2745,39 @@ tbody tr.is-selected {
 
 /* Input Fields inside fixed sheet */
 .fixed-sheet-input,
-.fixed-sheet-select {
-  width: 100%;
-  height: 32px;
-  border: 2px solid #3b82f6;
-  border-radius: 6px;
-  outline: none;
-  padding: 0 6px;
-  box-sizing: border-box;
+.fixed-sheet-select,
+.fixed-sheet-table input,
+.fixed-sheet-table select {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  border: 2px solid #3b82f6 !important;
+  border-radius: 6px !important;
+  outline: none !important;
+  padding: 2px 4px !important;
+  box-sizing: border-box !important;
   font-size: 16px !important;
-  text-align: center;
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  text-align: center !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+  margin: 0 !important;
 }
 
-.fixed-sheet-select {
-  text-align-last: center;
+.fixed-sheet-select,
+.fixed-sheet-table select {
+  text-align-last: center !important;
+}
+
+/* Hide number input spinners inside fixed-sheet-table */
+.fixed-sheet-table input::-webkit-outer-spin-button,
+.fixed-sheet-table input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+.fixed-sheet-table input[type=number] {
+  -moz-appearance: textfield !important;
 }
 
 .fixed-sheet-cell-interactive {
