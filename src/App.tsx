@@ -4782,7 +4782,15 @@ export default function App({ experimentalMode = false }: AppProps) {
           autoFocus
           className={options?.className}
           min={options?.min}
-          onFocus={(event) => event.currentTarget.select()}
+          onFocus={(event) => {
+            const target = event.currentTarget;
+            setTimeout(() => {
+              target.select();
+              try {
+                target.setSelectionRange(0, target.value.length);
+              } catch (err) {}
+            }, 50);
+          }}
           onBlur={stopCellEdit}
           onChange={(event) =>
             updateTableField(record.id, field, event.target.value)
@@ -6849,7 +6857,15 @@ export default function App({ experimentalMode = false }: AppProps) {
                                   <input
                                     autoFocus
                                     className="sheet-input"
-                                    onFocus={(event) => event.currentTarget.select()}
+                                    onFocus={(event) => {
+                                      const target = event.currentTarget;
+                                      setTimeout(() => {
+                                        target.select();
+                                        try {
+                                          target.setSelectionRange(0, target.value.length);
+                                        } catch (err) {}
+                                      }, 50);
+                                    }}
                                     onBlur={() => setRosterActiveCell(null)}
                                     onChange={(event) =>
                                       updateRosterDraftCell(index, 0, event.target.value)
@@ -6880,7 +6896,15 @@ export default function App({ experimentalMode = false }: AppProps) {
                                   <input
                                     autoFocus
                                     className="sheet-input"
-                                    onFocus={(event) => event.currentTarget.select()}
+                                    onFocus={(event) => {
+                                      const target = event.currentTarget;
+                                      setTimeout(() => {
+                                        target.select();
+                                        try {
+                                          target.setSelectionRange(0, target.value.length);
+                                        } catch (err) {}
+                                      }, 50);
+                                    }}
                                     onBlur={() => setRosterActiveCell(null)}
                                     onChange={(event) =>
                                       updateRosterDraftCell(index, 1, event.target.value)
@@ -6911,7 +6935,15 @@ export default function App({ experimentalMode = false }: AppProps) {
                                   <input
                                     autoFocus
                                     className="sheet-input"
-                                    onFocus={(event) => event.currentTarget.select()}
+                                    onFocus={(event) => {
+                                      const target = event.currentTarget;
+                                      setTimeout(() => {
+                                        target.select();
+                                        try {
+                                          target.setSelectionRange(0, target.value.length);
+                                        } catch (err) {}
+                                      }, 50);
+                                    }}
                                     onBlur={() => setRosterActiveCell(null)}
                                     onChange={(event) =>
                                       updateRosterDraftCell(index, 2, event.target.value)
