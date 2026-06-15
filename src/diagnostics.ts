@@ -755,10 +755,18 @@ async function uploadDiagnosticScreenshots(
       storage,
       `diagnosticReports/${reportId}/${browserId}-${index + 1}.${safeExtension}`,
     );
-    await uploadBytes(screenshotRef, file, {
-      contentType: file.type || "image/png",
-    });
-    const url = await getDownloadURL(screenshotRef);
+    await withTimeout(
+      uploadBytes(screenshotRef, file, {
+        contentType: file.type || "image/png",
+      }),
+      45_000,
+      `上傳截圖「${file.name}」逾時，請確認網路連線後再試一次。`,
+    );
+    const url = await withTimeout(
+      getDownloadURL(screenshotRef),
+      15_000,
+      `取得截圖「${file.name}」網址逾時，請稍後再試。`,
+    );
     return {
       name: file.name,
       url,
@@ -768,4 +776,27 @@ async function uploadDiagnosticScreenshots(
   });
 
   return Promise.all(uploads);
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
 }

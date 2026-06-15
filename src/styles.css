@@ -514,6 +514,12 @@ button {
   white-space: nowrap;
 }
 
+.diagnostic-submit-status {
+  margin-top: -4px;
+  color: #0f766e;
+  font-weight: 700;
+}
+
 .diagnostic-summary-grid {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

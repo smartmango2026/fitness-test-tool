@@ -867,6 +867,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [diagnosticActual, setDiagnosticActual] = useState("");
   const [diagnosticScreenshots, setDiagnosticScreenshots] = useState<File[]>([]);
   const [diagnosticSubmitting, setDiagnosticSubmitting] = useState(false);
+  const [diagnosticSubmitStage, setDiagnosticSubmitStage] = useState<
+    "idle" | "uploading" | "saving" | "refreshing"
+  >("idle");
   const [diagnosticPanelTab, setDiagnosticPanelTab] = useState<"new" | "history">("new");
   const [diagnosticReportHistory, setDiagnosticReportHistory] = useState<
     DiagnosticReportReference[]
@@ -1886,6 +1889,26 @@ export default function App({ experimentalMode = false }: AppProps) {
     setDiagnosticScreenshots((current) =>
       current.filter((_, currentIndex) => currentIndex !== index),
     );
+  }
+
+  function getDiagnosticSubmitButtonLabel(): string {
+    if (!diagnosticSubmitting) {
+      return "送出回報";
+    }
+
+    if (diagnosticSubmitStage === "uploading") {
+      return diagnosticScreenshots.length > 0 ? "上傳截圖中" : "準備送出中";
+    }
+
+    if (diagnosticSubmitStage === "saving") {
+      return "建立回報中";
+    }
+
+    if (diagnosticSubmitStage === "refreshing") {
+      return "整理清單中";
+    }
+
+    return "送出中";
   }
 
   function showAuthAlert(title: string, detail: string): void {
@@ -3071,6 +3094,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     }
 
     setDiagnosticSubmitting(true);
+    setDiagnosticSubmitStage(diagnosticScreenshots.length > 0 ? "uploading" : "saving");
     recordUserAction("按下「送出回報」按鈕。", {
       title: diagnosticTitle.trim(),
       description: diagnosticDescription.trim(),
@@ -3120,13 +3144,23 @@ export default function App({ experimentalMode = false }: AppProps) {
       recordDiagnosticEvent("diagnostic.submit-completed", "問題回報已送出。", {
         reportId,
       });
+      setDiagnosticSubmitStage("refreshing");
       setDiagnosticTitle("");
       setDiagnosticDescription("");
       setDiagnosticExpected("");
       setDiagnosticActual("");
       setDiagnosticScreenshots([]);
-      await refreshDiagnosticReportHistory(false);
+      setDiagnosticReportHistory(
+        getBrowserDiagnosticReportReferences().map((report) => ({
+          ...report,
+          source: "browser",
+          statusUpdatedAt: report.createdAt,
+        })),
+      );
       setDiagnosticPanelTab("history");
+      setDiagnosticSubmitting(false);
+      setDiagnosticSubmitStage("idle");
+      void refreshDiagnosticReportHistory(false);
       setMessage(`問題回報已送出，編號：${reportId}`);
     } catch (error) {
       const nextMessage =
@@ -3137,6 +3171,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setMessage(`問題回報送出失敗：${nextMessage}`);
     } finally {
       setDiagnosticSubmitting(false);
+      setDiagnosticSubmitStage("idle");
     }
   }
 
@@ -5550,6 +5585,11 @@ export default function App({ experimentalMode = false }: AppProps) {
                         取消
                       </button>
                     </div>
+                    {diagnosticSubmitting ? (
+                      <p className="auth-help diagnostic-submit-status">
+                        {getDiagnosticSubmitButtonLabel()}
+                      </p>
+                    ) : null}
                     {!currentUser ? (
                       <p className="auth-help">目前尚未登入，回報會以匿名方式送出，但仍會包含這個瀏覽器最近的操作流程。</p>
                     ) : null}
