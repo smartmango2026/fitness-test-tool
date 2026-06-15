@@ -610,6 +610,21 @@ button {
   font-size: 0.86rem;
 }
 
+.diagnostic-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.diagnostic-detail-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
 .diagnostic-report-screenshots {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

@@ -41,11 +41,13 @@ import {
 import { db, storage } from "./firebase";
 import {
   type DiagnosticScreenshotReference,
+  type DiagnosticReportDetail,
   getDiagnosticEnvironment,
   getDiagnosticBrowserId,
   getDiagnosticEvents,
   getBrowserDiagnosticReportReferences,
   getUserActionEvents,
+  fetchDiagnosticReportDetail,
   fetchVisibleDiagnosticReportReferences,
   installDiagnosticErrorListeners,
   recordDiagnosticEvent,
@@ -871,6 +873,15 @@ export default function App({ experimentalMode = false }: AppProps) {
   >([]);
   const [diagnosticHistoryLoading, setDiagnosticHistoryLoading] = useState(false);
   const [diagnosticHistoryMessage, setDiagnosticHistoryMessage] = useState("");
+  const [diagnosticReportDetails, setDiagnosticReportDetails] = useState<
+    Record<string, DiagnosticReportDetail>
+  >({});
+  const [diagnosticDetailLoading, setDiagnosticDetailLoading] = useState<
+    Record<string, boolean>
+  >({});
+  const [diagnosticExpandedSections, setDiagnosticExpandedSections] = useState<
+    Record<string, Partial<Record<"screenshots" | "actions" | "diagnostics", boolean>>>
+  >({});
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [nicknameDraft, setNicknameDraft] = useState("");
@@ -3162,6 +3173,56 @@ export default function App({ experimentalMode = false }: AppProps) {
     } finally {
       setDiagnosticHistoryLoading(false);
     }
+  }
+
+  async function toggleDiagnosticHistorySection(
+    reportId: string,
+    section: "screenshots" | "actions" | "diagnostics",
+  ): Promise<void> {
+    const isExpanded = Boolean(diagnosticExpandedSections[reportId]?.[section]);
+    if (isExpanded) {
+      setDiagnosticExpandedSections((current) => ({
+        ...current,
+        [reportId]: {
+          ...current[reportId],
+          [section]: false,
+        },
+      }));
+      return;
+    }
+
+    if (!diagnosticReportDetails[reportId]) {
+      setDiagnosticDetailLoading((current) => ({
+        ...current,
+        [reportId]: true,
+      }));
+      try {
+        const detail = await fetchDiagnosticReportDetail(db, reportId);
+        if (detail) {
+          setDiagnosticReportDetails((current) => ({
+            ...current,
+            [reportId]: detail,
+          }));
+        }
+      } catch (error) {
+        const nextMessage =
+          error instanceof Error ? error.message : "讀取問題回報詳細資料失敗。";
+        setMessage(nextMessage);
+      } finally {
+        setDiagnosticDetailLoading((current) => ({
+          ...current,
+          [reportId]: false,
+        }));
+      }
+    }
+
+    setDiagnosticExpandedSections((current) => ({
+      ...current,
+      [reportId]: {
+        ...current[reportId],
+        [section]: true,
+      },
+    }));
   }
 
   function formatActivityDate(dateString: string | null): string {
@@ -5525,7 +5586,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                       {diagnosticReportHistory.map((report) => (
                         <article className="diagnostic-report-card" key={report.reportId}>
                           <div>
-                            <strong>{report.title || report.description || "未命名問題"}</strong>
+                            <strong>{report.title || report.description || "未命名回報"}</strong>
                             <code>{report.reportId}</code>
                           </div>
                           <p>{report.description || "沒有留下問題描述。"}</p>
@@ -5534,7 +5595,7 @@ export default function App({ experimentalMode = false }: AppProps) {
                               {report.statusLabel}
                             </span>
                             <span>
-                              來源：{report.source === "browser" ? "本瀏覽器" : "目前帳號"}
+                              來源：{report.source === "browser" ? "瀏覽器紀錄" : "帳號索引"}
                             </span>
                             <span>
                               建立：{formatActivityDate(report.createdAt || null)}
@@ -5543,24 +5604,107 @@ export default function App({ experimentalMode = false }: AppProps) {
                               <span>更新：{formatActivityDate(report.statusUpdatedAt)}</span>
                             ) : null}
                           </div>
-                          {report.screenshots.length > 0 ? (
-                            <div className="diagnostic-report-screenshots">
-                              {report.screenshots.map((screenshot: DiagnosticScreenshotReference) => (
-                                <a
-                                  className="diagnostic-report-screenshot"
-                                  href={screenshot.url}
-                                  key={`${report.reportId}-${screenshot.url}`}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  <img
-                                    alt={screenshot.name}
-                                    loading="lazy"
-                                    src={screenshot.url}
-                                  />
-                                  <span>{screenshot.name}</span>
-                                </a>
-                              ))}
+                          <div className="diagnostic-detail-actions">
+                            <button
+                              className="secondary-button"
+                              onClick={() => {
+                                void toggleDiagnosticHistorySection(report.reportId, "screenshots");
+                              }}
+                              type="button"
+                            >
+                              {diagnosticExpandedSections[report.reportId]?.screenshots
+                                ? "收合截圖"
+                                : "查看截圖"}
+                            </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() => {
+                                void toggleDiagnosticHistorySection(report.reportId, "actions");
+                              }}
+                              type="button"
+                            >
+                              {diagnosticExpandedSections[report.reportId]?.actions
+                                ? "收合操作步驟"
+                                : "查看操作步驟"}
+                            </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() => {
+                                void toggleDiagnosticHistorySection(report.reportId, "diagnostics");
+                              }}
+                              type="button"
+                            >
+                              {diagnosticExpandedSections[report.reportId]?.diagnostics
+                                ? "收合技術紀錄"
+                                : "查看技術紀錄"}
+                            </button>
+                          </div>
+                          {diagnosticDetailLoading[report.reportId] ? (
+                            <p className="auth-help">正在載入詳細資料…</p>
+                          ) : null}
+                          {diagnosticExpandedSections[report.reportId]?.screenshots ? (
+                            <div className="diagnostic-detail-card">
+                              <strong>截圖</strong>
+                              {(
+                                diagnosticReportDetails[report.reportId]?.screenshots ??
+                                report.screenshots
+                              ).length > 0 ? (
+                                <div className="diagnostic-report-screenshots">
+                                  {(
+                                    diagnosticReportDetails[report.reportId]?.screenshots ??
+                                    report.screenshots
+                                  ).map((screenshot: DiagnosticScreenshotReference) => (
+                                    <a
+                                      className="diagnostic-report-screenshot"
+                                      href={screenshot.url}
+                                      key={`${report.reportId}-${screenshot.url}`}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                    >
+                                      <img
+                                        alt={screenshot.name}
+                                        loading="lazy"
+                                        src={screenshot.url}
+                                      />
+                                      <span>{screenshot.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="auth-help">這筆回報目前沒有附上截圖。</p>
+                              )}
+                            </div>
+                          ) : null}
+                          {diagnosticExpandedSections[report.reportId]?.actions ? (
+                            <div className="diagnostic-detail-card">
+                              <strong>操作步驟</strong>
+                              {(diagnosticReportDetails[report.reportId]?.userActions ?? []).length > 0 ? (
+                                <ol className="diagnostic-event-preview">
+                                  {(diagnosticReportDetails[report.reportId]?.userActions ?? []).map((event) => (
+                                    <li key={`${report.reportId}-${event.timestamp}-${event.type}`}>
+                                      <span>{event.label ?? event.message}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p className="auth-help">這筆回報沒有額外的操作步驟資料。</p>
+                              )}
+                            </div>
+                          ) : null}
+                          {diagnosticExpandedSections[report.reportId]?.diagnostics ? (
+                            <div className="diagnostic-detail-card">
+                              <strong>技術紀錄</strong>
+                              {(diagnosticReportDetails[report.reportId]?.diagnostics ?? []).length > 0 ? (
+                                <ol className="diagnostic-event-preview">
+                                  {(diagnosticReportDetails[report.reportId]?.diagnostics ?? []).map((event) => (
+                                    <li key={`${report.reportId}-diag-${event.timestamp}-${event.type}`}>
+                                      <span>{event.message}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p className="auth-help">這筆回報沒有額外的技術紀錄。</p>
+                              )}
                             </div>
                           ) : null}
                         </article>

@@ -45,6 +45,19 @@ export type DiagnosticReportReference = BrowserDiagnosticReportReference & {
   statusUpdatedAt: string;
 };
 
+export type DiagnosticReportDetail = {
+  reportId: string;
+  title: string;
+  description: string;
+  expected: string;
+  actual: string;
+  createdAt: string;
+  screenshots: DiagnosticScreenshotReference[];
+  userActions: DiagnosticEvent[];
+  diagnostics: DiagnosticEvent[];
+  currentFileSnapshot: Record<string, unknown>;
+};
+
 export type DiagnosticEvent = {
   timestamp: string;
   type: string;
@@ -53,6 +66,46 @@ export type DiagnosticEvent = {
   label?: string;
   payload?: Record<string, unknown>;
 };
+
+function normalizeDiagnosticEvent(value: unknown): DiagnosticEvent | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.timestamp !== "string" ||
+    typeof candidate.type !== "string" ||
+    typeof candidate.message !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    timestamp: candidate.timestamp,
+    type: candidate.type,
+    message: candidate.message,
+    audience:
+      candidate.audience === "user" || candidate.audience === "developer"
+        ? candidate.audience
+        : undefined,
+    label: typeof candidate.label === "string" ? candidate.label : undefined,
+    payload:
+      candidate.payload && typeof candidate.payload === "object"
+        ? (candidate.payload as Record<string, unknown>)
+        : undefined,
+  };
+}
+
+function normalizeDiagnosticEventList(value: unknown): DiagnosticEvent[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => normalizeDiagnosticEvent(entry))
+    .filter((entry): entry is DiagnosticEvent => Boolean(entry));
+}
 
 export type DiagnosticEnvironment = {
   pageUrl: string;
@@ -460,6 +513,42 @@ export async function fetchVisibleDiagnosticReportReferences(
       left.createdAt || left.statusUpdatedAt,
     ),
   );
+}
+
+export async function fetchDiagnosticReportDetail(
+  db: Firestore,
+  reportId: string,
+): Promise<DiagnosticReportDetail | null> {
+  const snapshot = await getDoc(doc(db, "diagnosticReports", reportId));
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  const data = snapshot.data() as Record<string, unknown>;
+  const userMessage =
+    data.userMessage && typeof data.userMessage === "object"
+      ? (data.userMessage as Record<string, unknown>)
+      : {};
+  const currentFileSnapshot =
+    data.currentFileSnapshot && typeof data.currentFileSnapshot === "object"
+      ? (data.currentFileSnapshot as Record<string, unknown>)
+      : {};
+
+  return {
+    reportId,
+    title: typeof userMessage.title === "string" ? userMessage.title : "",
+    description:
+      typeof userMessage.description === "string"
+        ? userMessage.description
+        : "",
+    expected: typeof userMessage.expected === "string" ? userMessage.expected : "",
+    actual: typeof userMessage.actual === "string" ? userMessage.actual : "",
+    createdAt: timestampLikeToIso(data.createdAt),
+    screenshots: normalizeScreenshotReferences(data.screenshots),
+    userActions: normalizeDiagnosticEventList(data.userActions),
+    diagnostics: normalizeDiagnosticEventList(data.diagnostics),
+    currentFileSnapshot,
+  };
 }
 
 function saveBrowserDiagnosticReportReference(
