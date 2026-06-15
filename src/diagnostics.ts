@@ -7,6 +7,12 @@ import {
   writeBatch,
   type Firestore,
 } from "firebase/firestore";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytes,
+  type FirebaseStorage,
+} from "firebase/storage";
 
 const DIAGNOSTIC_STORAGE_KEY = "fitness-test-tool:diagnostic-events";
 const DIAGNOSTIC_BROWSER_ID_KEY = "fitness-test-tool:diagnostic-browser-id";
@@ -16,6 +22,13 @@ const MAX_DIAGNOSTIC_REPORT_REFS = 30;
 
 export type DiagnosticReportStatus = "reported" | "received" | "resolved";
 
+export type DiagnosticScreenshotReference = {
+  name: string;
+  url: string;
+  contentType: string;
+  sizeBytes: number;
+};
+
 export type BrowserDiagnosticReportReference = {
   reportId: string;
   status: DiagnosticReportStatus;
@@ -24,6 +37,7 @@ export type BrowserDiagnosticReportReference = {
   description: string;
   reporterUid: string | null;
   createdAt: string;
+  screenshots: DiagnosticScreenshotReference[];
 };
 
 export type DiagnosticReportReference = BrowserDiagnosticReportReference & {
@@ -78,6 +92,7 @@ export type DiagnosticReportInput = {
   authSnapshot: Record<string, unknown>;
   currentFileSnapshot: Record<string, unknown>;
   frontendIssues: string[];
+  screenshots?: File[];
 };
 
 function getDiagnosticStatusLabel(status: DiagnosticReportStatus): string {
@@ -119,6 +134,47 @@ function timestampLikeToIso(value: unknown): string {
   }
 
   return "";
+}
+
+function normalizeScreenshotReference(
+  value: unknown,
+): DiagnosticScreenshotReference | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const name = typeof candidate.name === "string" ? candidate.name : "";
+  const url = typeof candidate.url === "string" ? candidate.url : "";
+  if (!name || !url) {
+    return null;
+  }
+
+  return {
+    name,
+    url,
+    contentType:
+      typeof candidate.contentType === "string"
+        ? candidate.contentType
+        : "image/png",
+    sizeBytes:
+      typeof candidate.sizeBytes === "number" && Number.isFinite(candidate.sizeBytes)
+        ? candidate.sizeBytes
+        : 0,
+  };
+}
+
+function normalizeScreenshotReferences(value: unknown): DiagnosticScreenshotReference[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => normalizeScreenshotReference(entry))
+    .filter(
+      (entry): entry is DiagnosticScreenshotReference => Boolean(entry),
+    )
+    .slice(0, 6);
 }
 
 function sanitizeDiagnosticValue(value: unknown): unknown {
@@ -268,17 +324,17 @@ export function getBrowserDiagnosticReportReferences(): BrowserDiagnosticReportR
       return [];
     }
 
-    return parsed.filter(
-      (reference): reference is BrowserDiagnosticReportReference =>
-        Boolean(reference) &&
-        typeof reference === "object" &&
-        typeof reference.reportId === "string" &&
-        typeof reference.status === "string" &&
-        typeof reference.statusLabel === "string" &&
-        typeof reference.title === "string" &&
-        typeof reference.description === "string" &&
-        typeof reference.createdAt === "string",
-    );
+    return parsed
+      .map((reference) =>
+        normalizeDiagnosticReportReference("browser", reference),
+      )
+      .filter(
+        (reference): reference is DiagnosticReportReference => Boolean(reference),
+      )
+      .map(({ source, statusUpdatedAt, ...reference }) => ({
+        ...reference,
+        screenshots: reference.screenshots ?? [],
+      }));
   } catch {
     return [];
   }
@@ -315,6 +371,9 @@ function normalizeDiagnosticReportReference(
     reporterUid: typeof data.reporterUid === "string" ? data.reporterUid : null,
     createdAt: timestampLikeToIso(data.createdAt),
     statusUpdatedAt: timestampLikeToIso(data.statusUpdatedAt),
+    screenshots: normalizeScreenshotReferences(
+      (data as { screenshots?: unknown }).screenshots,
+    ),
     source,
   };
 }
@@ -516,6 +575,7 @@ export function installDiagnosticErrorListeners(): () => void {
 
 export async function submitDiagnosticReport(
   db: Firestore,
+  storage: FirebaseStorage,
   input: DiagnosticReportInput,
 ): Promise<string> {
   const reportRef = doc(collection(db, "diagnosticReports"));
@@ -523,11 +583,18 @@ export async function submitDiagnosticReport(
   const statusLabel = getDiagnosticStatusLabel(status);
   const browserId = getDiagnosticBrowserId();
   const nowIso = new Date().toISOString();
+  const screenshots = await uploadDiagnosticScreenshots(
+    storage,
+    reportRef.id,
+    browserId,
+    input.screenshots ?? [],
+  );
   const reportData = {
     ...input,
     browserId,
     status,
     statusLabel,
+    screenshots,
     environment: getDiagnosticEnvironment(),
     userActions: getUserActionEvents(),
     diagnostics: getDiagnosticEvents(),
@@ -544,6 +611,8 @@ export async function submitDiagnosticReport(
     status,
     statusLabel,
     title: input.userMessage.title,
+    description: input.userMessage.description,
+    screenshots,
     createdAt: serverTimestamp(),
     statusUpdatedAt: serverTimestamp(),
     schemaVersion: 1,
@@ -556,6 +625,8 @@ export async function submitDiagnosticReport(
       status,
       statusLabel,
       title: input.userMessage.title,
+      description: input.userMessage.description,
+      screenshots,
       createdAt: serverTimestamp(),
       statusUpdatedAt: serverTimestamp(),
       schemaVersion: 1,
@@ -571,6 +642,41 @@ export async function submitDiagnosticReport(
     description: input.userMessage.description,
     reporterUid: input.reporterUid,
     createdAt: nowIso,
+    screenshots,
   });
   return reportRef.id;
+}
+
+async function uploadDiagnosticScreenshots(
+  storage: FirebaseStorage,
+  reportId: string,
+  browserId: string,
+  screenshots: File[],
+): Promise<DiagnosticScreenshotReference[]> {
+  if (!screenshots.length) {
+    return [];
+  }
+
+  const uploads = screenshots.slice(0, 3).map(async (file, index) => {
+    const rawExtension = file.name.includes(".")
+      ? file.name.split(".").pop() ?? "png"
+      : "png";
+    const safeExtension = rawExtension.replace(/[^a-zA-Z0-9]/g, "") || "png";
+    const screenshotRef = ref(
+      storage,
+      `diagnosticReports/${reportId}/${browserId}-${index + 1}.${safeExtension}`,
+    );
+    await uploadBytes(screenshotRef, file, {
+      contentType: file.type || "image/png",
+    });
+    const url = await getDownloadURL(screenshotRef);
+    return {
+      name: file.name,
+      url,
+      contentType: file.type || "image/png",
+      sizeBytes: file.size,
+    };
+  });
+
+  return Promise.all(uploads);
 }

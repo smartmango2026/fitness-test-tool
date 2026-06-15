@@ -459,6 +459,61 @@ button {
   color: #334155;
 }
 
+.diagnostic-upload-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.diagnostic-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.diagnostic-upload-button input {
+  display: none;
+}
+
+.diagnostic-screenshot-list {
+  display: grid;
+  gap: 8px;
+}
+
+.diagnostic-screenshot-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.diagnostic-screenshot-chip div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.diagnostic-screenshot-chip strong,
+.diagnostic-screenshot-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .diagnostic-summary-grid {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -553,6 +608,34 @@ button {
   gap: 8px;
   color: #64748b;
   font-size: 0.86rem;
+}
+
+.diagnostic-report-screenshots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.diagnostic-report-screenshot {
+  display: grid;
+  gap: 6px;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.diagnostic-report-screenshot img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.diagnostic-report-screenshot span {
+  font-size: 0.82rem;
+  color: #475569;
+  word-break: break-word;
 }
 
 .status-chip--reported {

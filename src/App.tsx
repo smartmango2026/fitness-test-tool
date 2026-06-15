@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   ClipboardEvent,
+  ChangeEvent,
   KeyboardEvent,
 } from "react";
 import A4CanvasBoard, {
@@ -37,8 +38,9 @@ import {
   readFirebaseConnectionTest,
   writeFirebaseConnectionTest,
 } from "./firebase-test";
-import { db } from "./firebase";
+import { db, storage } from "./firebase";
 import {
+  type DiagnosticScreenshotReference,
   getDiagnosticEnvironment,
   getDiagnosticBrowserId,
   getDiagnosticEvents,
@@ -861,6 +863,7 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [diagnosticDescription, setDiagnosticDescription] = useState("");
   const [diagnosticExpected, setDiagnosticExpected] = useState("");
   const [diagnosticActual, setDiagnosticActual] = useState("");
+  const [diagnosticScreenshots, setDiagnosticScreenshots] = useState<File[]>([]);
   const [diagnosticSubmitting, setDiagnosticSubmitting] = useState(false);
   const [diagnosticPanelTab, setDiagnosticPanelTab] = useState<"new" | "history">("new");
   const [diagnosticReportHistory, setDiagnosticReportHistory] = useState<
@@ -1826,6 +1829,52 @@ export default function App({ experimentalMode = false }: AppProps) {
       hasValue: value.length > 0,
       length: value.length,
     });
+  }
+
+  function formatDiagnosticScreenshotSize(sizeBytes: number): string {
+    if (sizeBytes >= 1024 * 1024) {
+      return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
+  }
+
+  function handleDiagnosticScreenshotChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ): void {
+    const nextFiles = Array.from(event.target.files ?? []);
+    if (!nextFiles.length) {
+      setDiagnosticScreenshots([]);
+      return;
+    }
+
+    const imageFiles = nextFiles.filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) {
+      window.alert("請選擇圖片檔案，例如手機截圖。");
+      event.target.value = "";
+      return;
+    }
+
+    const oversizedFile = imageFiles.find((file) => file.size > 10 * 1024 * 1024);
+    if (oversizedFile) {
+      window.alert(`圖片「${oversizedFile.name}」超過 10 MB，請縮小後再上傳。`);
+      event.target.value = "";
+      return;
+    }
+
+    const limitedFiles = imageFiles.slice(0, 3);
+    setDiagnosticScreenshots(limitedFiles);
+    recordUserAction("選擇問題回報截圖。", {
+      fileCount: limitedFiles.length,
+      fileNames: limitedFiles.map((file) => file.name),
+    });
+    event.target.value = "";
+  }
+
+  function removeDiagnosticScreenshot(index: number): void {
+    setDiagnosticScreenshots((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index),
+    );
   }
 
   function showAuthAlert(title: string, detail: string): void {
@@ -3016,6 +3065,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       description: diagnosticDescription.trim(),
       expected: diagnosticExpected.trim(),
       actual: diagnosticActual.trim(),
+      screenshotCount: diagnosticScreenshots.length,
     });
     recordDiagnosticEvent("diagnostic.submit-started", "使用者送出問題回報。", {
       uid: currentUser?.uid ?? null,
@@ -3026,7 +3076,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     });
 
     try {
-      const reportId = await submitDiagnosticReport(db, {
+      const reportId = await submitDiagnosticReport(db, storage, {
         reporterUid: currentUser?.uid ?? null,
         reporterUsername: currentUser ? currentUsername : null,
         reporterDisplayName: currentUser ? currentDisplayName : null,
@@ -3054,6 +3104,7 @@ export default function App({ experimentalMode = false }: AppProps) {
           rosterCount: data.rosterEntries.length,
         },
         frontendIssues,
+        screenshots: diagnosticScreenshots,
       });
       recordDiagnosticEvent("diagnostic.submit-completed", "問題回報已送出。", {
         reportId,
@@ -3062,6 +3113,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setDiagnosticDescription("");
       setDiagnosticExpected("");
       setDiagnosticActual("");
+      setDiagnosticScreenshots([]);
       await refreshDiagnosticReportHistory(false);
       setDiagnosticPanelTab("history");
       setMessage(`問題回報已送出，編號：${reportId}`);
@@ -5358,6 +5410,38 @@ export default function App({ experimentalMode = false }: AppProps) {
                       placeholder="實際結果（選填）"
                       value={diagnosticActual}
                     />
+                    <div className="diagnostic-upload-panel">
+                      <strong>附上手機截圖</strong>
+                      <p className="auth-help">可直接上傳手機截圖，最多 3 張、每張 10 MB。</p>
+                      <label className="diagnostic-upload-button">
+                        <input
+                          accept="image/*"
+                          multiple
+                          onChange={handleDiagnosticScreenshotChange}
+                          type="file"
+                        />
+                        選擇圖片
+                      </label>
+                      {diagnosticScreenshots.length > 0 ? (
+                        <div className="diagnostic-screenshot-list">
+                          {diagnosticScreenshots.map((file, index) => (
+                            <div className="diagnostic-screenshot-chip" key={`${file.name}-${index}`}>
+                              <div>
+                                <strong>{file.name}</strong>
+                                <span>{formatDiagnosticScreenshotSize(file.size)}</span>
+                              </div>
+                              <button
+                                className="secondary-button"
+                                onClick={() => removeDiagnosticScreenshot(index)}
+                                type="button"
+                              >
+                                移除
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="diagnostic-summary">
                       <strong>即將附上的診斷摘要</strong>
                       <div className="diagnostic-summary-grid">
@@ -5459,6 +5543,26 @@ export default function App({ experimentalMode = false }: AppProps) {
                               <span>更新：{formatActivityDate(report.statusUpdatedAt)}</span>
                             ) : null}
                           </div>
+                          {report.screenshots.length > 0 ? (
+                            <div className="diagnostic-report-screenshots">
+                              {report.screenshots.map((screenshot: DiagnosticScreenshotReference) => (
+                                <a
+                                  className="diagnostic-report-screenshot"
+                                  href={screenshot.url}
+                                  key={`${report.reportId}-${screenshot.url}`}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  <img
+                                    alt={screenshot.name}
+                                    loading="lazy"
+                                    src={screenshot.url}
+                                  />
+                                  <span>{screenshot.name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
                         </article>
                       ))}
                     </div>
