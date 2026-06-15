@@ -7,20 +7,15 @@ import {
   writeBatch,
   type Firestore,
 } from "firebase/firestore";
-import {
-  getDownloadURL,
-  uploadBytesResumable,
-  ref,
-  type FirebaseStorage,
-  type StorageError,
-  type UploadTaskSnapshot,
-} from "firebase/storage";
 
 const DIAGNOSTIC_STORAGE_KEY = "fitness-test-tool:diagnostic-events";
 const DIAGNOSTIC_BROWSER_ID_KEY = "fitness-test-tool:diagnostic-browser-id";
 const DIAGNOSTIC_REPORTS_STORAGE_KEY = "fitness-test-tool:diagnostic-report-refs";
 const MAX_DIAGNOSTIC_EVENTS = 100;
 const MAX_DIAGNOSTIC_REPORT_REFS = 30;
+const CLOUDINARY_CLOUD_NAME = "dvqmyafug";
+const CLOUDINARY_UPLOAD_PRESET = "fitness_test_tool_diagnostic_unsigned";
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 export type DiagnosticReportStatus = "reported" | "received" | "resolved";
 
@@ -29,6 +24,11 @@ export type DiagnosticScreenshotReference = {
   url: string;
   contentType: string;
   sizeBytes: number;
+  provider?: "cloudinary";
+  publicId?: string;
+  width?: number;
+  height?: number;
+  format?: string;
 };
 
 export type BrowserDiagnosticReportReference = {
@@ -160,6 +160,16 @@ export type DiagnosticScreenshotUploadProgress = {
   errorMessage?: string;
 };
 
+type CloudinaryUploadResponse = {
+  public_id: string;
+  secure_url: string;
+  bytes: number;
+  format: string;
+  width: number;
+  height: number;
+  resource_type: string;
+};
+
 function getDiagnosticStatusLabel(status: DiagnosticReportStatus): string {
   switch (status) {
     case "received":
@@ -226,6 +236,19 @@ function normalizeScreenshotReference(
       typeof candidate.sizeBytes === "number" && Number.isFinite(candidate.sizeBytes)
         ? candidate.sizeBytes
         : 0,
+    provider: candidate.provider === "cloudinary" ? "cloudinary" : undefined,
+    publicId:
+      typeof candidate.publicId === "string" ? candidate.publicId : undefined,
+    width:
+      typeof candidate.width === "number" && Number.isFinite(candidate.width)
+        ? candidate.width
+        : undefined,
+    height:
+      typeof candidate.height === "number" && Number.isFinite(candidate.height)
+        ? candidate.height
+        : undefined,
+    format:
+      typeof candidate.format === "string" ? candidate.format : undefined,
   };
 }
 
@@ -676,7 +699,6 @@ export function installDiagnosticErrorListeners(): () => void {
 
 export async function submitDiagnosticReport(
   db: Firestore,
-  storage: FirebaseStorage,
   input: DiagnosticReportInput,
 ): Promise<string> {
   const {
@@ -690,7 +712,6 @@ export async function submitDiagnosticReport(
   const browserId = getDiagnosticBrowserId();
   const nowIso = new Date().toISOString();
   const screenshots = await uploadDiagnosticScreenshots(
-    storage,
     reportRef.id,
     browserId,
     screenshotFiles,
@@ -755,7 +776,6 @@ export async function submitDiagnosticReport(
 }
 
 async function uploadDiagnosticScreenshots(
-  storage: FirebaseStorage,
   reportId: string,
   browserId: string,
   screenshots: File[],
@@ -775,108 +795,153 @@ async function uploadDiagnosticScreenshots(
   });
 
   const uploads = screenshots.slice(0, 3).map(async (file, index) => {
-    const rawExtension = file.name.includes(".")
-      ? file.name.split(".").pop() ?? "png"
-      : "png";
-    const safeExtension = rawExtension.replace(/[^a-zA-Z0-9]/g, "") || "png";
-    const screenshotRef = ref(
-      storage,
-      `diagnosticReports/${reportId}/${browserId}-${index + 1}.${safeExtension}`,
-    );
-    await uploadScreenshotWithProgress(
-      screenshotRef,
+    const result = await uploadScreenshotToCloudinary(
       file,
       index,
+      reportId,
+      browserId,
       onProgress,
     );
-    const url = await withTimeout(
-      getDownloadURL(screenshotRef),
-      15_000,
-      `取得截圖「${file.name}」網址逾時，請稍後再試。`,
-    );
+
     onProgress?.({
       index,
       name: file.name,
       progressPercent: 100,
       state: "uploaded",
     });
+
     return {
       name: file.name,
-      url,
-      contentType: file.type || "image/png",
-      sizeBytes: file.size,
+      url: result.secure_url,
+      contentType: file.type || `image/${result.format || "jpeg"}`,
+      sizeBytes: result.bytes || file.size,
+      provider: "cloudinary" as const,
+      publicId: result.public_id,
+      width: result.width,
+      height: result.height,
+      format: result.format,
     };
   });
 
   return Promise.all(uploads);
 }
 
-async function uploadScreenshotWithProgress(
-  screenshotRef: ReturnType<typeof ref>,
+async function uploadScreenshotToCloudinary(
   file: File,
   index: number,
+  reportId: string,
+  browserId: string,
   onProgress?: (update: DiagnosticScreenshotUploadProgress) => void,
-): Promise<void> {
-  const uploadTask = uploadBytesResumable(screenshotRef, file, {
-    contentType: file.type || "image/png",
-  });
+): Promise<CloudinaryUploadResponse> {
+  return await new Promise<CloudinaryUploadResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      const message = `上傳截圖「${file.name}」逾時，請確認網路連線後再試一次。`;
+      onProgress?.({
+        index,
+        name: file.name,
+        progressPercent: 0,
+        state: "failed",
+        errorCode: "cloudinary-upload-timeout",
+        errorMessage: message,
+      });
+      reject(new Error(message));
+    }, 45_000);
 
-  await withTimeout(
-    new Promise<void>((resolve, reject) => {
-      uploadTask.on(
-        "state_changed",
-        (snapshot: UploadTaskSnapshot) => {
-          const progressPercent =
-            snapshot.totalBytes > 0
-              ? Math.min(100, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100))
-              : 0;
-          onProgress?.({
-            index,
-            name: file.name,
-            progressPercent,
-            state: "uploading",
-          });
-        },
-        (error: StorageError) => {
-          onProgress?.({
-            index,
-            name: file.name,
-            progressPercent: 0,
-            state: "failed",
-            errorCode: error.code,
-            errorMessage: error.message,
-          });
-          reject(error);
-        },
-        () => {
-          resolve();
-        },
-      );
-    }),
-    45_000,
-    `上傳截圖「${file.name}」逾時，請確認網路連線後再試一次。`,
-  );
+    xhr.upload.onprogress = (event) => {
+      const progressPercent = event.lengthComputable
+        ? Math.min(100, Math.round((event.loaded / event.total) * 100))
+        : 0;
+      onProgress?.({
+        index,
+        name: file.name,
+        progressPercent,
+        state: "uploading",
+      });
+    };
+
+    xhr.onload = () => {
+      window.clearTimeout(timeoutId);
+      const payload = parseCloudinaryUploadResponse(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300 && payload.ok) {
+        resolve(payload.value);
+        return;
+      }
+
+      const message = !payload.ok
+        ? payload.errorMessage
+        : `Cloudinary upload failed with HTTP ${xhr.status}.`;
+      onProgress?.({
+        index,
+        name: file.name,
+        progressPercent: 0,
+        state: "failed",
+        errorCode: `cloudinary-${xhr.status || "unknown"}`,
+        errorMessage: message,
+      });
+      reject(new Error(message));
+    };
+
+    xhr.onerror = () => {
+      window.clearTimeout(timeoutId);
+      const message = `Cloudinary upload network error for「${file.name}」。`;
+      onProgress?.({
+        index,
+        name: file.name,
+        progressPercent: 0,
+        state: "failed",
+        errorCode: "cloudinary-network-error",
+        errorMessage: message,
+      });
+      reject(new Error(message));
+    };
+
+    const form = new FormData();
+    form.append("file", file);
+    form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    form.append("folder", "diagnostic-reports");
+    form.append("context", `report_id=${reportId}|browser_id=${browserId}`);
+
+    xhr.open("POST", CLOUDINARY_UPLOAD_URL);
+    xhr.send(form);
+  });
 }
 
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  timeoutMessage: string,
-): Promise<T> {
-  return await new Promise<T>((resolve, reject) => {
-    const timeoutId = window.setTimeout(() => {
-      reject(new Error(timeoutMessage));
-    }, timeoutMs);
+function parseCloudinaryUploadResponse(
+  responseText: string,
+): { ok: true; value: CloudinaryUploadResponse } | { ok: false; errorMessage: string } {
+  try {
+    const payload = JSON.parse(responseText) as Partial<CloudinaryUploadResponse> & {
+      error?: { message?: string };
+    };
+    if (
+      typeof payload.public_id === "string" &&
+      typeof payload.secure_url === "string"
+    ) {
+      return {
+        ok: true,
+        value: {
+          public_id: payload.public_id,
+          secure_url: payload.secure_url,
+          bytes: typeof payload.bytes === "number" ? payload.bytes : 0,
+          format: typeof payload.format === "string" ? payload.format : "",
+          width: typeof payload.width === "number" ? payload.width : 0,
+          height: typeof payload.height === "number" ? payload.height : 0,
+          resource_type:
+            typeof payload.resource_type === "string" ? payload.resource_type : "image",
+        },
+      };
+    }
 
-    promise.then(
-      (value) => {
-        window.clearTimeout(timeoutId);
-        resolve(value);
-      },
-      (error: unknown) => {
-        window.clearTimeout(timeoutId);
-        reject(error);
-      },
-    );
-  });
+    return {
+      ok: false,
+      errorMessage: payload.error?.message || "Cloudinary upload response was incomplete.",
+    };
+  } catch {
+    return {
+      ok: false,
+      errorMessage: "Cloudinary upload response was not valid JSON.",
+    };
+  }
 }

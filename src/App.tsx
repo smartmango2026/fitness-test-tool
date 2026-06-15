@@ -38,7 +38,7 @@ import {
   readFirebaseConnectionTest,
   writeFirebaseConnectionTest,
 } from "./firebase-test";
-import { db, storage } from "./firebase";
+import { db } from "./firebase";
 import {
   type DiagnosticScreenshotReference,
   type DiagnosticScreenshotUploadProgress,
@@ -3183,7 +3183,7 @@ export default function App({ experimentalMode = false }: AppProps) {
     });
 
     try {
-      const reportId = await submitDiagnosticReport(db, storage, {
+      const reportId = await submitDiagnosticReport(db, {
         reporterUid: currentUser?.uid ?? null,
         reporterUsername: currentUser ? currentUsername : null,
         reporterDisplayName: currentUser ? currentDisplayName : null,
