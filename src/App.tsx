@@ -6049,16 +6049,6 @@ export default function App({ experimentalMode = false }: AppProps) {
                 >
                   {showTableFilters ? "收起篩選器" : "展開篩選器"}
                 </button>
-                <button
-                  className="primary-button"
-                  disabled={!currentCloudFileId || !isCloudDirty}
-                  onClick={() => {
-                    void handleSaveCurrentCloudFile(data, "在測驗總表按下「儲存目前檔案」。");
-                  }}
-                  type="button"
-                >
-                  儲存目前檔案
-                </button>
               </div>
               {data.records.length === 0 ? renderNoStudentsCard("測驗總表") : null}
               {data.records.length > 0 && showTableFilters ? (
@@ -6162,6 +6152,20 @@ export default function App({ experimentalMode = false }: AppProps) {
                   viewportMaxHeight={getViewportMaxHeight(54)}
                   viewportRef={tableViewportRef}
                 />
+              ) : null}
+              {data.records.length > 0 ? (
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={!currentCloudFileId || !isCloudDirty}
+                    onClick={() => {
+                      void handleSaveCurrentCloudFile(data, "在測驗總表按下「儲存」。");
+                    }}
+                    type="button"
+                  >
+                    儲存
+                  </button>
+                </div>
               ) : null}
             </section>
           </>

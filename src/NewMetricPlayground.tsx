@@ -381,16 +381,6 @@ export default function NewMetricPlayground({
             </button>
           ))}
         </div>
-        <button
-          className="primary-button"
-          disabled={!currentCloudFileId || !isCloudDirty}
-          onClick={() => {
-            void handleSaveCurrentCloudFile(data, "在新版測驗項目按下「儲存目前檔案」。");
-          }}
-          type="button"
-        >
-          儲存目前檔案
-        </button>
       </div>
 
       <div className="nmp-hint">
@@ -506,6 +496,19 @@ export default function NewMetricPlayground({
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="button-row">
+        <button
+          className="primary-button"
+          disabled={!currentCloudFileId || !isCloudDirty}
+          onClick={() => {
+            void handleSaveCurrentCloudFile(data, "在測驗項目按下「儲存」。");
+          }}
+          type="button"
+        >
+          儲存
+        </button>
       </div>
     </div>
   );
