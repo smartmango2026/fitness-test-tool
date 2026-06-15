@@ -679,6 +679,11 @@ export async function submitDiagnosticReport(
   storage: FirebaseStorage,
   input: DiagnosticReportInput,
 ): Promise<string> {
+  const {
+    screenshots: screenshotFiles = [],
+    onScreenshotUploadProgress,
+    ...persistedInput
+  } = input;
   const reportRef = doc(collection(db, "diagnosticReports"));
   const status: DiagnosticReportStatus = "reported";
   const statusLabel = getDiagnosticStatusLabel(status);
@@ -688,11 +693,11 @@ export async function submitDiagnosticReport(
     storage,
     reportRef.id,
     browserId,
-    input.screenshots ?? [],
-    input.onScreenshotUploadProgress,
+    screenshotFiles,
+    onScreenshotUploadProgress,
   );
   const reportData = {
-    ...input,
+    ...persistedInput,
     browserId,
     status,
     statusLabel,
