@@ -9,9 +9,11 @@ import {
 } from "firebase/firestore";
 import {
   getDownloadURL,
+  uploadBytesResumable,
   ref,
-  uploadBytes,
   type FirebaseStorage,
+  type StorageError,
+  type UploadTaskSnapshot,
 } from "firebase/storage";
 
 const DIAGNOSTIC_STORAGE_KEY = "fitness-test-tool:diagnostic-events";
@@ -146,6 +148,16 @@ export type DiagnosticReportInput = {
   currentFileSnapshot: Record<string, unknown>;
   frontendIssues: string[];
   screenshots?: File[];
+  onScreenshotUploadProgress?: (update: DiagnosticScreenshotUploadProgress) => void;
+};
+
+export type DiagnosticScreenshotUploadProgress = {
+  index: number;
+  name: string;
+  progressPercent: number;
+  state: "queued" | "uploading" | "uploaded" | "failed";
+  errorCode?: string;
+  errorMessage?: string;
 };
 
 function getDiagnosticStatusLabel(status: DiagnosticReportStatus): string {
@@ -677,6 +689,7 @@ export async function submitDiagnosticReport(
     reportRef.id,
     browserId,
     input.screenshots ?? [],
+    input.onScreenshotUploadProgress,
   );
   const reportData = {
     ...input,
@@ -741,10 +754,20 @@ async function uploadDiagnosticScreenshots(
   reportId: string,
   browserId: string,
   screenshots: File[],
+  onProgress?: (update: DiagnosticScreenshotUploadProgress) => void,
 ): Promise<DiagnosticScreenshotReference[]> {
   if (!screenshots.length) {
     return [];
   }
+
+  screenshots.slice(0, 3).forEach((file, index) => {
+    onProgress?.({
+      index,
+      name: file.name,
+      progressPercent: 0,
+      state: "queued",
+    });
+  });
 
   const uploads = screenshots.slice(0, 3).map(async (file, index) => {
     const rawExtension = file.name.includes(".")
@@ -755,18 +778,23 @@ async function uploadDiagnosticScreenshots(
       storage,
       `diagnosticReports/${reportId}/${browserId}-${index + 1}.${safeExtension}`,
     );
-    await withTimeout(
-      uploadBytes(screenshotRef, file, {
-        contentType: file.type || "image/png",
-      }),
-      45_000,
-      `上傳截圖「${file.name}」逾時，請確認網路連線後再試一次。`,
+    await uploadScreenshotWithProgress(
+      screenshotRef,
+      file,
+      index,
+      onProgress,
     );
     const url = await withTimeout(
       getDownloadURL(screenshotRef),
       15_000,
       `取得截圖「${file.name}」網址逾時，請稍後再試。`,
     );
+    onProgress?.({
+      index,
+      name: file.name,
+      progressPercent: 100,
+      state: "uploaded",
+    });
     return {
       name: file.name,
       url,
@@ -776,6 +804,53 @@ async function uploadDiagnosticScreenshots(
   });
 
   return Promise.all(uploads);
+}
+
+async function uploadScreenshotWithProgress(
+  screenshotRef: ReturnType<typeof ref>,
+  file: File,
+  index: number,
+  onProgress?: (update: DiagnosticScreenshotUploadProgress) => void,
+): Promise<void> {
+  const uploadTask = uploadBytesResumable(screenshotRef, file, {
+    contentType: file.type || "image/png",
+  });
+
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot: UploadTaskSnapshot) => {
+          const progressPercent =
+            snapshot.totalBytes > 0
+              ? Math.min(100, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100))
+              : 0;
+          onProgress?.({
+            index,
+            name: file.name,
+            progressPercent,
+            state: "uploading",
+          });
+        },
+        (error: StorageError) => {
+          onProgress?.({
+            index,
+            name: file.name,
+            progressPercent: 0,
+            state: "failed",
+            errorCode: error.code,
+            errorMessage: error.message,
+          });
+          reject(error);
+        },
+        () => {
+          resolve();
+        },
+      );
+    }),
+    45_000,
+    `上傳截圖「${file.name}」逾時，請確認網路連線後再試一次。`,
+  );
 }
 
 async function withTimeout<T>(

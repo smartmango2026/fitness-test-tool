@@ -41,6 +41,7 @@ import {
 import { db, storage } from "./firebase";
 import {
   type DiagnosticScreenshotReference,
+  type DiagnosticScreenshotUploadProgress,
   type DiagnosticReportDetail,
   getDiagnosticEnvironment,
   getDiagnosticBrowserId,
@@ -866,6 +867,9 @@ export default function App({ experimentalMode = false }: AppProps) {
   const [diagnosticExpected, setDiagnosticExpected] = useState("");
   const [diagnosticActual, setDiagnosticActual] = useState("");
   const [diagnosticScreenshots, setDiagnosticScreenshots] = useState<File[]>([]);
+  const [diagnosticScreenshotUploads, setDiagnosticScreenshotUploads] = useState<
+    DiagnosticScreenshotUploadProgress[]
+  >([]);
   const [diagnosticSubmitting, setDiagnosticSubmitting] = useState(false);
   const [diagnosticSubmitStage, setDiagnosticSubmitStage] = useState<
     "idle" | "uploading" | "saving" | "refreshing"
@@ -1853,12 +1857,67 @@ export default function App({ experimentalMode = false }: AppProps) {
     return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
   }
 
+  function formatDiagnosticUploadState(
+    state: DiagnosticScreenshotUploadProgress["state"],
+  ): string {
+    switch (state) {
+      case "queued":
+        return "等待上傳";
+      case "uploading":
+        return "上傳中";
+      case "uploaded":
+        return "上傳完成";
+      case "failed":
+        return "上傳失敗";
+      default:
+        return "等待上傳";
+    }
+  }
+
+  function updateDiagnosticScreenshotUploadProgress(
+    update: DiagnosticScreenshotUploadProgress,
+  ): void {
+    setDiagnosticScreenshotUploads((current) => {
+      const next = [...current];
+      const existingIndex = next.findIndex((entry) => entry.index === update.index);
+      if (existingIndex >= 0) {
+        next[existingIndex] = {
+          ...next[existingIndex],
+          ...update,
+        };
+        return next;
+      }
+
+      next.push(update);
+      next.sort((left, right) => left.index - right.index);
+      return next;
+    });
+  }
+
+  function formatDiagnosticErrorMessage(error: unknown, fallback: string): string {
+    if (error && typeof error === "object" && "code" in error) {
+      const code = typeof error.code === "string" ? error.code : "unknown";
+      const message =
+        "message" in error && typeof error.message === "string"
+          ? error.message
+          : fallback;
+      return `${message}（錯誤碼：${code}）`;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return fallback;
+  }
+
   function handleDiagnosticScreenshotChange(
     event: ChangeEvent<HTMLInputElement>,
   ): void {
     const nextFiles = Array.from(event.target.files ?? []);
     if (!nextFiles.length) {
       setDiagnosticScreenshots([]);
+      setDiagnosticScreenshotUploads([]);
       return;
     }
 
@@ -1878,6 +1937,14 @@ export default function App({ experimentalMode = false }: AppProps) {
 
     const limitedFiles = imageFiles.slice(0, 3);
     setDiagnosticScreenshots(limitedFiles);
+    setDiagnosticScreenshotUploads(
+      limitedFiles.map((file, index) => ({
+        index,
+        name: file.name,
+        progressPercent: 0,
+        state: "queued",
+      })),
+    );
     recordUserAction("選擇問題回報截圖。", {
       fileCount: limitedFiles.length,
       fileNames: limitedFiles.map((file) => file.name),
@@ -1888,6 +1955,11 @@ export default function App({ experimentalMode = false }: AppProps) {
   function removeDiagnosticScreenshot(index: number): void {
     setDiagnosticScreenshots((current) =>
       current.filter((_, currentIndex) => currentIndex !== index),
+    );
+    setDiagnosticScreenshotUploads((current) =>
+      current
+        .filter((entry) => entry.index !== index)
+        .map((entry, nextIndex) => ({ ...entry, index: nextIndex })),
     );
   }
 
@@ -3140,6 +3212,7 @@ export default function App({ experimentalMode = false }: AppProps) {
         },
         frontendIssues,
         screenshots: diagnosticScreenshots,
+        onScreenshotUploadProgress: updateDiagnosticScreenshotUploadProgress,
       });
       recordDiagnosticEvent("diagnostic.submit-completed", "問題回報已送出。", {
         reportId,
@@ -3150,6 +3223,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setDiagnosticExpected("");
       setDiagnosticActual("");
       setDiagnosticScreenshots([]);
+      setDiagnosticScreenshotUploads([]);
       setDiagnosticReportHistory(
         getBrowserDiagnosticReportReferences().map((report) => ({
           ...report,
@@ -3161,6 +3235,7 @@ export default function App({ experimentalMode = false }: AppProps) {
       setDiagnosticSubmitting(false);
       setDiagnosticSubmitStage("idle");
       void refreshDiagnosticReportHistory(false);
+      window.alert(`問題回報已送出。\n\n回報編號：${reportId}`);
       setMessage(`問題回報已送出，編號：${reportId}`);
     } catch (error) {
       const nextMessage =
@@ -3169,6 +3244,9 @@ export default function App({ experimentalMode = false }: AppProps) {
         error: nextMessage,
       });
       setMessage(`問題回報送出失敗：${nextMessage}`);
+      const detailedMessage = formatDiagnosticErrorMessage(error, nextMessage);
+      setMessage(`問題回報送出失敗：${detailedMessage}`);
+      window.alert(`問題回報送出失敗。\n\n${detailedMessage}`);
     } finally {
       setDiagnosticSubmitting(false);
       setDiagnosticSubmitStage("idle");
@@ -5533,6 +5611,39 @@ export default function App({ experimentalMode = false }: AppProps) {
                               >
                                 移除
                               </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {diagnosticScreenshotUploads.length > 0 ? (
+                        <div className="diagnostic-upload-status-list">
+                          {diagnosticScreenshotUploads.map((upload) => (
+                            <div className="diagnostic-upload-status-card" key={upload.index}>
+                              <div className="diagnostic-upload-status-header">
+                                <strong>{upload.name}</strong>
+                                <span>
+                                  {formatDiagnosticUploadState(upload.state)}
+                                  {upload.state === "uploading" || upload.state === "uploaded"
+                                    ? ` ${upload.progressPercent}%`
+                                    : ""}
+                                </span>
+                              </div>
+                              <div aria-hidden="true" className="diagnostic-upload-progress">
+                                <div
+                                  className="diagnostic-upload-progress-bar"
+                                  style={{
+                                    width: `${Math.max(
+                                      0,
+                                      Math.min(100, upload.progressPercent),
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                              {upload.errorCode ? (
+                                <span className="diagnostic-upload-error">
+                                  錯誤碼：{upload.errorCode}
+                                </span>
+                              ) : null}
                             </div>
                           ))}
                         </div>
