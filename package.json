@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "reports": "node scripts/list-diagnostic-reports.mjs"
   },
   "dependencies": {
@@ -19,6 +21,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

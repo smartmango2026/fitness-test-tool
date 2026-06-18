@@ -35,6 +35,14 @@ The app has a separate `/e2e/` entry for automated testing. It runs the same app
 
 To configure it locally, copy `.env.e2e.example` to `.env.local` and fill the `VITE_E2E_FIREBASE_*` values from the Firebase test project's Web app config. If those values are empty, `/e2e/` will show a warning and use a placeholder Firebase config so it does not silently write to production.
 
+Run the Playwright smoke and main-flow checks with:
+
+```bash
+pnpm test:e2e
+```
+
+The current E2E suite opens `/e2e/`, verifies the test environment banner, checks login/register controls, then runs a basic teacher workflow: register an isolated test account, create a class file, edit the roster, open the metric sheet, open the summary sheet, and verify the PDF report page loads.
+
 ## Agent Notes
 
 Use this section as the fast orientation block for future maintenance agents.
