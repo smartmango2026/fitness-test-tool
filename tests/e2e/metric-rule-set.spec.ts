@@ -49,9 +49,15 @@ test.describe("metric rule set rendering", () => {
 
     await page.getByTestId("metric-item-option").last().click();
 
+    await expect(page.getByTestId("metric-group-viewport")).toHaveCount(2);
     await expect(page.getByText("雙腳跳").first()).toBeVisible();
     await expect(page.getByText("單腳跳").first()).toBeVisible();
     await expect(page.getByRole("columnheader", { name: /左腳/ })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: /右腳/ })).toBeVisible();
+
+    await page.getByTestId("summary-tab").click();
+    await expect(page.getByTestId("summary-group-viewport")).toHaveCount(2);
+    await expect(page.getByRole("columnheader", { name: "左腳" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "右腳" })).toBeVisible();
   });
 });

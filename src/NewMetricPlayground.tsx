@@ -432,13 +432,8 @@ export default function NewMetricPlayground({
       </div>
 
       {/* 試算表容器 */}
-        {debugInfo}
-        <div
-          className="nmp-viewport"
-          data-testid="metric-sheet"
-          ref={viewportRef}
-          style={viewportMaxHeight ? { maxHeight: viewportMaxHeight } : undefined}
-        >
+      {debugInfo}
+      <div className="nmp-groups" data-testid="metric-sheet">
           {metricGroups.map((group, groupIndex) => {
             const variant = getMetricVariant(activeMetric, group.records[0]?.studentGradeLabel ?? "大班");
             return (
@@ -449,135 +444,142 @@ export default function NewMetricPlayground({
                     <small>{group.grades.join("、")}</small>
                   </div>
                 ) : null}
-                <table className="nmp-table" ref={groupIndex === 0 ? tableRef : undefined}>
-                  <colgroup>
-                    <col style={{ width: "90px" }} />
-                    {variant.fields.map((inputField) => (
-                      <col key={String(inputField.id)} style={{ width: "150px" }} />
-                    ))}
-                  </colgroup>
-
-                  <thead>
-                    <tr>
-                      <th className="nmp-sticky-name">學生姓名</th>
+                <div
+                  className="nmp-viewport"
+                  data-testid="metric-group-viewport"
+                  ref={groupIndex === 0 ? viewportRef : undefined}
+                  style={viewportMaxHeight ? { maxHeight: viewportMaxHeight } : undefined}
+                >
+                  <table className="nmp-table" ref={groupIndex === 0 ? tableRef : undefined}>
+                    <colgroup>
+                      <col style={{ width: "90px" }} />
                       {variant.fields.map((inputField) => (
-                        <th key={String(inputField.id)}>
-                          <span className="nmp-header-label">
-                            {renderMetricLabel(
-                              variant.fields.length === 1
-                                ? activeMetricLabel
-                                : `${activeMetricLabel} / ${inputField.label}`,
-                            )}
-                          </span>
-                          {activeMetricUnit ? (
-                            <small className="nmp-header-unit">
-                              單位：{inputField.unit ?? activeMetricUnit}
-                            </small>
-                          ) : null}
-                        </th>
+                        <col key={String(inputField.id)} style={{ width: "150px" }} />
                       ))}
-                    </tr>
-                  </thead>
+                    </colgroup>
 
-                  <tbody>
-                    {group.records.map((record, rIdx) => {
-                      const rule = getMetricRule(activeMetric, record);
-                      const isRubric = rule?.kind === "rubric" && variant.fields.length === 1;
+                    <thead>
+                      <tr>
+                        <th className="nmp-sticky-name">學生姓名</th>
+                        {variant.fields.map((inputField) => (
+                          <th key={String(inputField.id)}>
+                            <span className="nmp-header-label">
+                              {renderMetricLabel(
+                                variant.fields.length === 1
+                                  ? variant.label
+                                  : inputField.label,
+                              )}
+                            </span>
+                            {activeMetricUnit ? (
+                              <small className="nmp-header-unit">
+                                單位：{inputField.unit ?? activeMetricUnit}
+                              </small>
+                            ) : null}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
 
-                      return (
-                        <tr
-                          className={record.id === selectedId ? "is-selected" : ""}
-                          key={record.id}
-                          onClick={() => selectRecord?.(record)}
-                        >
-                          <td className="nmp-sticky-name">
-                            {record.studentName}
-                          </td>
+                    <tbody>
+                      {group.records.map((record, rIdx) => {
+                        const rule = getMetricRule(activeMetric, record);
+                        const isRubric = rule?.kind === "rubric" && variant.fields.length === 1;
 
-                          {variant.fields.map((inputField) => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell.fieldId === inputField.id;
-                            const rawValue = record[inputField.id];
-                            const displayVal =
-                              inputField.id === activeMetric
-                                ? getMetricDisplayValue(record, activeMetric)
-                                : typeof rawValue === "number" && rawValue > 0
-                                  ? String(rawValue)
-                                  : "";
+                        return (
+                          <tr
+                            className={record.id === selectedId ? "is-selected" : ""}
+                            key={record.id}
+                            onClick={() => selectRecord?.(record)}
+                          >
+                            <td className="nmp-sticky-name">
+                              {record.studentName}
+                            </td>
 
-                            return (
-                              <td
-                                className={`nmp-cell-interactive ${isEditing ? "nmp-cell-editing" : ""}`}
-                                id={`cell-${record.id}-${String(inputField.id)}`}
-                                key={String(inputField.id)}
-                                onClick={(e) => {
-                                  if (!isEditing) {
-                                    const nextRawValue = isRubric
-                                      ? String(record[activeMetric] || 0)
-                                      : String(rawValue || "");
-                                    handleCellClick(record.id, inputField, nextRawValue, e);
-                                  }
-                                }}
-                              >
-                                {isEditing ? (
-                                  isRubric ? (
-                                    <select
-                                      className="nmp-select"
-                                      onBlur={() => {
-                                        commitValue(record, inputField, editValue);
-                                        setEditingCell(null);
-                                      }}
-                                      onChange={(e) => setEditValue(e.target.value)}
-                                      onKeyDown={(e) =>
-                                        handleKeyDown(e, record, inputField, rIdx, group.records)
-                                      }
-                                      ref={activeInputRef as React.RefObject<HTMLSelectElement>}
-                                      value={editValue}
-                                    >
-                                      <option value="0">未填寫</option>
-                                      {getMetricSelectOptions(activeMetric, record).map((option) => (
-                                        <option key={`${activeMetric}-${option.value}`} value={option.value}>
-                                          {option.label}
-                                        </option>
-                                      ))}
-                                    </select>
+                            {variant.fields.map((inputField) => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell.fieldId === inputField.id;
+                              const rawValue = record[inputField.id];
+                              const displayVal =
+                                inputField.id === activeMetric
+                                  ? getMetricDisplayValue(record, activeMetric)
+                                  : typeof rawValue === "number" && rawValue > 0
+                                    ? String(rawValue)
+                                    : "";
+
+                              return (
+                                <td
+                                  className={`nmp-cell-interactive ${isEditing ? "nmp-cell-editing" : ""}`}
+                                  id={`cell-${record.id}-${String(inputField.id)}`}
+                                  key={String(inputField.id)}
+                                  onClick={(e) => {
+                                    if (!isEditing) {
+                                      const nextRawValue = isRubric
+                                        ? String(record[activeMetric] || 0)
+                                        : String(rawValue || "");
+                                      handleCellClick(record.id, inputField, nextRawValue, e);
+                                    }
+                                  }}
+                                >
+                                  {isEditing ? (
+                                    isRubric ? (
+                                      <select
+                                        className="nmp-select"
+                                        onBlur={() => {
+                                          commitValue(record, inputField, editValue);
+                                          setEditingCell(null);
+                                        }}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={(e) =>
+                                          handleKeyDown(e, record, inputField, rIdx, group.records)
+                                        }
+                                        ref={activeInputRef as React.RefObject<HTMLSelectElement>}
+                                        value={editValue}
+                                      >
+                                        <option value="0">未填寫</option>
+                                        {getMetricSelectOptions(activeMetric, record).map((option) => (
+                                          <option key={`${activeMetric}-${option.value}`} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        className="nmp-input"
+                                        onBlur={() => {
+                                          commitValue(record, inputField, editValue);
+                                          setEditingCell(null);
+                                        }}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onFocus={(e) => {
+                                          const target = e.currentTarget;
+                                          setTimeout(() => {
+                                            target.select();
+                                            try {
+                                              target.setSelectionRange(0, target.value.length);
+                                            } catch (err) {}
+                                          }, 50);
+                                        }}
+                                        onKeyDown={(e) =>
+                                          handleKeyDown(e, record, inputField, rIdx, group.records)
+                                        }
+                                        ref={activeInputRef as React.RefObject<HTMLInputElement>}
+                                        type="number"
+                                        value={editValue}
+                                      />
+                                    )
                                   ) : (
-                                    <input
-                                      className="nmp-input"
-                                      onBlur={() => {
-                                        commitValue(record, inputField, editValue);
-                                        setEditingCell(null);
-                                      }}
-                                      onChange={(e) => setEditValue(e.target.value)}
-                                      onFocus={(e) => {
-                                        const target = e.currentTarget;
-                                        setTimeout(() => {
-                                          target.select();
-                                          try {
-                                            target.setSelectionRange(0, target.value.length);
-                                          } catch (err) {}
-                                        }, 50);
-                                      }}
-                                      onKeyDown={(e) =>
-                                        handleKeyDown(e, record, inputField, rIdx, group.records)
-                                      }
-                                      ref={activeInputRef as React.RefObject<HTMLInputElement>}
-                                      type="number"
-                                      value={editValue}
-                                    />
-                                  )
-                                ) : (
-                                  displayVal || "—"
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                    displayVal || "—"
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })}

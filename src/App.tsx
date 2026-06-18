@@ -112,6 +112,10 @@ import SpreadsheetPlayground from "./SpreadsheetPlayground";
 import NewMetricPlayground from "./NewMetricPlayground";
 import RosterSpreadsheet from "./RosterSpreadsheet";
 import SummarySpreadsheet from "./SummarySpreadsheet";
+import {
+  aggregateMetricVariantValue,
+  getMetricVariant,
+} from "./test-rule-set";
 
 type TabKey =
   | "files"
@@ -2520,9 +2524,22 @@ export default function App({ experimentalMode = false, runtime = "production" }
         }
 
         if (numericMetricInputFields.includes(field)) {
-          return {
+          const numericValue = normalizeNumber(value);
+          const nextRecord = {
             ...record,
-            [field]: normalizeNumber(value),
+            [field]: numericValue,
+          };
+
+          if (field === "item6Left" || field === "item6Right") {
+            const variant = getMetricVariant("item6", record.studentGradeLabel);
+            return {
+              ...nextRecord,
+              item6: aggregateMetricVariantValue(nextRecord, variant),
+            };
+          }
+
+          return {
+            ...nextRecord,
           };
         }
 
