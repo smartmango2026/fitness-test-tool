@@ -1769,6 +1769,28 @@ button {
   color: #9a3412;
 }
 
+.e2e-banner {
+  border-color: rgba(14, 116, 144, 0.26);
+  background: linear-gradient(180deg, rgba(236, 254, 255, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
+}
+
+.e2e-banner.is-unconfigured {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
+}
+
+.e2e-banner .startup-banner-head h2 {
+  color: #0e7490;
+}
+
+.e2e-banner.is-unconfigured .startup-banner-head h2 {
+  color: #b91c1c;
+}
+
+.e2e-banner strong {
+  color: #0f172a;
+}
+
 .startup-banner-head h2 {
   margin: 0 0 6px;
   font-size: 1rem;

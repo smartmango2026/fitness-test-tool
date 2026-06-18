@@ -38,7 +38,7 @@ import {
   readFirebaseConnectionTest,
   writeFirebaseConnectionTest,
 } from "./firebase-test";
-import { db } from "./firebase";
+import { db, firebaseRuntimeInfo } from "./firebase";
 import {
   type DiagnosticScreenshotReference,
   type DiagnosticScreenshotUploadProgress,
@@ -634,7 +634,12 @@ function isValidDateInput(value: string): boolean {
 }
 
 function getLastCloudFileStorageKey(uid: string): string {
-  return `${LAST_CLOUD_FILE_STORAGE_PREFIX}${uid}`;
+  const runtime =
+    typeof window !== "undefined" && window.__FITNESS_TEST_RUNTIME__ === "e2e"
+      ? "e2e"
+      : "production";
+
+  return `${LAST_CLOUD_FILE_STORAGE_PREFIX}${runtime}:${uid}`;
 }
 
 function readLastCloudFileSelection(uid: string): { fileId: string; ownerUid: string } | null {
@@ -822,9 +827,10 @@ function readMobileTabVariantFromUrl(): MobileTabVariant {
 
 type AppProps = {
   experimentalMode?: boolean;
+  runtime?: "production" | "e2e";
 };
 
-export default function App({ experimentalMode = false }: AppProps) {
+export default function App({ experimentalMode = false, runtime = "production" }: AppProps) {
   const visibleTabs = experimentalMode ? experimentalTabs : tabs;
   const [data, setData] = useState<AppData>(defaultAppData);
   const reportDebugParams = useMemo(() => readReportDebugParamsFromUrl(), []);
@@ -5879,6 +5885,28 @@ export default function App({ experimentalMode = false }: AppProps) {
           <div className="startup-banner-head">
             <h2>實驗版頁面</h2>
             <p>這個入口和正式版共用同一套畫面與資料流，之後新的功能會先放在這裡測試，再決定是否複製回正式版。</p>
+          </div>
+        </section>
+      ) : null}
+
+      {runtime === "e2e" ? (
+        <section
+          className={`startup-banner e2e-banner ${
+            firebaseRuntimeInfo.isConfigured ? "is-configured" : "is-unconfigured"
+          }`}
+          data-testid="e2e-runtime-banner"
+          aria-live="polite"
+        >
+          <div className="startup-banner-head">
+            <h2>E2E 測試環境</h2>
+            <p>
+              這個入口用於自動化測試，預期連線到獨立 Firebase test project。
+              目前 Firebase project：
+              <strong> {firebaseRuntimeInfo.projectId}</strong>
+              {firebaseRuntimeInfo.isConfigured
+                ? "。"
+                : "。尚未設定測試 Firebase，請勿用此入口執行會寫入資料的測試。"}
+            </p>
           </div>
         </section>
       ) : null}
