@@ -260,7 +260,36 @@ http://localhost:5173/e2e/
 
 需要在 Firebase Console 建立獨立 project。
 
-取得 Web app config 後填入 `src/firebase-config.ts`。
+取得 Web app config 後，不要直接改 `src/firebase-config.ts`。
+
+請複製：
+
+```text
+.env.e2e.example
+```
+
+成為本機不提交的：
+
+```text
+.env.local
+```
+
+或：
+
+```text
+.env.e2e.local
+```
+
+並填入：
+
+```text
+VITE_E2E_FIREBASE_API_KEY
+VITE_E2E_FIREBASE_AUTH_DOMAIN
+VITE_E2E_FIREBASE_PROJECT_ID
+VITE_E2E_FIREBASE_STORAGE_BUCKET
+VITE_E2E_FIREBASE_MESSAGING_SENDER_ID
+VITE_E2E_FIREBASE_APP_ID
+```
 
 注意：Firebase config 可公開，但安全性要靠 Firebase Auth / Firestore Rules，而不是靠隱藏 config。
 
@@ -276,6 +305,14 @@ http://localhost:5173/e2e/
 /e2e/ 顯示 test project id
 /`/` 仍顯示 production project id 或不顯示但實際連正式 project
 ```
+
+若 `/e2e/` 顯示：
+
+```text
+e2e-test-firebase-not-configured
+```
+
+代表尚未設定 test Firebase，這個入口可以載入畫面，但不應執行會寫入資料的自動化測試。
 
 ### Step 5: 接 visual-regression-tester
 
@@ -339,4 +376,3 @@ pdf-download-all-button
 - `docs/e2e-visual-test-plan.md`：描述完整 E2E 操作路徑與截圖策略。
 - 本文件：描述如何隔離 E2E 測試環境，避免測試資料污染正式資料。
 - `D:\VSCode\visual-regression-tester\SESSION_CONTEXT.md`：描述測試模組短期與長期策略。
-

@@ -29,6 +29,12 @@ Do not open the source `index.html` in the project root. That file is the Vite e
 
 This project now uses relative asset paths, so the built output is suitable for GitHub Pages and for opening `dist/index.html` locally.
 
+## E2E Test Entry
+
+The app has a separate `/e2e/` entry for automated testing. It runs the same app code but is intended to connect to a separate Firebase test project.
+
+To configure it locally, copy `.env.e2e.example` to `.env.local` and fill the `VITE_E2E_FIREBASE_*` values from the Firebase test project's Web app config. If those values are empty, `/e2e/` will show a warning and use a placeholder Firebase config so it does not silently write to production.
+
 ## Agent Notes
 
 Use this section as the fast orientation block for future maintenance agents.
