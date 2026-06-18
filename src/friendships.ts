@@ -19,6 +19,8 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { emailToUsername, normalizeUsername } from "./firebase-auth";
+import { getSchoolName, normalizeSchoolId } from "./schools";
+import type { SchoolId } from "./schools";
 
 export type FriendRecord = {
   friendUid: string;
@@ -33,6 +35,8 @@ export type UserProfileRecord = {
   uid: string;
   username: string;
   displayNickname: string | null;
+  schoolId: SchoolId | "";
+  schoolName: string;
 };
 
 export type FriendRequestRecord = {
@@ -98,6 +102,7 @@ function mapUserProfileDocument(
   uid: string,
   data: DocumentData,
 ): UserProfileRecord {
+  const schoolId = normalizeSchoolId(data.schoolId);
   return {
     uid,
     username:
@@ -106,6 +111,11 @@ function mapUserProfileDocument(
       typeof data.displayNickname === "string" && data.displayNickname.trim()
         ? data.displayNickname.trim()
         : null,
+    schoolId,
+    schoolName:
+      typeof data.schoolName === "string" && data.schoolName.trim()
+        ? data.schoolName.trim()
+        : getSchoolName(schoolId),
   };
 }
 
@@ -233,6 +243,22 @@ export async function updateOwnDisplayNickname(options: {
     );
   });
   await batch.commit();
+}
+
+export async function updateOwnSchool(options: {
+  uid: string;
+  username: string;
+  schoolId: SchoolId | "";
+}): Promise<void> {
+  const schoolId = normalizeSchoolId(options.schoolId);
+  const profileRef = doc(db, "users", options.uid);
+
+  await updateDoc(profileRef, {
+    username: normalizeUsername(options.username),
+    schoolId,
+    schoolName: getSchoolName(schoolId),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export function subscribeToFriends(

@@ -14,6 +14,8 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { defaultAppData } from "./sample-data";
+import { getSchoolName, normalizeSchoolId } from "./schools";
+import type { SchoolId } from "./schools";
 import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
 
 export type CloudFileSummary = {
@@ -22,6 +24,9 @@ export type CloudFileSummary = {
   rosterName: string;
   gradeLabel: string;
   academicTerm: string;
+  schoolId: SchoolId | "";
+  schoolNameSnapshot: string;
+  schoolLogoSnapshotUrl: string;
   testDate: string;
   rosterCount: number;
   recordCount: number;
@@ -78,12 +83,22 @@ function buildStoredFileData(
   ownerDisplayName: string | null,
   data: AppData,
 ) {
+  const schoolId = normalizeSchoolId(data.schoolId);
+  const schoolNameSnapshot =
+    typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
+      ? data.schoolNameSnapshot.trim()
+      : getSchoolName(schoolId);
+
   return {
     ownerUid,
     ownerUsername,
     ownerDisplayName,
     status: "active",
     fileName: buildFileName(data),
+    schoolId,
+    schoolNameSnapshot,
+    schoolLogoSnapshotUrl:
+      typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     rosterName: data.rosterName,
     gradeLabel: data.gradeLabel,
     academicTerm: data.academicTerm,
@@ -187,6 +202,13 @@ function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
       typeof data.academicTerm === "string" && data.academicTerm.trim()
         ? data.academicTerm
         : "尚未設定",
+    schoolId: normalizeSchoolId(data.schoolId),
+    schoolNameSnapshot:
+      typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
+        ? data.schoolNameSnapshot.trim()
+        : getSchoolName(normalizeSchoolId(data.schoolId)),
+    schoolLogoSnapshotUrl:
+      typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     testDate:
       typeof data.testDate === "string" && data.testDate
         ? data.testDate
@@ -246,6 +268,13 @@ function mapRecipientSharedFileSummary(id: string, data: DocumentData): CloudFil
       typeof data.academicTerm === "string" && data.academicTerm.trim()
         ? data.academicTerm
         : "尚未設定",
+    schoolId: normalizeSchoolId(data.schoolId),
+    schoolNameSnapshot:
+      typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
+        ? data.schoolNameSnapshot.trim()
+        : getSchoolName(normalizeSchoolId(data.schoolId)),
+    schoolLogoSnapshotUrl:
+      typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     testDate:
       typeof data.testDate === "string" && data.testDate
         ? data.testDate
@@ -272,6 +301,9 @@ async function syncShareMetadata(options: {
   gradeLabel: string;
   academicTerm: string;
   testDate: string;
+  schoolId?: SchoolId | "";
+  schoolNameSnapshot?: string;
+  schoolLogoSnapshotUrl?: string;
   rosterCount: number;
   recordCount: number;
   status?: "active" | "archived";
@@ -307,6 +339,10 @@ async function syncShareMetadata(options: {
         gradeLabel: options.gradeLabel,
         academicTerm: options.academicTerm,
         testDate: options.testDate,
+        schoolId: normalizeSchoolId(options.schoolId),
+        schoolNameSnapshot:
+          options.schoolNameSnapshot?.trim() || getSchoolName(normalizeSchoolId(options.schoolId)),
+        schoolLogoSnapshotUrl: options.schoolLogoSnapshotUrl ?? "",
         rosterCount: options.rosterCount,
         recordCount: options.recordCount,
         recipientUid,
@@ -434,6 +470,10 @@ export async function saveCloudFile(options: {
     gradeLabel: options.data.gradeLabel,
     academicTerm: options.data.academicTerm,
     testDate: options.data.testDate,
+    schoolId: normalizeSchoolId(options.data.schoolId),
+    schoolNameSnapshot:
+      options.data.schoolNameSnapshot?.trim() || getSchoolName(normalizeSchoolId(options.data.schoolId)),
+    schoolLogoSnapshotUrl: options.data.schoolLogoSnapshotUrl ?? "",
     rosterCount: options.data.rosterEntries.length,
     recordCount: options.data.records.length,
     ownerUsername: options.username,
@@ -448,11 +488,17 @@ export async function updateCloudFileInfo(options: {
   gradeLabel: string;
   academicTerm: string;
   testDate: string;
+  schoolId?: SchoolId | "";
+  schoolNameSnapshot?: string;
+  schoolLogoSnapshotUrl?: string;
 }): Promise<void> {
   const fileRef = doc(db, "users", options.ownerUid, "files", options.fileId);
   const rosterName = options.rosterName.trim() || "未命名班級";
   const academicTerm = options.academicTerm.trim();
   const fileName = academicTerm ? `${academicTerm} / ${rosterName}` : rosterName;
+  const schoolId = normalizeSchoolId(options.schoolId);
+  const schoolNameSnapshot =
+    options.schoolNameSnapshot?.trim() || getSchoolName(schoolId);
 
   await setDoc(
     fileRef,
@@ -461,6 +507,9 @@ export async function updateCloudFileInfo(options: {
       gradeLabel: options.gradeLabel,
       academicTerm,
       testDate: options.testDate,
+      schoolId,
+      schoolNameSnapshot,
+      schoolLogoSnapshotUrl: options.schoolLogoSnapshotUrl ?? "",
       fileName,
       updatedAt: serverTimestamp(),
     },
@@ -543,6 +592,11 @@ export async function loadCloudFile(
 
   const data = snapshot.data();
   const gradeLabel = typeof data.gradeLabel === "string" ? data.gradeLabel : "";
+  const schoolId = normalizeSchoolId(data.schoolId);
+  const schoolNameSnapshot =
+    typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
+      ? data.schoolNameSnapshot.trim()
+      : getSchoolName(schoolId);
   const testDate =
     typeof data.testDate === "string" && data.testDate
       ? data.testDate
@@ -557,6 +611,10 @@ export async function loadCloudFile(
       typeof data.academicTerm === "string" && data.academicTerm
         ? data.academicTerm
         : defaultAppData.academicTerm,
+    schoolId,
+    schoolNameSnapshot,
+    schoolLogoSnapshotUrl:
+      typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     itemLabels:
       Array.isArray(data.itemLabels) && data.itemLabels.length
         ? data.itemLabels
@@ -625,6 +683,10 @@ export async function setCloudFileEditors(options: {
         rosterName: options.file.rosterName,
         gradeLabel: options.file.gradeLabel,
         academicTerm: options.file.academicTerm,
+        schoolId: normalizeSchoolId(options.file.schoolId),
+        schoolNameSnapshot:
+          options.file.schoolNameSnapshot || getSchoolName(normalizeSchoolId(options.file.schoolId)),
+        schoolLogoSnapshotUrl: options.file.schoolLogoSnapshotUrl,
         rosterCount: options.file.rosterCount,
         recordCount: options.file.recordCount,
         recipientUid: target.uid,

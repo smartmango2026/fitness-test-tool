@@ -96,6 +96,7 @@ import {
   type UserProfileRecord,
   updateFriendCustomNickname,
   updateOwnDisplayNickname,
+  updateOwnSchool,
 } from "./friendships";
 import RadarChart from "./RadarChart";
 import { defaultAppData } from "./sample-data";
@@ -117,6 +118,14 @@ import {
   getMetricRuleDefinition,
   getMetricVariant,
 } from "./test-rule-set";
+import {
+  getSchoolName,
+  isSmartSportSchool,
+  normalizeSchoolId,
+  SCHOOL_OPTIONS,
+  SMART_SPORT_SCHOOL_ID,
+} from "./schools";
+import type { SchoolId } from "./schools";
 
 type TabKey =
   | "files"
@@ -147,9 +156,18 @@ type NewCloudFileDraft = {
   academicYear: string;
   semester: string;
   rosterName: string;
+  schoolId: SchoolId | "";
   gradeLabel: string;
   testDate: string;
   rosterCount: string;
+};
+
+type CloudFileInfoDraft = {
+  rosterName: string;
+  gradeLabel: string;
+  academicTerm: string;
+  testDate: string;
+  schoolId: SchoolId | "";
 };
 
 type FileOpenTraceEntry = {
@@ -510,6 +528,7 @@ function makeNewCloudFileDraft(source: AppData): NewCloudFileDraft {
     academicYear: parts.academicYear || String(CURRENT_ROC_YEAR),
     semester: parts.semester || TERM_OPTIONS[1],
     rosterName: "",
+    schoolId: normalizeSchoolId(source.schoolId),
     gradeLabel: source.gradeLabel || GRADE_OPTIONS[0] || "",
     testDate: source.testDate || new Date().toISOString().slice(0, 10),
     rosterCount: "1",
@@ -919,6 +938,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [nicknameDraft, setNicknameDraft] = useState("");
+  const [profileSchoolDraft, setProfileSchoolDraft] = useState<SchoolId | "">("");
   const [friendNicknameDrafts, setFriendNicknameDrafts] = useState<Record<string, string>>({});
   const [expandedFriendUids, setExpandedFriendUids] = useState<string[]>([]);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
@@ -969,10 +989,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
       ),
   );
   const [cloudFileDrafts, setCloudFileDrafts] = useState<
-    Record<
-      string,
-      { rosterName: string; gradeLabel: string; academicTerm: string; testDate: string }
-    >
+    Record<string, CloudFileInfoDraft>
   >({});
   const [draftRecord, setDraftRecord] = useState<FitnessRecord>(
     data.records[0] ?? makeEmptyRecord(data.testDate),
@@ -1267,6 +1284,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
     const unsubscribeProfile = subscribeToUserProfile(currentUser.uid, (profile) => {
       setCurrentProfile(profile);
       setNicknameDraft(profile?.displayNickname ?? "");
+      setProfileSchoolDraft(profile?.schoolId ?? "");
       updateLoadCheckpoint("profile", "success", "使用者基本資料已載入。");
     });
     const unsubscribeIncoming = subscribeToIncomingFriendRequests(
@@ -1393,6 +1411,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
           gradeLabel: current[file.id]?.gradeLabel ?? file.gradeLabel,
           academicTerm: current[file.id]?.academicTerm ?? file.academicTerm,
           testDate: current[file.id]?.testDate ?? file.testDate,
+          schoolId: current[file.id]?.schoolId ?? file.schoolId,
         };
       }
 
@@ -1405,6 +1424,24 @@ export default function App({ experimentalMode = false, runtime = "production" }
       return next;
     });
   }, [cloudFiles]);
+
+  useEffect(() => {
+    const profileSchoolId = normalizeSchoolId(currentProfile?.schoolId);
+    setNewCloudFileDraft((current) => {
+      if (isSmartSportSchool(profileSchoolId)) {
+        return current;
+      }
+
+      if (current.schoolId === profileSchoolId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        schoolId: profileSchoolId,
+      };
+    });
+  }, [currentProfile?.schoolId]);
 
   const sortedCloudFiles = useMemo(() => {
     const nextFiles = [...cloudFiles];
@@ -1835,6 +1872,30 @@ export default function App({ experimentalMode = false, runtime = "production" }
     "未登入";
   const currentDisplayName =
     currentProfile?.displayNickname?.trim() || currentUsername;
+  const currentProfileSchoolId = normalizeSchoolId(currentProfile?.schoolId);
+  const currentProfileIsSmartSport = isSmartSportSchool(currentProfileSchoolId);
+
+  function resolveFileSchoolIdForDraft(draftSchoolId: SchoolId | ""): SchoolId | "" {
+    return currentProfileIsSmartSport
+      ? normalizeSchoolId(draftSchoolId)
+      : currentProfileSchoolId;
+  }
+
+  function withEffectiveSchoolForSave(source: AppData): AppData {
+    const schoolId = currentProfileIsSmartSport
+      ? normalizeSchoolId(source.schoolId)
+      : currentProfileSchoolId;
+
+    return {
+      ...source,
+      schoolId,
+      schoolNameSnapshot:
+        source.schoolNameSnapshot?.trim() && currentProfileIsSmartSport
+          ? source.schoolNameSnapshot.trim()
+          : getSchoolName(schoolId),
+      schoolLogoSnapshotUrl: source.schoolLogoSnapshotUrl ?? "",
+    };
+  }
 
   function pushFileOpenTrace(status: FileOpenTraceEntry["status"], detail: string) {
     const entry: FileOpenTraceEntry = {
@@ -2561,6 +2622,24 @@ export default function App({ experimentalMode = false, runtime = "production" }
     setData((current) => ({
       ...current,
       rosterName: nextName,
+    }));
+  }
+
+  function updateFileSchool(nextSchoolId: SchoolId | ""): void {
+    const schoolId = normalizeSchoolId(nextSchoolId);
+    const schoolName = getSchoolName(schoolId);
+    recordUserAction(
+      schoolName ? `修改檔案所屬學校為「${schoolName}」。` : "清除檔案所屬學校。",
+      {
+        schoolId,
+        schoolName,
+      },
+    );
+    setData((current) => ({
+      ...current,
+      schoolId,
+      schoolNameSnapshot: schoolName,
+      schoolLogoSnapshotUrl: "",
     }));
   }
 
@@ -3899,6 +3978,57 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
   }
 
+  async function handleSaveOwnSchool(): Promise<void> {
+    if (!currentUser) {
+      setMessage("請先登入，再設定學校。");
+      return;
+    }
+
+    try {
+      const schoolId = normalizeSchoolId(profileSchoolDraft);
+      const schoolName = getSchoolName(schoolId);
+      const operationId = createSystemLogOperationId();
+      await writeAppSystemLog({
+        operationId,
+        actionType: "profile_school_updated",
+        phase: "started",
+        message: "開始更新帳號學校。",
+        payload: {
+          schoolId,
+          schoolName,
+        },
+      });
+      await updateOwnSchool({
+        uid: currentUser.uid,
+        username: currentUsername,
+        schoolId,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "profile_school_updated",
+        phase: "completed",
+        message: "已更新帳號學校。",
+        payload: {
+          schoolId,
+          schoolName,
+        },
+      });
+      setMessage(schoolName ? `已更新帳號學校：${schoolName}` : "已清除帳號學校。");
+    } catch (error) {
+      const nextMessage =
+        error instanceof Error ? error.message : "更新帳號學校失敗。";
+      await writeAppSystemLog({
+        actionType: "profile_school_updated",
+        phase: "failed",
+        message: nextMessage,
+        payload: {
+          schoolId: profileSchoolDraft,
+        },
+      });
+      setMessage(`更新帳號學校失敗：${nextMessage}`);
+    }
+  }
+
   function updateFriendNicknameDraft(friendUid: string, value: string): void {
     setFriendNicknameDrafts((current) => ({
       ...current,
@@ -4032,10 +4162,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
 
     try {
+      const effectiveData = withEffectiveSchoolForSave(data);
       recordUserAction("按下「新增雲端檔案」按鈕。", {
-        rosterName: data.rosterName,
-        gradeLabel: data.gradeLabel,
-        academicTerm: data.academicTerm,
+        rosterName: effectiveData.rosterName,
+        gradeLabel: effectiveData.gradeLabel,
+        academicTerm: effectiveData.academicTerm,
+        schoolId: effectiveData.schoolId,
+        schoolName: effectiveData.schoolNameSnapshot,
       });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
@@ -4044,16 +4177,18 @@ export default function App({ experimentalMode = false, runtime = "production" }
         phase: "started",
         message: "開始建立雲端檔案。",
         payload: {
-          rosterName: data.rosterName,
-          gradeLabel: data.gradeLabel,
-          academicTerm: data.academicTerm,
+          rosterName: effectiveData.rosterName,
+          gradeLabel: effectiveData.gradeLabel,
+          academicTerm: effectiveData.academicTerm,
+          schoolId: effectiveData.schoolId,
+          schoolName: effectiveData.schoolNameSnapshot,
         },
       });
       const fileId = await createCloudFile({
         uid: currentUser.uid,
         username: currentUsername,
         displayName: currentProfile?.displayNickname ?? null,
-        data,
+        data: effectiveData,
       });
       await writeAppSystemLog({
         operationId,
@@ -4061,11 +4196,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
         phase: "completed",
         ownerUid: currentUser.uid,
         fileId,
-        fileName: data.academicTerm
-          ? `${data.academicTerm} / ${data.rosterName || "未命名班級"}`
-          : data.rosterName || "未命名班級",
+        fileName: effectiveData.academicTerm
+          ? `${effectiveData.academicTerm} / ${effectiveData.rosterName || "未命名班級"}`
+          : effectiveData.rosterName || "未命名班級",
         message: "已建立雲端檔案。",
       });
+      skipNextCloudDirtyRef.current = true;
+      setData(effectiveData);
       setCurrentCloudFileId(fileId);
       setCurrentCloudFileOwnerUid(currentUser.uid);
       setExpandedCloudFileId(fileId);
@@ -4090,9 +4227,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
   }
 
-  function updateNewCloudFileDraft(
-    field: keyof NewCloudFileDraft,
-    value: string,
+  function updateNewCloudFileDraft<Field extends keyof NewCloudFileDraft>(
+    field: Field,
+    value: NewCloudFileDraft[Field],
   ): void {
     setNewCloudFileDraft((current) => ({
       ...current,
@@ -4163,6 +4300,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
     const gradeLabel = newCloudFileDraft.gradeLabel;
     const testDate = newCloudFileDraft.testDate;
     const academicTerm = `民國 ${newCloudFileDraft.academicYear} 年${newCloudFileDraft.semester}`;
+    const schoolId = resolveFileSchoolIdForDraft(newCloudFileDraft.schoolId);
     const studentGradeLabel = resolveStudentGradeLabel(gradeLabel, "");
     const rosterEntries = Array.from({ length: rosterCount }, () => ({
       ...makeEmptyRosterEntry(),
@@ -4173,6 +4311,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
       ...defaultAppData,
       testDate,
       academicTerm,
+      schoolId,
+      schoolNameSnapshot: getSchoolName(schoolId),
+      schoolLogoSnapshotUrl: "",
       rosterName: newCloudFileDraft.rosterName.trim(),
       gradeLabel,
       rosterEntries,
@@ -4271,12 +4412,15 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
 
     try {
+      const effectiveDataToSave = withEffectiveSchoolForSave(dataToSave);
       recordUserAction(actionLabel, {
         fileId: currentCloudFileId,
         ownerUid: currentCloudFileOwnerUid,
-        rosterName: dataToSave.rosterName,
-        recordCount: dataToSave.records.length,
-        rosterCount: dataToSave.rosterEntries.length,
+        rosterName: effectiveDataToSave.rosterName,
+        schoolId: effectiveDataToSave.schoolId,
+        schoolName: effectiveDataToSave.schoolNameSnapshot,
+        recordCount: effectiveDataToSave.records.length,
+        rosterCount: effectiveDataToSave.rosterEntries.length,
       });
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
@@ -4285,9 +4429,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
         phase: "started",
         ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
-        fileName: dataToSave.academicTerm
-          ? `${dataToSave.academicTerm} / ${dataToSave.rosterName || "未命名班級"}`
-          : dataToSave.rosterName || "未命名班級",
+        fileName: effectiveDataToSave.academicTerm
+          ? `${effectiveDataToSave.academicTerm} / ${effectiveDataToSave.rosterName || "未命名班級"}`
+          : effectiveDataToSave.rosterName || "未命名班級",
         message: "開始儲存雲端檔案。",
       });
       await saveCloudFileData({
@@ -4295,7 +4439,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
         fileId: currentCloudFileId,
         username: currentUsername,
         displayName: currentProfile?.displayNickname ?? null,
-        data: dataToSave,
+        data: effectiveDataToSave,
       });
       await writeAppSystemLog({
         operationId,
@@ -4303,11 +4447,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
         phase: "completed",
         ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
-        fileName: dataToSave.academicTerm
-          ? `${dataToSave.academicTerm} / ${dataToSave.rosterName || "未命名班級"}`
-          : dataToSave.rosterName || "未命名班級",
+        fileName: effectiveDataToSave.academicTerm
+          ? `${effectiveDataToSave.academicTerm} / ${effectiveDataToSave.rosterName || "未命名班級"}`
+          : effectiveDataToSave.rosterName || "未命名班級",
         message: "已儲存雲端檔案。",
       });
+      skipNextCloudDirtyRef.current = true;
+      setData(effectiveDataToSave);
       setIsCloudDirty(false);
       setMessage("目前檔案已儲存到雲端。");
       return true;
@@ -4563,10 +4709,10 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
   }
 
-  function updateCloudFileDraft(
+  function updateCloudFileDraft<Field extends keyof CloudFileInfoDraft>(
     fileId: string,
-    field: "rosterName" | "gradeLabel" | "academicTerm" | "testDate",
-    value: string,
+    field: Field,
+    value: CloudFileInfoDraft[Field],
   ): void {
     setCloudFileDrafts((current) => ({
       ...current,
@@ -4575,6 +4721,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
         gradeLabel: current[fileId]?.gradeLabel ?? "",
         academicTerm: current[fileId]?.academicTerm ?? "",
         testDate: current[fileId]?.testDate ?? "",
+        schoolId: current[fileId]?.schoolId ?? "",
         [field]: value,
       },
     }));
@@ -4632,6 +4779,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
           gradeLabel: draft.gradeLabel,
           academicTerm: draft.academicTerm,
           testDate: draft.testDate,
+          schoolId: draft.schoolId,
+          schoolName: getSchoolName(draft.schoolId),
         },
       });
       await updateCloudFileInfo({
@@ -4641,6 +4790,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
         gradeLabel: draft.gradeLabel,
         academicTerm: draft.academicTerm,
         testDate: draft.testDate,
+        schoolId: draft.schoolId,
+        schoolNameSnapshot: getSchoolName(draft.schoolId),
       });
       await writeAppSystemLog({
         operationId,
@@ -4655,6 +4806,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
           gradeLabel: draft.gradeLabel,
           academicTerm: draft.academicTerm,
           testDate: draft.testDate,
+          schoolId: draft.schoolId,
+          schoolName: getSchoolName(draft.schoolId),
         },
       });
       setMessage(`已更新檔案資訊：${file.fileName}`);
@@ -6388,6 +6541,28 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               value={newCloudFileDraft.rosterName}
                             />
                           </label>
+                          {currentProfileIsSmartSport ? (
+                            <label>
+                              <strong>檔案所屬學校</strong>
+                              <select
+                                data-testid="file-school-select"
+                                onChange={(event) =>
+                                  updateNewCloudFileDraft(
+                                    "schoolId",
+                                    normalizeSchoolId(event.target.value),
+                                  )
+                                }
+                                value={newCloudFileDraft.schoolId}
+                              >
+                                <option value="">尚未設定</option>
+                                {SCHOOL_OPTIONS.map((school) => (
+                                  <option key={school.id} value={school.id}>
+                                    {school.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
                           <label>
                             <strong>學期</strong>
                             <select
@@ -6492,6 +6667,25 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               value={data.rosterName}
                             />
                           </label>
+                          {currentProfileIsSmartSport ? (
+                            <label>
+                              <strong>檔案所屬學校</strong>
+                              <select
+                                disabled={!currentCloudFileIsOwner}
+                                onChange={(event) =>
+                                  updateFileSchool(normalizeSchoolId(event.target.value))
+                                }
+                                value={normalizeSchoolId(data.schoolId)}
+                              >
+                                <option value="">尚未設定</option>
+                                {SCHOOL_OPTIONS.map((school) => (
+                                  <option key={school.id} value={school.id}>
+                                    {school.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
                           <label>
                             <strong>學期</strong>
                             <select
@@ -6748,6 +6942,44 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               清空
                             </button>
                           </div>
+                        </div>
+                      ) : (
+                        <div>尚未登入</div>
+                      )}
+                    </div>
+                    <div>
+                      <strong>所屬學校</strong>
+                      {currentUser ? (
+                        <div className="friend-alias-form">
+                          <select
+                            onChange={(event) =>
+                              setProfileSchoolDraft(normalizeSchoolId(event.target.value))
+                            }
+                            value={profileSchoolDraft}
+                          >
+                            <option value="">尚未設定</option>
+                            {SCHOOL_OPTIONS.map((school) => (
+                              <option key={school.id} value={school.id}>
+                                {school.name}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="friend-row-actions">
+                            <button
+                              className="primary-button"
+                              onClick={() => {
+                                void handleSaveOwnSchool();
+                              }}
+                              type="button"
+                            >
+                              儲存學校
+                            </button>
+                          </div>
+                          {profileSchoolDraft === SMART_SPORT_SCHOOL_ID ? (
+                            <small className="auth-help">
+                              聰明動老師建立檔案時，可以再指定該檔案所屬學校。
+                            </small>
+                          ) : null}
                         </div>
                       ) : (
                         <div>尚未登入</div>

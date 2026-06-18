@@ -1,5 +1,6 @@
 import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
 import { defaultAppData } from "./sample-data";
+import { getSchoolName, normalizeSchoolId } from "./schools";
 
 const STORAGE_KEY = "fitness-test-tool.app-data.v1";
 
@@ -106,6 +107,13 @@ function migrateAppData(data: LegacyAppData): AppData {
       ("academicTerm" in data && typeof data.academicTerm === "string" && data.academicTerm.trim()
         ? data.academicTerm
         : formatAcademicTermFromDate(testDate)),
+    schoolId: normalizeSchoolId(data.schoolId),
+    schoolNameSnapshot:
+      typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
+        ? data.schoolNameSnapshot.trim()
+        : getSchoolName(normalizeSchoolId(data.schoolId)),
+    schoolLogoSnapshotUrl:
+      typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     itemLabels:
       Array.isArray(data.itemLabels) && data.itemLabels.length
         ? data.itemLabels

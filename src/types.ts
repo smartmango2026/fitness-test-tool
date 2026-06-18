@@ -1,3 +1,5 @@
+import type { SchoolId } from "./schools";
+
 export type FitnessField =
   | "item1"
   | "item2"
@@ -38,6 +40,9 @@ export type AppData = {
   schemaVersion: number;
   testDate: string;
   academicTerm: string;
+  schoolId?: SchoolId | "";
+  schoolNameSnapshot?: string;
+  schoolLogoSnapshotUrl?: string;
   itemLabels: string[];
   rosterName: string;
   gradeLabel: string;
