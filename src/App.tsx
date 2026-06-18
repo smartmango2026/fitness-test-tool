@@ -382,6 +382,11 @@ const tableEditableFields: EditableField[] = [
   "studentGradeLabel",
   ...scoreFields,
 ];
+const numericMetricInputFields: Array<keyof FitnessRecord> = [
+  ...scoreFields,
+  "item6Left",
+  "item6Right",
+];
 
 const SHEET_ZOOM_OPTIONS: Array<{ label: string; value: SheetZoomMode }> = [
   { label: "符合頁寬", value: "fit" },
@@ -437,6 +442,8 @@ function makeEmptyRecord(testDate: string): FitnessRecord {
     item4: 0,
     item5: 0,
     item6: 0,
+    item6Left: 0,
+    item6Right: 0,
     comment: "",
   };
 }
@@ -2022,6 +2029,12 @@ export default function App({ experimentalMode = false, runtime = "production" }
     if (field === "comment") {
       return "評語";
     }
+    if (field === "item6Left") {
+      return "單腳跳左腳";
+    }
+    if (field === "item6Right") {
+      return "單腳跳右腳";
+    }
     const scoreIndex = scoreFields.indexOf(field as FitnessField);
     return scoreIndex >= 0 ? resolvedItemLabels[scoreIndex] ?? field : field;
   }
@@ -2506,7 +2519,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
           return record;
         }
 
-        if (scoreFields.includes(field as FitnessField)) {
+        if (numericMetricInputFields.includes(field)) {
           return {
             ...record,
             [field]: normalizeNumber(value),

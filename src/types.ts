@@ -29,6 +29,8 @@ export type FitnessRecord = {
   item4: number;
   item5: number;
   item6: number;
+  item6Left?: number;
+  item6Right?: number;
   comment: string;
 };
 

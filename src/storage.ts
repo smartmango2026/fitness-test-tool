@@ -65,6 +65,8 @@ function migrateRecords(data: LegacyAppData, testDate: string, gradeLabel: strin
     item4: typeof record.item4 === "number" ? record.item4 : 0,
     item5: typeof record.item5 === "number" ? record.item5 : 0,
     item6: typeof record.item6 === "number" ? record.item6 : 0,
+    item6Left: typeof record.item6Left === "number" ? record.item6Left : 0,
+    item6Right: typeof record.item6Right === "number" ? record.item6Right : 0,
     comment: record.comment || "",
   }));
 }

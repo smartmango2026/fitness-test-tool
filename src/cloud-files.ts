@@ -151,6 +151,8 @@ function normalizeRecords(raw: unknown, fileGradeLabel: string, testDate: string
       item4: typeof data.item4 === "number" ? data.item4 : 0,
       item5: typeof data.item5 === "number" ? data.item5 : 0,
       item6: typeof data.item6 === "number" ? data.item6 : 0,
+      item6Left: typeof data.item6Left === "number" ? data.item6Left : 0,
+      item6Right: typeof data.item6Right === "number" ? data.item6Right : 0,
       comment: typeof data.comment === "string" ? data.comment : "",
     };
   });

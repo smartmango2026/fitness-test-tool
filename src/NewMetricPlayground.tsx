@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 import type { AppData, FitnessRecord, FitnessField } from "./types";
+import {
+  aggregateMetricVariantValue,
+  getMetricContainerGroups,
+  getMetricVariant,
+  type MetricInputField,
+} from "./test-rule-set";
 
 type EditableField = keyof FitnessRecord;
 
@@ -50,7 +56,10 @@ export default function NewMetricPlayground({
   tableRef: externalTableRef,
 }: NewMetricPlaygroundProps) {
   // 編輯單元格狀態：紀錄哪個學生的 id 正在編輯
-  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{
+    recordId: string;
+    fieldId: keyof FitnessRecord;
+  } | null>(null);
   const [editValue, setEditValue] = useState<string>("");
 
   const internalViewportRef = useRef<HTMLDivElement>(null);
@@ -63,6 +72,7 @@ export default function NewMetricPlayground({
   const activeMetricIndex = scoreFields.indexOf(activeMetric);
   const activeMetricLabel = resolvedItemLabels[activeMetricIndex] ?? activeMetric;
   const activeMetricUnit = getMetricUnitLabel(activeMetric);
+  const metricGroups = getMetricContainerGroups(data.records, activeMetric);
 
   function renderMetricLabel(label: string): ReactNode {
     const parts = label.split(" / ");
@@ -79,7 +89,7 @@ export default function NewMetricPlayground({
 
   // 1. 當切換編輯儲存格時，將焦點移至輸入元件，並防止瀏覽器畫面產生跳動，同時在行動裝置與電腦上自動全選內容
   useEffect(() => {
-    if (editingRecordId && activeInputRef.current) {
+    if (editingCell && activeInputRef.current) {
       const element = activeInputRef.current;
       element.focus({ preventScroll: true });
       if (element instanceof HTMLInputElement) {
@@ -92,15 +102,16 @@ export default function NewMetricPlayground({
         }, 50);
       }
     }
-  }, [editingRecordId]);
+  }, [editingCell]);
 
   // 2. 點擊儲存格進入編輯，並確保該儲存格不會被左邊凍結的姓名欄遮擋
   const handleCellClick = (
     recordId: string,
+    inputField: MetricInputField,
     currentVal: string,
     event: React.MouseEvent<HTMLTableCellElement>
   ) => {
-    setEditingRecordId(recordId);
+    setEditingCell({ recordId, fieldId: inputField.id });
     setEditValue(currentVal);
 
     const cellElement = event.currentTarget;
@@ -124,38 +135,55 @@ export default function NewMetricPlayground({
   };
 
   // 3. 儲存數值並通知父組件更新
-  const commitValue = (recordId: string, val: string) => {
-    updateTableField(recordId, activeMetric, val);
+  const commitValue = (
+    record: FitnessRecord,
+    inputField: MetricInputField,
+    val: string,
+  ) => {
+    updateTableField(record.id, inputField.id, val);
+
+    const variant = getMetricVariant(activeMetric, record.studentGradeLabel);
+    if (!variant.aggregateTo || variant.aggregateTo === inputField.id) {
+      return;
+    }
+
+    const numericValue = Number(val);
+    const nextRecord = {
+      ...record,
+      [inputField.id]: Number.isFinite(numericValue) ? numericValue : 0,
+    };
+    updateTableField(
+      record.id,
+      variant.aggregateTo,
+      String(aggregateMetricVariantValue(nextRecord, variant)),
+    );
   };
 
   // 4. 處理鍵盤導覽 (Tab / Shift+Tab / Enter / Escape / ArrowUp / ArrowDown)
   const handleKeyDown = (
     event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
-    recordId: string,
-    rowIndex: number
+    record: FitnessRecord,
+    inputField: MetricInputField,
+    rowIndex: number,
+    groupRecords: FitnessRecord[],
   ) => {
     if (event.key === "Tab") {
       event.preventDefault(); // 攔截預設 Tab focus 切換
-      commitValue(recordId, editValue);
+      commitValue(record, inputField, editValue);
 
       // 移動到下一個學生的編輯格
       const isShift = event.shiftKey;
       let nextRowIndex = isShift ? rowIndex - 1 : rowIndex + 1;
 
-      if (nextRowIndex >= 0 && nextRowIndex < data.records.length) {
-        const nextRecord = data.records[nextRowIndex];
-        setEditingRecordId(nextRecord.id);
-        
-        // 取得該指標的展示值作為編輯預設值
-        const displayVal = getMetricDisplayValue(nextRecord, activeMetric);
-        // 如果是下拉選單，對應到數值
-        const rule = getMetricRule(activeMetric, nextRecord);
-        const nextVal = rule?.kind === "rubric" ? String(nextRecord[activeMetric] || 0) : String(nextRecord[activeMetric] || "");
+      if (nextRowIndex >= 0 && nextRowIndex < groupRecords.length) {
+        const nextRecord = groupRecords[nextRowIndex];
+        setEditingCell({ recordId: nextRecord.id, fieldId: inputField.id });
+        const nextVal = String(nextRecord[inputField.id] || "");
         setEditValue(nextVal);
 
         // 延遲滾動微調以避免姓名遮擋
         setTimeout(() => {
-          const nextCell = document.getElementById(`cell-${nextRecord.id}`);
+          const nextCell = document.getElementById(`cell-${nextRecord.id}-${String(inputField.id)}`);
           if (nextCell && viewportRef.current) {
             const viewport = viewportRef.current;
             const stickyWidth = 90;
@@ -172,37 +200,35 @@ export default function NewMetricPlayground({
           }
         }, 0);
       } else {
-        setEditingRecordId(null); // 超出邊界，結束編輯
+        setEditingCell(null); // 超出邊界，結束編輯
       }
     } else if (event.key === "Enter") {
       event.preventDefault();
-      commitValue(recordId, editValue);
-      setEditingRecordId(null);
+      commitValue(record, inputField, editValue);
+      setEditingCell(null);
     } else if (event.key === "Escape") {
       event.preventDefault();
-      setEditingRecordId(null); // 直接放棄修改，不 commit
+      setEditingCell(null); // 直接放棄修改，不 commit
     } else if (event.key === "ArrowUp") {
       // 僅在 input 或是 select 沒展開時做上下移動（為了防止與 select 本身選項切換衝突）
       if (event.currentTarget.tagName === "INPUT" || event.altKey) {
         event.preventDefault();
-        commitValue(recordId, editValue);
+        commitValue(record, inputField, editValue);
         if (rowIndex > 0) {
-          const nextRecord = data.records[rowIndex - 1];
-          setEditingRecordId(nextRecord.id);
-          const rule = getMetricRule(activeMetric, nextRecord);
-          const nextVal = rule?.kind === "rubric" ? String(nextRecord[activeMetric] || 0) : String(nextRecord[activeMetric] || "");
+          const nextRecord = groupRecords[rowIndex - 1];
+          setEditingCell({ recordId: nextRecord.id, fieldId: inputField.id });
+          const nextVal = String(nextRecord[inputField.id] || "");
           setEditValue(nextVal);
         }
       }
     } else if (event.key === "ArrowDown") {
       if (event.currentTarget.tagName === "INPUT" || event.altKey) {
         event.preventDefault();
-        commitValue(recordId, editValue);
-        if (rowIndex < data.records.length - 1) {
-          const nextRecord = data.records[rowIndex + 1];
-          setEditingRecordId(nextRecord.id);
-          const rule = getMetricRule(activeMetric, nextRecord);
-          const nextVal = rule?.kind === "rubric" ? String(nextRecord[activeMetric] || 0) : String(nextRecord[activeMetric] || "");
+        commitValue(record, inputField, editValue);
+        if (rowIndex < groupRecords.length - 1) {
+          const nextRecord = groupRecords[rowIndex + 1];
+          setEditingCell({ recordId: nextRecord.id, fieldId: inputField.id });
+          const nextVal = String(nextRecord[inputField.id] || "");
           setEditValue(nextVal);
         }
       }
@@ -362,6 +388,23 @@ export default function NewMetricPlayground({
           font-weight: 500;
           color: #64748b;
         }
+        .nmp-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 16px;
+        }
+        .nmp-group-heading {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          color: #0f172a;
+          font-weight: 700;
+        }
+        .nmp-group-heading small {
+          color: #64748b;
+          font-weight: 500;
+        }
       `}</style>
 
       {/* 頂部切換與操作工具列 */}
@@ -374,7 +417,7 @@ export default function NewMetricPlayground({
               key={field}
               onClick={() => {
                 setActiveMetric(field);
-                setEditingRecordId(null); // 切換指標時重設編輯狀態
+                setEditingCell(null); // 切換指標時重設編輯狀態
               }}
               type="button"
             >
@@ -396,108 +439,148 @@ export default function NewMetricPlayground({
           ref={viewportRef}
           style={viewportMaxHeight ? { maxHeight: viewportMaxHeight } : undefined}
         >
-          <table className="nmp-table" ref={tableRef}>
-          <colgroup>
-            <col style={{ width: "90px" }} />
-            <col style={{ width: "150px" }} />
-          </colgroup>
-
-          <thead>
-            <tr>
-              <th className="nmp-sticky-name">學生姓名</th>
-              <th>
-                <span className="nmp-header-label">
-                  {renderMetricLabel(activeMetricLabel)}
-                </span>
-                {activeMetricUnit ? (
-                  <small className="nmp-header-unit">單位：{activeMetricUnit}</small>
+          {metricGroups.map((group, groupIndex) => {
+            const variant = getMetricVariant(activeMetric, group.records[0]?.studentGradeLabel ?? "大班");
+            return (
+              <div className="nmp-group" key={group.key}>
+                {metricGroups.length > 1 ? (
+                  <div className="nmp-group-heading">
+                    <span>{group.label}</span>
+                    <small>{group.grades.join("、")}</small>
+                  </div>
                 ) : null}
-              </th>
-            </tr>
-          </thead>
+                <table className="nmp-table" ref={groupIndex === 0 ? tableRef : undefined}>
+                  <colgroup>
+                    <col style={{ width: "90px" }} />
+                    {variant.fields.map((inputField) => (
+                      <col key={String(inputField.id)} style={{ width: "150px" }} />
+                    ))}
+                  </colgroup>
 
-          <tbody>
-            {data.records.map((record, rIdx) => {
-              const isEditing = editingRecordId === record.id;
-              const rule = getMetricRule(activeMetric, record);
-              const isRubric = rule?.kind === "rubric";
-              const displayVal = getMetricDisplayValue(record, activeMetric);
+                  <thead>
+                    <tr>
+                      <th className="nmp-sticky-name">學生姓名</th>
+                      {variant.fields.map((inputField) => (
+                        <th key={String(inputField.id)}>
+                          <span className="nmp-header-label">
+                            {renderMetricLabel(
+                              variant.fields.length === 1
+                                ? activeMetricLabel
+                                : `${activeMetricLabel} / ${inputField.label}`,
+                            )}
+                          </span>
+                          {activeMetricUnit ? (
+                            <small className="nmp-header-unit">
+                              單位：{inputField.unit ?? activeMetricUnit}
+                            </small>
+                          ) : null}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
 
-              return (
-                <tr
-                  className={record.id === selectedId ? "is-selected" : ""}
-                  key={record.id}
-                  onClick={() => selectRecord?.(record)}
-                >
-                  {/* Column 1: 學生姓名 (唯讀) */}
-                  <td className="nmp-sticky-name">
-                    {record.studentName}
-                  </td>
+                  <tbody>
+                    {group.records.map((record, rIdx) => {
+                      const rule = getMetricRule(activeMetric, record);
+                      const isRubric = rule?.kind === "rubric" && variant.fields.length === 1;
 
-                  {/* Column 2: 測驗分數/評分 (可編輯) */}
-                  <td
-                    className={`nmp-cell-interactive ${isEditing ? "nmp-cell-editing" : ""}`}
-                    id={`cell-${record.id}`}
-                    onClick={(e) => {
-                      if (!isEditing) {
-                        // 編輯時使用實際儲存格數值而非顯示用文字 (例如評分對應的數字)
-                        const rawVal = isRubric ? String(record[activeMetric] || 0) : String(record[activeMetric] || "");
-                        handleCellClick(record.id, rawVal, e);
-                      }
-                    }}
-                  >
-                    {isEditing ? (
-                      isRubric ? (
-                        <select
-                          className="nmp-select"
-                          onBlur={() => {
-                            commitValue(record.id, editValue);
-                            setEditingRecordId(null);
-                          }}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => handleKeyDown(e, record.id, rIdx)}
-                          ref={activeInputRef as React.RefObject<HTMLSelectElement>}
-                          value={editValue}
+                      return (
+                        <tr
+                          className={record.id === selectedId ? "is-selected" : ""}
+                          key={record.id}
+                          onClick={() => selectRecord?.(record)}
                         >
-                          <option value="0">未填寫</option>
-                          {getMetricSelectOptions(activeMetric, record).map((option) => (
-                            <option key={`${activeMetric}-${option.value}`} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="nmp-input"
-                          onBlur={() => {
-                            commitValue(record.id, editValue);
-                            setEditingRecordId(null);
-                          }}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onFocus={(e) => {
-                            const target = e.currentTarget;
-                            setTimeout(() => {
-                              target.select();
-                              try {
-                                target.setSelectionRange(0, target.value.length);
-                              } catch (err) {}
-                            }, 50);
-                          }}
-                          onKeyDown={(e) => handleKeyDown(e, record.id, rIdx)}
-                          ref={activeInputRef as React.RefObject<HTMLInputElement>}
-                          type="number"
-                          value={editValue}
-                        />
-                      )
-                    ) : (
-                      displayVal
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                          <td className="nmp-sticky-name">
+                            {record.studentName}
+                          </td>
+
+                          {variant.fields.map((inputField) => {
+                            const isEditing =
+                              editingCell?.recordId === record.id &&
+                              editingCell.fieldId === inputField.id;
+                            const rawValue = record[inputField.id];
+                            const displayVal =
+                              inputField.id === activeMetric
+                                ? getMetricDisplayValue(record, activeMetric)
+                                : typeof rawValue === "number" && rawValue > 0
+                                  ? String(rawValue)
+                                  : "";
+
+                            return (
+                              <td
+                                className={`nmp-cell-interactive ${isEditing ? "nmp-cell-editing" : ""}`}
+                                id={`cell-${record.id}-${String(inputField.id)}`}
+                                key={String(inputField.id)}
+                                onClick={(e) => {
+                                  if (!isEditing) {
+                                    const nextRawValue = isRubric
+                                      ? String(record[activeMetric] || 0)
+                                      : String(rawValue || "");
+                                    handleCellClick(record.id, inputField, nextRawValue, e);
+                                  }
+                                }}
+                              >
+                                {isEditing ? (
+                                  isRubric ? (
+                                    <select
+                                      className="nmp-select"
+                                      onBlur={() => {
+                                        commitValue(record, inputField, editValue);
+                                        setEditingCell(null);
+                                      }}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onKeyDown={(e) =>
+                                        handleKeyDown(e, record, inputField, rIdx, group.records)
+                                      }
+                                      ref={activeInputRef as React.RefObject<HTMLSelectElement>}
+                                      value={editValue}
+                                    >
+                                      <option value="0">未填寫</option>
+                                      {getMetricSelectOptions(activeMetric, record).map((option) => (
+                                        <option key={`${activeMetric}-${option.value}`} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      className="nmp-input"
+                                      onBlur={() => {
+                                        commitValue(record, inputField, editValue);
+                                        setEditingCell(null);
+                                      }}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onFocus={(e) => {
+                                        const target = e.currentTarget;
+                                        setTimeout(() => {
+                                          target.select();
+                                          try {
+                                            target.setSelectionRange(0, target.value.length);
+                                          } catch (err) {}
+                                        }, 50);
+                                      }}
+                                      onKeyDown={(e) =>
+                                        handleKeyDown(e, record, inputField, rIdx, group.records)
+                                      }
+                                      ref={activeInputRef as React.RefObject<HTMLInputElement>}
+                                      type="number"
+                                      value={editValue}
+                                    />
+                                  )
+                                ) : (
+                                  displayVal || "—"
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
       </div>
 
       <div className="button-row">
