@@ -93,6 +93,7 @@ export default function SummarySpreadsheet({
       {debugInfo}
       <div
         className="fixed-sheet-viewport table-wrap"
+        data-testid="summary-sheet"
         ref={viewportRef}
         style={{ maxHeight: viewportMaxHeight }}
       >

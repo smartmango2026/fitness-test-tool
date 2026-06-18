@@ -97,6 +97,7 @@ export default function RosterSpreadsheet({
       {debugInfo}
       <div
         className="fixed-sheet-viewport roster-viewport table-wrap"
+        data-testid="roster-sheet"
         ref={viewportRef}
         style={{ maxHeight: viewportMaxHeight }}
       >

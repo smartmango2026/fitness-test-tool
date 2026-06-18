@@ -366,10 +366,11 @@ export default function NewMetricPlayground({
 
       {/* 頂部切換與操作工具列 */}
       <div className="nmp-toolbar">
-        <div className="nmp-pills">
+        <div className="nmp-pills" data-testid="metric-item-select">
           {scoreFields.map((field, index) => (
             <button
               className={field === activeMetric ? "nmp-pill is-active" : "nmp-pill"}
+              data-testid="metric-item-option"
               key={field}
               onClick={() => {
                 setActiveMetric(field);
@@ -391,6 +392,7 @@ export default function NewMetricPlayground({
         {debugInfo}
         <div
           className="nmp-viewport"
+          data-testid="metric-sheet"
           ref={viewportRef}
           style={viewportMaxHeight ? { maxHeight: viewportMaxHeight } : undefined}
         >
@@ -501,6 +503,7 @@ export default function NewMetricPlayground({
       <div className="button-row">
         <button
           className="primary-button"
+          data-testid="metric-save-button"
           disabled={!currentCloudFileId || !isCloudDirty}
           onClick={() => {
             void handleSaveCurrentCloudFile(data, "在測驗項目按下「儲存」。");

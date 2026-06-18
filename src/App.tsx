@@ -312,6 +312,15 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "pdf", label: "測驗報告" },
 ];
 
+const tabTestIds: Partial<Record<TabKey, string>> = {
+  account: "account-tab",
+  files: "files-tab",
+  metric: "metric-tab",
+  pdf: "pdf-tab",
+  roster: "roster-tab",
+  table: "summary-tab",
+};
+
 const experimentalTabs: Array<{ key: TabKey; label: string }> = [
   ...tabs,
   { key: "tablab", label: "Tab 元件展示" },
@@ -2207,6 +2216,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
               <div className="friend-row-actions">
                 <button
                   className="primary-button"
+                  data-testid="friend-accept-alert-button"
                   onClick={() => {
                     void handleAcceptFriendRequest(request);
                   }}
@@ -5425,6 +5435,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   <div className="button-row">
                     <button
                       className="primary-button"
+                      data-testid="auth-login-button"
                       disabled={!authReady}
                       onClick={() => {
                         recordUserAction("按下頁首「登入」按鈕。");
@@ -5439,6 +5450,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                     </button>
                     <button
                       className="secondary-button"
+                      data-testid="auth-register-button"
                       disabled={!authReady}
                       onClick={() => {
                         recordUserAction("按下頁首「註冊」按鈕。");
@@ -5494,6 +5506,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
               <h2>{authMode === "login" ? "使用者登入" : "建立帳號"}</h2>
               <div className="auth-form-grid">
                 <input
+                  data-testid="auth-username-input"
                   onChange={(event) => setLoginUsername(event.target.value)}
                   onBlur={(event) => recordInputAction("登入帳號", event.target.value)}
                   placeholder="帳號（例如 teacher01）"
@@ -5501,6 +5514,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   value={loginUsername}
                 />
                 <input
+                  data-testid="auth-password-input"
                   onChange={(event) => setLoginPassword(event.target.value)}
                   onBlur={(event) => recordSensitiveInputAction("密碼", event.target.value)}
                   placeholder="密碼"
@@ -5513,6 +5527,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                 <div className="button-row">
                   <button
                     className="primary-button"
+                    data-testid="auth-submit-button"
                     disabled={!authReady}
                     onClick={authMode === "login" ? handleSignIn : handleRegister}
                     type="button"
@@ -6042,6 +6057,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
             {visibleTabs.map((tab) => (
               <button
                 className={tab.key === activeTab ? "tab is-active" : "tab"}
+                data-testid={tabTestIds[tab.key]}
                 key={tab.key}
                 onClick={() => {
                   void handleTabChange(tab.key);
@@ -6126,6 +6142,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                     <label className="filter-toggle">
                       <input
                         checked={showIncompleteOnly}
+                        data-testid="summary-incomplete-filter"
                         onChange={(event) => setShowIncompleteOnly(event.target.checked)}
                         type="checkbox"
                       />
@@ -6185,6 +6202,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                 <div className="button-row">
                   <button
                     className="primary-button"
+                    data-testid="summary-save-button"
                     disabled={!currentCloudFileId || !isCloudDirty}
                     onClick={() => {
                       void handleSaveCurrentCloudFile(data, "在測驗總表按下「儲存」。");
@@ -6220,6 +6238,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   ) : null}
                   <button
                     className="primary-button"
+                    data-testid="create-file-button"
                     disabled={!currentUser}
                     onClick={() => {
                       recordUserAction("按下「建立新檔案」入口按鈕。", {
@@ -6252,7 +6271,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
               ) : (
                 <>
                   <div className="file-current-shell">
-                    <div className="workspace-file-card file-current-card">
+                    <div className="workspace-file-card file-current-card" data-testid="current-file-card">
                       <div>
                         <strong>目前使用檔案</strong>
                         <span>{currentWorkspaceFileLabel}</span>
@@ -6322,7 +6341,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                             <h3>建立新檔案</h3>
                           </div>
                         </div>
-                        <div className="file-detail-grid">
+                        <div className="file-detail-grid" data-testid="create-file-form">
                           <label>
                             <strong>學年度</strong>
                             <select
@@ -6341,6 +6360,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <label>
                             <strong>班級名稱</strong>
                             <input
+                              data-testid="file-name-input"
                               onChange={(event) =>
                                 updateNewCloudFileDraft("rosterName", event.target.value)
                               }
@@ -6367,6 +6387,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <label>
                             <strong>年級</strong>
                             <select
+                              data-testid="file-grade-select"
                               onChange={(event) =>
                                 updateNewCloudFileDraft("gradeLabel", event.target.value)
                               }
@@ -6382,6 +6403,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <label>
                             <strong>測驗日期</strong>
                             <input
+                              data-testid="file-test-date-input"
                               onChange={(event) =>
                                 updateNewCloudFileDraft("testDate", event.target.value)
                               }
@@ -6392,6 +6414,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <label className="file-size-field">
                             <strong>班級人數</strong>
                             <input
+                              data-testid="file-size-input"
                               max={35}
                               min={1}
                               onChange={(event) =>
@@ -6412,6 +6435,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           </button>
                           <button
                             className="primary-button"
+                            data-testid="file-create-submit"
                             onClick={() => {
                               void handleCreateCloudFileFromDraft();
                             }}
@@ -6559,6 +6583,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 )}
                                 <div className="file-share-row">
                                   <select
+                                    data-testid="file-share-select"
                                     onChange={(event) =>
                                       setSelectedShareFriendUid(event.target.value)
                                     }
@@ -6573,6 +6598,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                   </select>
                                   <button
                                     className="secondary-button"
+                                    data-testid="file-share-submit"
                                     disabled={!selectedShareFriendUid}
                                     onClick={() => {
                                       void handleShareFileWithFriend(currentCloudFileSummary);
@@ -6838,6 +6864,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
 
                     <div className="friend-toolbar">
                       <input
+                        data-testid="friend-target-input"
                         disabled={!currentUser}
                         onChange={(event) => setFriendDraft(event.target.value)}
                         onKeyDown={(event) => {
@@ -6852,6 +6879,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                       />
                       <button
                         className="primary-button"
+                        data-testid="friend-send-button"
                         disabled={!currentUser}
                         onClick={() => {
                           void handleAddFriend();
@@ -6918,6 +6946,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 <div className="friend-row-actions">
                                   <button
                                     className="primary-button"
+                                    data-testid="friend-accept-button"
                                     onClick={() => {
                                       void handleAcceptFriendRequest(request);
                                     }}
@@ -7172,6 +7201,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                 <div className="button-row">
                   <button
                     className="primary-button"
+                    data-testid="roster-save-button"
                     onClick={importRosterToRecords}
                     type="button"
                   >
@@ -7347,6 +7377,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                       選擇學生
                       <select
                         className="search-input"
+                        data-testid="pdf-student-select"
                         onChange={(event) => {
                           const nextRecord = data.records.find(
                             (record) => record.id === event.target.value,
@@ -7366,24 +7397,27 @@ export default function App({ experimentalMode = false, runtime = "production" }
                     </label>
                     <button
                       className="primary-button"
+                      data-testid="pdf-download-all-button"
                       onClick={handleDownloadAllPdfs}
                       type="button"
                     >
                       下載全班 PDF
                     </button>
                   </div>
-                  <A4CanvasBoard
-                    ref={pdfCanvasRef}
-                    abilityProfile={currentAbilityProfile}
-                    abilityRulesConfig={abilityRulesConfig}
-                    abilityLevelLabels={selectedAbilityLevelLabels}
-                    abilityScores={selectedAbilityScores}
-                    labels={selectedRecordItemLabels}
-                    record={selectedRecord}
-                    rosterName={data.rosterName}
-                    seatNumber={selectedSeatNumber}
-                    testDate={data.testDate}
-                  />
+                  <div data-testid="pdf-report-preview">
+                    <A4CanvasBoard
+                      ref={pdfCanvasRef}
+                      abilityProfile={currentAbilityProfile}
+                      abilityRulesConfig={abilityRulesConfig}
+                      abilityLevelLabels={selectedAbilityLevelLabels}
+                      abilityScores={selectedAbilityScores}
+                      labels={selectedRecordItemLabels}
+                      record={selectedRecord}
+                      rosterName={data.rosterName}
+                      seatNumber={selectedSeatNumber}
+                      testDate={data.testDate}
+                    />
+                  </div>
                 </>
               )}
             </section>
