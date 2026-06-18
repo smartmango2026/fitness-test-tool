@@ -20,6 +20,7 @@ export type MetricRuleDefinition = {
   id: FitnessField;
   label: string;
   defaultFields: MetricInputField[];
+  splitMixedAge?: boolean;
   variants?: MetricVariant[];
 };
 
@@ -35,33 +36,76 @@ export const builtInTestRuleSet: TestRuleSet = {
   metrics: [
     {
       id: "item1",
-      label: "測驗項目 1",
-      defaultFields: [{ id: "item1", label: "測驗數值" }],
+      label: "立定跳遠",
+      defaultFields: [{ id: "item1", label: "立定跳遠" }],
     },
     {
       id: "item2",
-      label: "測驗項目 2",
-      defaultFields: [{ id: "item2", label: "測驗數值" }],
+      label: "坐姿體前彎",
+      defaultFields: [{ id: "item2", label: "坐姿體前彎" }],
     },
     {
       id: "item3",
-      label: "測驗項目 3",
-      defaultFields: [{ id: "item3", label: "測驗數值" }],
+      label: "擲遠",
+      defaultFields: [{ id: "item3", label: "擲遠" }],
     },
     {
       id: "item4",
-      label: "測驗項目 4",
+      label: "協調 / 敏捷移動",
       defaultFields: [{ id: "item4", label: "測驗數值" }],
+      splitMixedAge: true,
+      variants: [
+        {
+          id: "junior-directional-crawl",
+          label: "6 公尺定向爬行",
+          appliesToGrades: ["幼幼班", "小班"],
+          containerGroup: "junior",
+          fields: [{ id: "item4", label: "6 公尺定向爬行" }],
+          aggregateTo: "item4",
+          aggregation: "single",
+        },
+        {
+          id: "middle-senior-forward-roll",
+          label: "前滾翻",
+          appliesToGrades: ["中班", "大班"],
+          containerGroup: "middle-senior",
+          fields: [{ id: "item4", label: "前滾翻" }],
+          aggregateTo: "item4",
+          aggregation: "single",
+        },
+      ],
     },
     {
       id: "item5",
-      label: "測驗項目 5",
+      label: "平衡 / 敏捷",
       defaultFields: [{ id: "item5", label: "測驗數值" }],
+      splitMixedAge: true,
+      variants: [
+        {
+          id: "junior-balance-walk",
+          label: "平衡走",
+          appliesToGrades: ["幼幼班", "小班"],
+          containerGroup: "junior",
+          fields: [{ id: "item5", label: "平衡走" }],
+          aggregateTo: "item5",
+          aggregation: "single",
+        },
+        {
+          id: "middle-senior-side-touch",
+          label: "側併摸地",
+          appliesToGrades: ["中班", "大班"],
+          containerGroup: "middle-senior",
+          fields: [{ id: "item5", label: "側併摸地" }],
+          aggregateTo: "item5",
+          aggregation: "single",
+        },
+      ],
     },
     {
       id: "item6",
       label: "跳躍能力",
       defaultFields: [{ id: "item6", label: "測驗數值" }],
+      splitMixedAge: true,
       variants: [
         {
           id: "junior-two-foot-jump",
@@ -142,6 +186,46 @@ export function getMetricContainerGroups(
 
     current.records.push(record);
     groups.set(variant.containerGroup, current);
+  });
+
+  return Array.from(groups.values());
+}
+
+export function getMixedAgeMetricGroupKey(
+  record: FitnessRecord,
+  fields: FitnessField[],
+): string {
+  const keys = fields
+    .map((field) => getMetricVariant(field, record.studentGradeLabel).containerGroup)
+    .filter((key) => key !== "default");
+
+  return keys[0] ?? "default";
+}
+
+export function getMixedAgeMetricGroups(
+  records: FitnessRecord[],
+  fields: FitnessField[],
+): Array<{ key: string; label: string; grades: StudentGradeLabel[]; records: FitnessRecord[] }> {
+  const groups = new Map<
+    string,
+    { key: string; label: string; grades: StudentGradeLabel[]; records: FitnessRecord[] }
+  >();
+
+  records.forEach((record) => {
+    const key = getMixedAgeMetricGroupKey(record, fields);
+    const current = groups.get(key) ?? {
+      key,
+      label: key === "middle-senior" ? "中班、大班" : key === "junior" ? "幼幼班、小班" : "測驗資料",
+      grades: [],
+      records: [],
+    };
+
+    if (!current.grades.includes(record.studentGradeLabel)) {
+      current.grades.push(record.studentGradeLabel);
+    }
+
+    current.records.push(record);
+    groups.set(key, current);
   });
 
   return Array.from(groups.values());

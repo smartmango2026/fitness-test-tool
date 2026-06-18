@@ -114,6 +114,7 @@ import RosterSpreadsheet from "./RosterSpreadsheet";
 import SummarySpreadsheet from "./SummarySpreadsheet";
 import {
   aggregateMetricVariantValue,
+  getMetricRuleDefinition,
   getMetricVariant,
 } from "./test-rule-set";
 
@@ -1712,21 +1713,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
       );
     }
 
-    const juniorRules = abilityRulesByGradeGroup.junior;
-    const middleSeniorRules = abilityRulesByGradeGroup.middleSenior;
-
     return scoreFields.map((field, index) => {
-      const juniorLabel = juniorRules[field]?.metricLabel;
-      const middleSeniorLabel = middleSeniorRules[field]?.metricLabel;
-      if (
-        juniorLabel &&
-        middleSeniorLabel &&
-        juniorLabel !== middleSeniorLabel
-      ) {
-        return `${middleSeniorLabel} / ${juniorLabel}`;
-      }
-
-      return middleSeniorLabel ?? juniorLabel ?? data.itemLabels[index] ?? field;
+      const ruleDefinition = getMetricRuleDefinition(field);
+      return ruleDefinition.label ?? data.itemLabels[index] ?? field;
     });
   }, [currentAbilityProfile, data.gradeLabel, data.itemLabels]);
   const selectedRecordItemLabels = useMemo(

@@ -55,8 +55,16 @@ test.describe("metric rule set rendering", () => {
     await expect(page.getByRole("columnheader", { name: /左腳/ })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: /右腳/ })).toBeVisible();
 
+    await page.getByTestId("metric-item-option").nth(4).click();
+    await expect(page.getByText("平衡走").first()).toBeVisible();
+    await expect(page.getByText("側併摸地").first()).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "平衡走" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "側併摸地" })).toBeVisible();
+
     await page.getByTestId("summary-tab").click();
     await expect(page.getByTestId("summary-group-viewport")).toHaveCount(2);
+    await expect(page.getByRole("columnheader", { name: "平衡走" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "側併摸地" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "左腳" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "右腳" })).toBeVisible();
   });

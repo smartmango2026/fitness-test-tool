@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import type { ReactNode, RefObject } from "react";
 import type { FitnessField, FitnessRecord } from "./types";
-import { getMetricContainerGroups, getMetricVariant } from "./test-rule-set";
+import {
+  getMetricRuleDefinition,
+  getMetricVariant,
+  getMixedAgeMetricGroups,
+} from "./test-rule-set";
 
 type EditableField = keyof FitnessRecord;
 
@@ -99,29 +103,32 @@ export default function SummarySpreadsheet({
     }
   }, [activeCell, isMixedAgeClass]);
 
-  const summaryGroups = getMetricContainerGroups(records, "item6");
-  const baseScoreFields = scoreFields.filter((field) => field !== "item6");
+  const splitScoreFields = scoreFields.filter(
+    (field) => getMetricRuleDefinition(field).splitMixedAge,
+  );
+  const summaryGroups = getMixedAgeMetricGroups(records, splitScoreFields);
 
   return (
     <div className="sheet-shell">
       {debugInfo}
       <div data-testid="summary-sheet">
         {summaryGroups.map((group, groupIndex) => {
-          const variant = getMetricVariant("item6", group.records[0]?.studentGradeLabel ?? "大班");
           const metricColumns: SummaryMetricColumn[] = [
-            ...baseScoreFields.map((field) => ({
-              field,
-              label: resolvedItemLabels[scoreFields.indexOf(field)] ?? field,
-              displayField: field,
-            })),
-            ...variant.fields.map((inputField) => ({
-              field: inputField.id,
-              label:
-                variant.fields.length === 1
-                  ? variant.label
-                  : inputField.label,
-              displayField: inputField.id === "item6" ? ("item6" as FitnessField) : null,
-            })),
+            ...scoreFields.flatMap((field) => {
+              const variant = getMetricVariant(
+                field,
+                group.records[0]?.studentGradeLabel ?? "大班",
+              );
+
+              return variant.fields.map((inputField) => ({
+                field: inputField.id,
+                label:
+                  variant.fields.length === 1
+                    ? variant.label
+                    : inputField.label,
+                displayField: inputField.id === field ? field : null,
+              }));
+            }),
           ];
           const navigationFields = [
             "studentName",
