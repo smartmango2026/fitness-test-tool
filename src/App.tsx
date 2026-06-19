@@ -3127,6 +3127,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
       records: data.records,
       rosterName: data.rosterName,
       testDate: data.testDate,
+      schoolNameSnapshot: data.schoolNameSnapshot,
+      schoolBranchNameSnapshot: data.schoolBranchNameSnapshot,
     });
     setMessage(`已下載 ${data.rosterName || "本班"} 全班報告。`);
   }
@@ -5627,6 +5629,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
           seatNumber={selectedSeatNumber}
           testDate={data.testDate}
           schoolNameSnapshot={data.schoolNameSnapshot}
+          schoolBranchNameSnapshot={data.schoolBranchNameSnapshot}
         />
       </div>
     );
@@ -7772,6 +7775,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                       seatNumber={selectedSeatNumber}
                       testDate={data.testDate}
                       schoolNameSnapshot={data.schoolNameSnapshot}
+                      schoolBranchNameSnapshot={data.schoolBranchNameSnapshot}
                     />
                   </div>
                 </>

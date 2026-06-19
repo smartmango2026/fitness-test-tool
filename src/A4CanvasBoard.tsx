@@ -49,6 +49,7 @@ type A4CanvasBoardProps = {
   testDate: string;
   seatNumber: number | null;
   schoolNameSnapshot?: string;
+  schoolBranchNameSnapshot?: string;
 };
 
 type ReportRenderPayload = {
@@ -62,6 +63,7 @@ type ReportRenderPayload = {
   testDate: string;
   seatNumber: number | null;
   schoolNameSnapshot?: string;
+  schoolBranchNameSnapshot?: string;
 };
 
 type ExportAllReportsPayload = {
@@ -72,6 +74,7 @@ type ExportAllReportsPayload = {
   rosterName: string;
   testDate: string;
   schoolNameSnapshot?: string;
+  schoolBranchNameSnapshot?: string;
 };
 
 function resolveStudentGradeLabel(fileGradeLabel: string, studentGradeLabel: string): string {
@@ -466,9 +469,13 @@ function renderReportPage(
   context.lineWidth = 3;
   context.stroke();
 
+  const schoolDisplay = [payload.schoolNameSnapshot, payload.schoolBranchNameSnapshot]
+    .filter(Boolean)
+    .join(" ") || "-";
+
   const infoColumns = [
-    { label: "班級", value: rosterName || "未設定班級", x: 165 },
-    { label: "座號", value: seatNumber ? `${seatNumber} 號` : "-", x: 425 },
+    { label: "學校分校", value: schoolDisplay, x: 165 },
+    { label: "班級", value: rosterName || "未設定班級", x: 425 },
     { label: "姓名", value: record?.studentName || "未選擇學生", x: 695 },
     { label: "身高 / 體重", value: `${record?.height || "-"} cm / ${record?.weight || "-"} kg`, x: 970 },
   ];
@@ -763,7 +770,7 @@ function downloadBlobUrl(href: string, fileName: string): void {
 export async function exportAllReportsPdf(
   payload: ExportAllReportsPayload,
 ): Promise<void> {
-  const { abilityProfile, abilityRulesConfig, fileGradeLabel, records, rosterName, testDate, schoolNameSnapshot } = payload;
+  const { abilityProfile, abilityRulesConfig, fileGradeLabel, records, rosterName, testDate, schoolNameSnapshot, schoolBranchNameSnapshot } = payload;
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -785,6 +792,7 @@ export async function exportAllReportsPdf(
       testDate,
       seatNumber: null,
       schoolNameSnapshot,
+      schoolBranchNameSnapshot,
     });
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
   } else {
@@ -814,6 +822,7 @@ export async function exportAllReportsPdf(
         testDate,
         seatNumber: index + 1,
         schoolNameSnapshot,
+        schoolBranchNameSnapshot,
       });
 
       if (index > 0) {
@@ -840,6 +849,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
       testDate,
       seatNumber,
       schoolNameSnapshot,
+      schoolBranchNameSnapshot,
     },
     ref,
   ) {
@@ -868,6 +878,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
         testDate,
         seatNumber,
         schoolNameSnapshot,
+        schoolBranchNameSnapshot,
       }),
       [
         abilityLevelLabels,
