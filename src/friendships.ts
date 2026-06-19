@@ -37,6 +37,7 @@ export type UserProfileRecord = {
   displayNickname: string | null;
   schoolId: SchoolId | "";
   schoolName: string;
+  schoolBranchName: string;
 };
 
 export type FriendRequestRecord = {
@@ -116,6 +117,10 @@ function mapUserProfileDocument(
       typeof data.schoolName === "string" && data.schoolName.trim()
         ? data.schoolName.trim()
         : getSchoolName(schoolId),
+    schoolBranchName:
+      typeof data.schoolBranchName === "string" && data.schoolBranchName.trim()
+        ? data.schoolBranchName.trim()
+        : "",
   };
 }
 
@@ -249,14 +254,19 @@ export async function updateOwnSchool(options: {
   uid: string;
   username: string;
   schoolId: SchoolId | "";
+  schoolName: string;
+  schoolBranchName: string;
 }): Promise<void> {
   const schoolId = normalizeSchoolId(options.schoolId);
+  const schoolName = options.schoolName.trim() || getSchoolName(schoolId);
+  const schoolBranchName = options.schoolBranchName.trim();
   const profileRef = doc(db, "users", options.uid);
 
   await updateDoc(profileRef, {
     username: normalizeUsername(options.username),
     schoolId,
-    schoolName: getSchoolName(schoolId),
+    schoolName,
+    schoolBranchName,
     updatedAt: serverTimestamp(),
   });
 }

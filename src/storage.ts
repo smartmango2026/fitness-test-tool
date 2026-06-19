@@ -112,6 +112,8 @@ function migrateAppData(data: LegacyAppData): AppData {
       typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
         ? data.schoolNameSnapshot.trim()
         : getSchoolName(normalizeSchoolId(data.schoolId)),
+    schoolBranchNameSnapshot:
+      typeof data.schoolBranchNameSnapshot === "string" ? data.schoolBranchNameSnapshot.trim() : "",
     schoolLogoSnapshotUrl:
       typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     itemLabels:

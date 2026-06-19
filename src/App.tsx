@@ -112,7 +112,10 @@ import {
 import { writeLoginLog } from "./login-logs";
 import SpreadsheetPlayground from "./SpreadsheetPlayground";
 import NewMetricPlayground from "./NewMetricPlayground";
-import SchoolCombobox, { getSchoolComboboxValue } from "./SchoolCombobox";
+import SchoolCombobox, {
+  getSchoolComboboxValue,
+  type SchoolComboboxValue,
+} from "./SchoolCombobox";
 import SchoolComboboxLab from "./SchoolComboboxLab";
 import RosterSpreadsheet from "./RosterSpreadsheet";
 import SummarySpreadsheet from "./SummarySpreadsheet";
@@ -125,7 +128,6 @@ import {
   getSchoolName,
   isSmartSportSchool,
   normalizeSchoolId,
-  SCHOOL_OPTIONS,
   SMART_SPORT_SCHOOL_ID,
 } from "./schools";
 import type { SchoolId } from "./schools";
@@ -162,6 +164,7 @@ type NewCloudFileDraft = {
   rosterName: string;
   schoolId: SchoolId | "";
   schoolName: string;
+  schoolBranchName: string;
   gradeLabel: string;
   testDate: string;
   rosterCount: string;
@@ -183,6 +186,15 @@ type FileOpenTraceEntry = {
 
 const FRIEND_INVITE_TRACE_STORAGE_KEY = "fitness-test-tool:friend-invite-trace";
 const FILE_OPEN_TRACE_STORAGE_KEY = "fitness-test-tool:file-open-trace";
+const SCHOOL_BRANCH_SUGGESTIONS = [
+  "總校",
+  "本校",
+  "台北分校",
+  "新北分校",
+  "桃園分校",
+  "台中分校",
+  "高雄分校",
+];
 
 function formatAuthError(error: unknown, fallback: string): string {
   if (
@@ -537,6 +549,7 @@ function makeNewCloudFileDraft(source: AppData): NewCloudFileDraft {
     rosterName: "",
     schoolId,
     schoolName: source.schoolNameSnapshot?.trim() || getSchoolName(schoolId),
+    schoolBranchName: source.schoolBranchNameSnapshot?.trim() ?? "",
     gradeLabel: source.gradeLabel || GRADE_OPTIONS[0] || "",
     testDate: source.testDate || new Date().toISOString().slice(0, 10),
     rosterCount: "1",
@@ -946,7 +959,11 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [friendDraft, setFriendDraft] = useState("");
   const [nicknameDraft, setNicknameDraft] = useState("");
-  const [profileSchoolDraft, setProfileSchoolDraft] = useState<SchoolId | "">("");
+  const [profileSchoolDraft, setProfileSchoolDraft] = useState<SchoolComboboxValue>({
+    schoolId: "",
+    schoolName: "",
+  });
+  const [profileSchoolBranchDraft, setProfileSchoolBranchDraft] = useState("");
   const [friendNicknameDrafts, setFriendNicknameDrafts] = useState<Record<string, string>>({});
   const [expandedFriendUids, setExpandedFriendUids] = useState<string[]>([]);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
@@ -1301,7 +1318,10 @@ export default function App({ experimentalMode = false, runtime = "production" }
     const unsubscribeProfile = subscribeToUserProfile(currentUser.uid, (profile) => {
       setCurrentProfile(profile);
       setNicknameDraft(profile?.displayNickname ?? "");
-      setProfileSchoolDraft(profile?.schoolId ?? "");
+      setProfileSchoolDraft(
+        getSchoolComboboxValue(profile?.schoolId ?? "", profile?.schoolName ?? ""),
+      );
+      setProfileSchoolBranchDraft(profile?.schoolBranchName ?? "");
       updateLoadCheckpoint("profile", "success", "使用者基本資料已載入。");
     });
     const unsubscribeIncoming = subscribeToIncomingFriendRequests(
@@ -1444,22 +1464,25 @@ export default function App({ experimentalMode = false, runtime = "production" }
 
   useEffect(() => {
     const profileSchoolId = normalizeSchoolId(currentProfile?.schoolId);
+    const profileSchoolName = currentProfile?.schoolName?.trim() || getSchoolName(profileSchoolId);
+    const profileSchoolBranchName = currentProfile?.schoolBranchName?.trim() ?? "";
     setNewCloudFileDraft((current) => {
-      if (isSmartSportSchool(profileSchoolId)) {
-        return current;
-      }
-
-      if (current.schoolId === profileSchoolId) {
+      if (
+        current.schoolId === profileSchoolId &&
+        current.schoolName === profileSchoolName &&
+        current.schoolBranchName === profileSchoolBranchName
+      ) {
         return current;
       }
 
       return {
         ...current,
         schoolId: profileSchoolId,
-        schoolName: getSchoolName(profileSchoolId),
+        schoolName: profileSchoolName,
+        schoolBranchName: profileSchoolBranchName,
       };
     });
-  }, [currentProfile?.schoolId]);
+  }, [currentProfile?.schoolBranchName, currentProfile?.schoolId, currentProfile?.schoolName]);
 
   const sortedCloudFiles = useMemo(() => {
     const nextFiles = [...cloudFiles];
@@ -1910,7 +1933,11 @@ export default function App({ experimentalMode = false, runtime = "production" }
       schoolNameSnapshot:
         source.schoolNameSnapshot?.trim() && currentProfileIsSmartSport
           ? source.schoolNameSnapshot.trim()
-          : getSchoolName(schoolId),
+          : currentProfile?.schoolName?.trim() || getSchoolName(schoolId),
+      schoolBranchNameSnapshot:
+        source.schoolBranchNameSnapshot?.trim() && currentProfileIsSmartSport
+          ? source.schoolBranchNameSnapshot.trim()
+          : currentProfile?.schoolBranchName?.trim() ?? "",
       schoolLogoSnapshotUrl: source.schoolLogoSnapshotUrl ?? "",
     };
   }
@@ -2658,6 +2685,22 @@ export default function App({ experimentalMode = false, runtime = "production" }
       schoolId,
       schoolNameSnapshot: schoolName,
       schoolLogoSnapshotUrl: "",
+    }));
+  }
+
+  function updateFileSchoolBranch(nextBranchName: string): void {
+    const schoolBranchName = nextBranchName.trim();
+    recordUserAction(
+      schoolBranchName
+        ? `修改檔案所屬分校為「${schoolBranchName}」。`
+        : "清除檔案所屬分校。",
+      {
+        schoolBranchName,
+      },
+    );
+    setData((current) => ({
+      ...current,
+      schoolBranchNameSnapshot: schoolBranchName,
     }));
   }
 
@@ -4003,8 +4046,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
 
     try {
-      const schoolId = normalizeSchoolId(profileSchoolDraft);
-      const schoolName = getSchoolName(schoolId);
+      const schoolId = normalizeSchoolId(profileSchoolDraft.schoolId);
+      const schoolName = profileSchoolDraft.schoolName.trim() || getSchoolName(schoolId);
+      const schoolBranchName = profileSchoolBranchDraft.trim();
       const operationId = createSystemLogOperationId();
       await writeAppSystemLog({
         operationId,
@@ -4014,12 +4058,15 @@ export default function App({ experimentalMode = false, runtime = "production" }
         payload: {
           schoolId,
           schoolName,
+          schoolBranchName,
         },
       });
       await updateOwnSchool({
         uid: currentUser.uid,
         username: currentUsername,
         schoolId,
+        schoolName,
+        schoolBranchName,
       });
       await writeAppSystemLog({
         operationId,
@@ -4029,9 +4076,14 @@ export default function App({ experimentalMode = false, runtime = "production" }
         payload: {
           schoolId,
           schoolName,
+          schoolBranchName,
         },
       });
-      setMessage(schoolName ? `已更新帳號學校：${schoolName}` : "已清除帳號學校。");
+      setMessage(
+        schoolName
+          ? `已更新帳號學校：${schoolName}${schoolBranchName ? `／${schoolBranchName}` : ""}`
+          : "已清除帳號學校。",
+      );
     } catch (error) {
       const nextMessage =
         error instanceof Error ? error.message : "更新帳號學校失敗。";
@@ -4040,7 +4092,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
         phase: "failed",
         message: nextMessage,
         payload: {
-          schoolId: profileSchoolDraft,
+          schoolId: profileSchoolDraft.schoolId,
+          schoolName: profileSchoolDraft.schoolName,
+          schoolBranchName: profileSchoolBranchDraft,
         },
       });
       setMessage(`更新帳號學校失敗：${nextMessage}`);
@@ -4321,7 +4375,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
     const schoolId = resolveFileSchoolIdForDraft(newCloudFileDraft.schoolId);
     const schoolNameSnapshot = currentProfileIsSmartSport
       ? newCloudFileDraft.schoolName.trim()
-      : getSchoolName(schoolId);
+      : currentProfile?.schoolName?.trim() || getSchoolName(schoolId);
     const studentGradeLabel = resolveStudentGradeLabel(gradeLabel, "");
     const rosterEntries = Array.from({ length: rosterCount }, () => ({
       ...makeEmptyRosterEntry(),
@@ -4334,6 +4388,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
       academicTerm,
       schoolId,
       schoolNameSnapshot,
+      schoolBranchNameSnapshot: newCloudFileDraft.schoolBranchName.trim(),
       schoolLogoSnapshotUrl: "",
       rosterName: newCloudFileDraft.rosterName.trim(),
       gradeLabel,
@@ -5593,6 +5648,11 @@ export default function App({ experimentalMode = false, runtime = "production" }
         } as CSSProperties
       }
     >
+      <datalist id="school-branch-suggestions">
+        {SCHOOL_BRANCH_SUGGESTIONS.map((branchName) => (
+          <option key={branchName} value={branchName} />
+        ))}
+      </datalist>
       <header className="hero">
         <div>
           <div className="hero-top">
@@ -6569,6 +6629,23 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               variant="dropdown"
                             />
                           ) : null}
+                          {currentProfileIsSmartSport ? (
+                            <label>
+                              <strong>分校</strong>
+                              <input
+                                list="school-branch-suggestions"
+                                onChange={(event) =>
+                                  setNewCloudFileDraft((current) => ({
+                                    ...current,
+                                    schoolBranchName: event.target.value,
+                                  }))
+                                }
+                                placeholder="例如 台北分校、總校"
+                                type="text"
+                                value={newCloudFileDraft.schoolBranchName}
+                              />
+                            </label>
+                          ) : null}
                           <label>
                             <strong>學期</strong>
                             <select
@@ -6685,8 +6762,21 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 normalizeSchoolId(data.schoolId),
                                 data.schoolNameSnapshot,
                               )}
-                              variant="chip"
+                              variant="dropdown"
                             />
+                          ) : null}
+                          {currentProfileIsSmartSport ? (
+                            <label>
+                              <strong>分校</strong>
+                              <input
+                                disabled={!currentCloudFileIsOwner}
+                                list="school-branch-suggestions"
+                                onChange={(event) => updateFileSchoolBranch(event.target.value)}
+                                placeholder="例如 台北分校、總校"
+                                type="text"
+                                value={data.schoolBranchNameSnapshot ?? ""}
+                              />
+                            </label>
                           ) : null}
                           <label>
                             <strong>學期</strong>
@@ -6771,7 +6861,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                             }}
                             type="button"
                           >
-                            儲存基本資料
+                            儲存
                           </button>
                         </div>
                         {currentCloudFileSummary.accessRole === "owner" ? (
@@ -6956,19 +7046,25 @@ export default function App({ experimentalMode = false, runtime = "production" }
                       <strong>所屬學校</strong>
                       {currentUser ? (
                         <div className="friend-alias-form">
-                          <select
-                            onChange={(event) =>
-                              setProfileSchoolDraft(normalizeSchoolId(event.target.value))
-                            }
+                          <SchoolCombobox
+                            label="學校"
+                            onChange={setProfileSchoolDraft}
+                            placeholder="輸入學校名稱，或選擇建議"
                             value={profileSchoolDraft}
-                          >
-                            <option value="">尚未設定</option>
-                            {SCHOOL_OPTIONS.map((school) => (
-                              <option key={school.id} value={school.id}>
-                                {school.name}
-                              </option>
-                            ))}
-                          </select>
+                            variant="dropdown"
+                          />
+                          <label className="school-branch-field">
+                            <strong>分校</strong>
+                            <input
+                              list="school-branch-suggestions"
+                              onChange={(event) =>
+                                setProfileSchoolBranchDraft(event.target.value)
+                              }
+                              placeholder="例如 台北分校、總校"
+                              type="text"
+                              value={profileSchoolBranchDraft}
+                            />
+                          </label>
                           <div className="friend-row-actions">
                             <button
                               className="primary-button"
@@ -6980,7 +7076,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               儲存學校
                             </button>
                           </div>
-                          {profileSchoolDraft === SMART_SPORT_SCHOOL_ID ? (
+                          {profileSchoolDraft.schoolId === SMART_SPORT_SCHOOL_ID ? (
                             <small className="auth-help">
                               聰明動老師建立檔案時，可以再指定該檔案所屬學校。
                             </small>

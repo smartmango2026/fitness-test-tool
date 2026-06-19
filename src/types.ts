@@ -42,6 +42,7 @@ export type AppData = {
   academicTerm: string;
   schoolId?: SchoolId | "";
   schoolNameSnapshot?: string;
+  schoolBranchNameSnapshot?: string;
   schoolLogoSnapshotUrl?: string;
   itemLabels: string[];
   rosterName: string;

@@ -26,6 +26,7 @@ export type CloudFileSummary = {
   academicTerm: string;
   schoolId: SchoolId | "";
   schoolNameSnapshot: string;
+  schoolBranchNameSnapshot: string;
   schoolLogoSnapshotUrl: string;
   testDate: string;
   rosterCount: number;
@@ -97,6 +98,8 @@ function buildStoredFileData(
     fileName: buildFileName(data),
     schoolId,
     schoolNameSnapshot,
+    schoolBranchNameSnapshot:
+      typeof data.schoolBranchNameSnapshot === "string" ? data.schoolBranchNameSnapshot.trim() : "",
     schoolLogoSnapshotUrl:
       typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     rosterName: data.rosterName,
@@ -207,6 +210,8 @@ function mapOwnedFileSummary(id: string, data: DocumentData): CloudFileSummary {
       typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
         ? data.schoolNameSnapshot.trim()
         : getSchoolName(normalizeSchoolId(data.schoolId)),
+    schoolBranchNameSnapshot:
+      typeof data.schoolBranchNameSnapshot === "string" ? data.schoolBranchNameSnapshot.trim() : "",
     schoolLogoSnapshotUrl:
       typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     testDate:
@@ -273,6 +278,8 @@ function mapRecipientSharedFileSummary(id: string, data: DocumentData): CloudFil
       typeof data.schoolNameSnapshot === "string" && data.schoolNameSnapshot.trim()
         ? data.schoolNameSnapshot.trim()
         : getSchoolName(normalizeSchoolId(data.schoolId)),
+    schoolBranchNameSnapshot:
+      typeof data.schoolBranchNameSnapshot === "string" ? data.schoolBranchNameSnapshot.trim() : "",
     schoolLogoSnapshotUrl:
       typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     testDate:
@@ -303,6 +310,7 @@ async function syncShareMetadata(options: {
   testDate: string;
   schoolId?: SchoolId | "";
   schoolNameSnapshot?: string;
+  schoolBranchNameSnapshot?: string;
   schoolLogoSnapshotUrl?: string;
   rosterCount: number;
   recordCount: number;
@@ -342,6 +350,7 @@ async function syncShareMetadata(options: {
         schoolId: normalizeSchoolId(options.schoolId),
         schoolNameSnapshot:
           options.schoolNameSnapshot?.trim() || getSchoolName(normalizeSchoolId(options.schoolId)),
+        schoolBranchNameSnapshot: options.schoolBranchNameSnapshot?.trim() ?? "",
         schoolLogoSnapshotUrl: options.schoolLogoSnapshotUrl ?? "",
         rosterCount: options.rosterCount,
         recordCount: options.recordCount,
@@ -473,6 +482,7 @@ export async function saveCloudFile(options: {
     schoolId: normalizeSchoolId(options.data.schoolId),
     schoolNameSnapshot:
       options.data.schoolNameSnapshot?.trim() || getSchoolName(normalizeSchoolId(options.data.schoolId)),
+    schoolBranchNameSnapshot: options.data.schoolBranchNameSnapshot?.trim() ?? "",
     schoolLogoSnapshotUrl: options.data.schoolLogoSnapshotUrl ?? "",
     rosterCount: options.data.rosterEntries.length,
     recordCount: options.data.records.length,
@@ -490,6 +500,7 @@ export async function updateCloudFileInfo(options: {
   testDate: string;
   schoolId?: SchoolId | "";
   schoolNameSnapshot?: string;
+  schoolBranchNameSnapshot?: string;
   schoolLogoSnapshotUrl?: string;
 }): Promise<void> {
   const fileRef = doc(db, "users", options.ownerUid, "files", options.fileId);
@@ -509,6 +520,7 @@ export async function updateCloudFileInfo(options: {
       testDate: options.testDate,
       schoolId,
       schoolNameSnapshot,
+      schoolBranchNameSnapshot: options.schoolBranchNameSnapshot?.trim() ?? "",
       schoolLogoSnapshotUrl: options.schoolLogoSnapshotUrl ?? "",
       fileName,
       updatedAt: serverTimestamp(),
@@ -526,6 +538,10 @@ export async function updateCloudFileInfo(options: {
     gradeLabel: options.gradeLabel,
     academicTerm,
     testDate: options.testDate,
+    schoolId,
+    schoolNameSnapshot,
+    schoolBranchNameSnapshot: options.schoolBranchNameSnapshot?.trim() ?? "",
+    schoolLogoSnapshotUrl: options.schoolLogoSnapshotUrl ?? "",
     rosterCount: typeof data?.rosterCount === "number" ? data.rosterCount : 0,
     recordCount: typeof data?.recordCount === "number" ? data.recordCount : 0,
     ownerUsername: typeof data?.ownerUsername === "string" ? data.ownerUsername : "",
@@ -613,6 +629,8 @@ export async function loadCloudFile(
         : defaultAppData.academicTerm,
     schoolId,
     schoolNameSnapshot,
+    schoolBranchNameSnapshot:
+      typeof data.schoolBranchNameSnapshot === "string" ? data.schoolBranchNameSnapshot.trim() : "",
     schoolLogoSnapshotUrl:
       typeof data.schoolLogoSnapshotUrl === "string" ? data.schoolLogoSnapshotUrl : "",
     itemLabels:
@@ -686,6 +704,7 @@ export async function setCloudFileEditors(options: {
         schoolId: normalizeSchoolId(options.file.schoolId),
         schoolNameSnapshot:
           options.file.schoolNameSnapshot || getSchoolName(normalizeSchoolId(options.file.schoolId)),
+        schoolBranchNameSnapshot: options.file.schoolBranchNameSnapshot,
         schoolLogoSnapshotUrl: options.file.schoolLogoSnapshotUrl,
         rosterCount: options.file.rosterCount,
         recordCount: options.file.recordCount,
