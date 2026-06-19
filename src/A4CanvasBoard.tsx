@@ -469,34 +469,39 @@ function renderReportPage(
   context.lineWidth = 3;
   context.stroke();
 
-  const schoolDisplay = [payload.schoolNameSnapshot, payload.schoolBranchNameSnapshot]
-    .filter(Boolean)
-    .join(" ") || "-";
-
   const infoColumns = [
-    { label: "學校分校", value: schoolDisplay, x: 165 },
-    { label: "班級", value: rosterName || "未設定班級", x: 425 },
-    { label: "姓名", value: record?.studentName || "未選擇學生", x: 695 },
-    { label: "身高 / 體重", value: `${record?.height || "-"} cm / ${record?.weight || "-"} kg`, x: 970 },
+    { label: "學校分校", value: payload.schoolBranchNameSnapshot ? [payload.schoolNameSnapshot, payload.schoolBranchNameSnapshot] : payload.schoolNameSnapshot || "-", x: 186, rightEdge: 326 },
+    { label: "班級", value: rosterName || "未設定班級", x: 441, rightEdge: 556 },
+    { label: "姓名", value: record?.studentName || "未選擇學生", x: 671, rightEdge: 786 },
+    { label: "身高 / 體重", value: `${record?.height || "-"} cm / ${record?.weight || "-"} kg`, x: 990, rightEdge: null },
   ];
 
+  context.beginPath();
   for (let index = 0; index < infoColumns.length; index += 1) {
     const column = infoColumns[index];
     context.fillStyle = SUBTITLE_COLOR;
     context.textAlign = "center";
     context.font = "700 24px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
     context.fillText(column.label, column.x, 242);
-    context.fillStyle = TEXT_COLOR;
-    context.font = index === 3
-      ? "500 30px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif"
-      : "500 38px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-    context.fillText(column.value, column.x, 296);
 
-    if (index < infoColumns.length - 1) {
+    context.fillStyle = TEXT_COLOR;
+    
+    if (Array.isArray(column.value)) {
+      context.font = "500 30px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(String(column.value[0]), column.x, 284);
+      context.fillText(String(column.value[1]), column.x, 322);
+    } else {
+      context.font = index === 3
+        ? "500 30px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif"
+        : "500 38px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+      context.fillText(String(column.value), column.x, 296);
+    }
+
+    if (column.rightEdge !== null) {
       context.setLineDash([5, 8]);
       context.beginPath();
-      context.moveTo(column.x + 132, 196);
-      context.lineTo(column.x + 132, 330);
+      context.moveTo(column.rightEdge, 196);
+      context.lineTo(column.rightEdge, 330);
       context.strokeStyle = "#c8daf2";
       context.lineWidth = 2;
       context.stroke();
