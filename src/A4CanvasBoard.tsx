@@ -8,7 +8,7 @@ import {
   useState,
   type TouchEvent,
 } from "react";
-import associationLogo from "./assets/sgpea-logo.png";
+import { getSchoolLogo } from "./school-logos";
 import {
   findAbilityGradeProfile,
   generateObservationAndEncouragement,
@@ -31,7 +31,7 @@ const MUTED_TEXT_COLOR = "#64748b";
 const CHART_LINE = "#2d72d8";
 const CHART_FILL = "rgba(69, 132, 220, 0.18)";
 const SCORE_COLORS = ["#5b8fd9", "#75bc67", "#f59b43", "#f26b75", "#8c80d8", "#f7b93f"];
-let associationLogoImagePromise: Promise<HTMLImageElement> | null = null;
+const logoCache = new Map<string, Promise<HTMLImageElement>>();
 
 export type A4CanvasBoardHandle = {
   downloadCurrentPdf: () => Promise<void>;
@@ -48,6 +48,7 @@ type A4CanvasBoardProps = {
   rosterName: string;
   testDate: string;
   seatNumber: number | null;
+  schoolNameSnapshot?: string;
 };
 
 type ReportRenderPayload = {
@@ -60,6 +61,7 @@ type ReportRenderPayload = {
   rosterName: string;
   testDate: string;
   seatNumber: number | null;
+  schoolNameSnapshot?: string;
 };
 
 type ExportAllReportsPayload = {
@@ -69,6 +71,7 @@ type ExportAllReportsPayload = {
   records: FitnessRecord[];
   rosterName: string;
   testDate: string;
+  schoolNameSnapshot?: string;
 };
 
 function resolveStudentGradeLabel(fileGradeLabel: string, studentGradeLabel: string): string {
@@ -197,19 +200,22 @@ function drawLogoBadge(
   context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 }
 
-function loadAssociationLogoImage(): Promise<HTMLImageElement> {
-  if (associationLogoImagePromise) {
-    return associationLogoImagePromise;
+function loadSchoolLogoImage(schoolNameSnapshot?: string): Promise<HTMLImageElement> {
+  const logoUrl = getSchoolLogo(schoolNameSnapshot);
+
+  if (logoCache.has(logoUrl)) {
+    return logoCache.get(logoUrl)!;
   }
 
-  associationLogoImagePromise = new Promise((resolve, reject) => {
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("無法載入報表 logo。"));
-    image.src = associationLogo;
+    image.src = logoUrl;
   });
 
-  return associationLogoImagePromise;
+  logoCache.set(logoUrl, promise);
+  return promise;
 }
 
 function getRadarPolygonPoints(
@@ -732,7 +738,7 @@ async function createReportCanvas(payload: ReportRenderPayload): Promise<HTMLCan
 
   let logoImage: HTMLImageElement | null = null;
   try {
-    logoImage = await loadAssociationLogoImage();
+    logoImage = await loadSchoolLogoImage(payload.schoolNameSnapshot);
   } catch {
     logoImage = null;
   }
@@ -757,7 +763,7 @@ function downloadBlobUrl(href: string, fileName: string): void {
 export async function exportAllReportsPdf(
   payload: ExportAllReportsPayload,
 ): Promise<void> {
-  const { abilityProfile, abilityRulesConfig, fileGradeLabel, records, rosterName, testDate } = payload;
+  const { abilityProfile, abilityRulesConfig, fileGradeLabel, records, rosterName, testDate, schoolNameSnapshot } = payload;
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -778,6 +784,7 @@ export async function exportAllReportsPdf(
       rosterName,
       testDate,
       seatNumber: null,
+      schoolNameSnapshot,
     });
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
   } else {
@@ -805,7 +812,8 @@ export async function exportAllReportsPdf(
         record,
         rosterName,
         testDate,
-        seatNumber: index + 1,
+        seatNumber: record.seatNo ?? null,
+        schoolNameSnapshot,
       });
 
       if (index > 0) {
@@ -831,6 +839,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
       rosterName,
       testDate,
       seatNumber,
+      schoolNameSnapshot,
     },
     ref,
   ) {
@@ -858,6 +867,7 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
         rosterName,
         testDate,
         seatNumber,
+        schoolNameSnapshot,
       }),
       [
         abilityLevelLabels,
@@ -873,10 +883,10 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
     );
 
     useEffect(() => {
-      loadAssociationLogoImage()
+      loadSchoolLogoImage(schoolNameSnapshot)
         .then((image) => setLogoImage(image))
         .catch(() => setLogoImage(null));
-    }, []);
+    }, [schoolNameSnapshot]);
 
     useEffect(() => {
       const canvas = canvasRef.current;

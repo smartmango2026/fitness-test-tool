@@ -103,7 +103,7 @@ import { defaultAppData } from "./sample-data";
 import type { AppData, FitnessField, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
 import type { User } from "firebase/auth";
 import QRCode from "qrcode";
-import associationLogo from "./assets/sgpea-logo.png";
+import { getSchoolLogo } from "./school-logos";
 import {
   createSystemLogOperationId,
   writeSystemLog,
@@ -5626,6 +5626,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
           rosterName={data.rosterName}
           seatNumber={selectedSeatNumber}
           testDate={data.testDate}
+          schoolNameSnapshot={data.schoolNameSnapshot}
         />
       </div>
     );
@@ -5658,11 +5659,11 @@ export default function App({ experimentalMode = false, runtime = "production" }
           <div className="hero-top">
             <div>
               <img
-                alt="新北市運動遊戲體育協會 SGPEA 標誌"
+                alt={data.schoolNameSnapshot?.includes("吉的堡") ? "吉的堡教育集團 標誌" : "新北市運動遊戲體育協會 SGPEA 標誌"}
                 className="hero-logo"
-                src={associationLogo}
+                src={getSchoolLogo(data.schoolNameSnapshot)}
               />
-              <p className="eyebrow">新北市運動遊戲體育協會</p>
+              <p className="eyebrow">{data.schoolNameSnapshot?.includes("吉的堡") ? "吉的堡教育集團" : "新北市運動遊戲體育協會"}</p>
               <h1>體適能測驗管理工具</h1>
             </div>
             <div className="hero-auth">
@@ -7770,6 +7771,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                       rosterName={data.rosterName}
                       seatNumber={selectedSeatNumber}
                       testDate={data.testDate}
+                      schoolNameSnapshot={data.schoolNameSnapshot}
                     />
                   </div>
                 </>
