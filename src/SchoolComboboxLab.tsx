@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
+import SchoolCombobox from "./SchoolCombobox";
+import type { SchoolComboboxValue } from "./SchoolCombobox";
 
-const schoolSuggestions = [
-  "何嘉仁",
-  "吉的堡",
-  "聰明動",
+const extraSchoolSuggestions = [
   "臺北市私立星星幼兒園",
   "新北市小太陽幼兒園",
   "桃園快樂森林幼兒園",
@@ -13,14 +12,16 @@ const schoolSuggestions = [
   "Taichung Little Tree Preschool",
 ];
 
+const nativeSuggestions = ["何嘉仁", "吉的堡", "聰明動", ...extraSchoolSuggestions];
+
 function getMatchedSchools(query: string): string[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
   if (!normalizedQuery) {
-    return schoolSuggestions.slice(0, 6);
+    return nativeSuggestions.slice(0, 6);
   }
 
-  return schoolSuggestions
+  return nativeSuggestions
     .filter((school) => school.toLocaleLowerCase().includes(normalizedQuery))
     .slice(0, 6);
 }
@@ -34,53 +35,17 @@ function ResultPreview({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SuggestionButtons({
-  query,
-  onPick,
-}: {
-  query: string;
-  onPick: (schoolName: string) => void;
-}) {
-  const matches = useMemo(() => getMatchedSchools(query), [query]);
-  const trimmedQuery = query.trim();
-  const shouldShowCustom =
-    trimmedQuery.length > 0 && !matches.some((school) => school === trimmedQuery);
-
-  return (
-    <div className="school-combobox-menu">
-      {matches.map((school) => (
-        <button
-          key={school}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onPick(school)}
-          type="button"
-        >
-          {school}
-        </button>
-      ))}
-      {matches.length === 0 ? (
-        <p className="school-combobox-empty">找不到相符的建議，可以直接使用輸入內容。</p>
-      ) : null}
-      {shouldShowCustom ? (
-        <button
-          className="school-combobox-custom"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onPick(trimmedQuery)}
-          type="button"
-        >
-          使用「{trimmedQuery}」
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 export default function SchoolComboboxLab() {
   const [nativeValue, setNativeValue] = useState("");
-  const [dropdownValue, setDropdownValue] = useState("");
-  const [chipValue, setChipValue] = useState("");
+  const [dropdownValue, setDropdownValue] = useState<SchoolComboboxValue>({
+    schoolId: "",
+    schoolName: "",
+  });
+  const [chipValue, setChipValue] = useState<SchoolComboboxValue>({
+    schoolId: "",
+    schoolName: "",
+  });
   const [cardValue, setCardValue] = useState("");
-  const [activeDropdown, setActiveDropdown] = useState<"dropdown" | "chip" | null>(null);
 
   const cardMatches = useMemo(() => getMatchedSchools(cardValue), [cardValue]);
 
@@ -104,7 +69,7 @@ export default function SchoolComboboxLab() {
               <p>最輕量，瀏覽器內建下拉建議，但樣式與手機體驗較難控制。</p>
             </div>
             <label className="school-combobox-field">
-              學校名稱
+              <strong>學校名稱</strong>
               <input
                 list="school-lab-native-list"
                 onChange={(event) => setNativeValue(event.target.value)}
@@ -113,7 +78,7 @@ export default function SchoolComboboxLab() {
               />
             </label>
             <datalist id="school-lab-native-list">
-              {schoolSuggestions.map((school) => (
+              {nativeSuggestions.map((school) => (
                 <option key={school} value={school} />
               ))}
             </datalist>
@@ -125,29 +90,15 @@ export default function SchoolComboboxLab() {
               <h3>方案 B：客製建議清單</h3>
               <p>最接近正式功能，可以控制提示、空結果與「使用自訂名稱」。</p>
             </div>
-            <label className="school-combobox-field school-combobox-field--floating">
-              學校名稱
-              <input
-                onBlur={() => setActiveDropdown(null)}
-                onChange={(event) => {
-                  setDropdownValue(event.target.value);
-                  setActiveDropdown("dropdown");
-                }}
-                onFocus={() => setActiveDropdown("dropdown")}
-                placeholder="輸入部分名稱後選擇"
-                value={dropdownValue}
-              />
-              {activeDropdown === "dropdown" ? (
-                <SuggestionButtons
-                  query={dropdownValue}
-                  onPick={(schoolName) => {
-                    setDropdownValue(schoolName);
-                    setActiveDropdown(null);
-                  }}
-                />
-              ) : null}
-            </label>
-            <ResultPreview label="目前內容" value={dropdownValue} />
+            <SchoolCombobox
+              extraSuggestions={extraSchoolSuggestions}
+              label="學校名稱"
+              onChange={setDropdownValue}
+              placeholder="輸入部分名稱後選擇"
+              value={dropdownValue}
+              variant="dropdown"
+            />
+            <ResultPreview label="目前內容" value={dropdownValue.schoolName} />
           </article>
 
           <article className="tab-lab-card school-combobox-card">
@@ -155,40 +106,14 @@ export default function SchoolComboboxLab() {
               <h3>方案 C：選取後變成標籤</h3>
               <p>適合讓使用者清楚知道目前已選哪間學校，也容易加上「已驗證」狀態。</p>
             </div>
-            <label className="school-combobox-field school-combobox-field--floating">
-              學校名稱
-              <input
-                onBlur={() => setActiveDropdown(null)}
-                onChange={(event) => {
-                  setChipValue(event.target.value);
-                  setActiveDropdown("chip");
-                }}
-                onFocus={() => setActiveDropdown("chip")}
-                placeholder="搜尋或輸入學校"
-                value={chipValue}
-              />
-              {activeDropdown === "chip" ? (
-                <SuggestionButtons
-                  query={chipValue}
-                  onPick={(schoolName) => {
-                    setChipValue(schoolName);
-                    setActiveDropdown(null);
-                  }}
-                />
-              ) : null}
-            </label>
-            <div className="school-combobox-chip-row">
-              {chipValue.trim() ? (
-                <span className="school-combobox-chip">{chipValue.trim()}</span>
-              ) : (
-                <span className="school-combobox-chip school-combobox-chip--muted">
-                  尚未選擇
-                </span>
-              )}
-              <button onClick={() => setChipValue("")} type="button">
-                清除
-              </button>
-            </div>
+            <SchoolCombobox
+              extraSuggestions={extraSchoolSuggestions}
+              label="學校名稱"
+              onChange={setChipValue}
+              placeholder="搜尋或輸入學校"
+              value={chipValue}
+              variant="chip"
+            />
           </article>
 
           <article className="tab-lab-card school-combobox-card school-combobox-card--wide">
@@ -197,7 +122,7 @@ export default function SchoolComboboxLab() {
               <p>下拉選單改成大按鈕卡片，手機比較好點，但佔用高度較多。</p>
             </div>
             <label className="school-combobox-field">
-              學校名稱
+              <strong>學校名稱</strong>
               <input
                 onChange={(event) => setCardValue(event.target.value)}
                 placeholder="輸入後篩選下方卡片"
@@ -214,7 +139,7 @@ export default function SchoolComboboxLab() {
                 >
                   <strong>{school}</strong>
                   <span>
-                    {schoolSuggestions.indexOf(school) < 3
+                    {["何嘉仁", "吉的堡", "聰明動"].includes(school)
                       ? "已知建議學校"
                       : "可作為自訂學校名稱"}
                   </span>

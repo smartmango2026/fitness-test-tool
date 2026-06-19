@@ -112,6 +112,7 @@ import {
 import { writeLoginLog } from "./login-logs";
 import SpreadsheetPlayground from "./SpreadsheetPlayground";
 import NewMetricPlayground from "./NewMetricPlayground";
+import SchoolCombobox, { getSchoolComboboxValue } from "./SchoolCombobox";
 import SchoolComboboxLab from "./SchoolComboboxLab";
 import RosterSpreadsheet from "./RosterSpreadsheet";
 import SummarySpreadsheet from "./SummarySpreadsheet";
@@ -160,6 +161,7 @@ type NewCloudFileDraft = {
   semester: string;
   rosterName: string;
   schoolId: SchoolId | "";
+  schoolName: string;
   gradeLabel: string;
   testDate: string;
   rosterCount: string;
@@ -528,11 +530,13 @@ function comparableRosterEntriesForDirtyCheck(
 
 function makeNewCloudFileDraft(source: AppData): NewCloudFileDraft {
   const parts = parseAcademicTermParts(source.academicTerm);
+  const schoolId = normalizeSchoolId(source.schoolId);
   return {
     academicYear: parts.academicYear || String(CURRENT_ROC_YEAR),
     semester: parts.semester || TERM_OPTIONS[1],
     rosterName: "",
-    schoolId: normalizeSchoolId(source.schoolId),
+    schoolId,
+    schoolName: source.schoolNameSnapshot?.trim() || getSchoolName(schoolId),
     gradeLabel: source.gradeLabel || GRADE_OPTIONS[0] || "",
     testDate: source.testDate || new Date().toISOString().slice(0, 10),
     rosterCount: "1",
@@ -1452,6 +1456,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
       return {
         ...current,
         schoolId: profileSchoolId,
+        schoolName: getSchoolName(profileSchoolId),
       };
     });
   }, [currentProfile?.schoolId]);
@@ -2638,9 +2643,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }));
   }
 
-  function updateFileSchool(nextSchoolId: SchoolId | ""): void {
+  function updateFileSchool(nextSchoolId: SchoolId | "", nextSchoolName: string): void {
     const schoolId = normalizeSchoolId(nextSchoolId);
-    const schoolName = getSchoolName(schoolId);
+    const schoolName = nextSchoolName.trim() || getSchoolName(schoolId);
     recordUserAction(
       schoolName ? `修改檔案所屬學校為「${schoolName}」。` : "清除檔案所屬學校。",
       {
@@ -4314,6 +4319,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
     const testDate = newCloudFileDraft.testDate;
     const academicTerm = `民國 ${newCloudFileDraft.academicYear} 年${newCloudFileDraft.semester}`;
     const schoolId = resolveFileSchoolIdForDraft(newCloudFileDraft.schoolId);
+    const schoolNameSnapshot = currentProfileIsSmartSport
+      ? newCloudFileDraft.schoolName.trim()
+      : getSchoolName(schoolId);
     const studentGradeLabel = resolveStudentGradeLabel(gradeLabel, "");
     const rosterEntries = Array.from({ length: rosterCount }, () => ({
       ...makeEmptyRosterEntry(),
@@ -4325,7 +4333,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
       testDate,
       academicTerm,
       schoolId,
-      schoolNameSnapshot: getSchoolName(schoolId),
+      schoolNameSnapshot,
       schoolLogoSnapshotUrl: "",
       rosterName: newCloudFileDraft.rosterName.trim(),
       gradeLabel,
@@ -6410,17 +6418,6 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   <h2>編輯檔案</h2>
                 </div>
                 <div className="button-row">
-                  {currentCloudFileId && isCloudDirty ? (
-                    <button
-                      className="secondary-button"
-                      onClick={() => {
-                        void handleSaveCurrentCloudFile();
-                      }}
-                      type="button"
-                    >
-                      儲存目前檔案
-                    </button>
-                  ) : null}
                   <button
                     className="primary-button"
                     data-testid="create-file-button"
@@ -6555,26 +6552,22 @@ export default function App({ experimentalMode = false, runtime = "production" }
                             />
                           </label>
                           {currentProfileIsSmartSport ? (
-                            <label>
-                              <strong>檔案所屬學校</strong>
-                              <select
-                                data-testid="file-school-select"
-                                onChange={(event) =>
-                                  updateNewCloudFileDraft(
-                                    "schoolId",
-                                    normalizeSchoolId(event.target.value),
-                                  )
-                                }
-                                value={newCloudFileDraft.schoolId}
-                              >
-                                <option value="">尚未設定</option>
-                                {SCHOOL_OPTIONS.map((school) => (
-                                  <option key={school.id} value={school.id}>
-                                    {school.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            <SchoolCombobox
+                              label="檔案所屬學校"
+                              onChange={(nextSchool) =>
+                                setNewCloudFileDraft((current) => ({
+                                  ...current,
+                                  schoolId: nextSchool.schoolId,
+                                  schoolName: nextSchool.schoolName,
+                                }))
+                              }
+                              placeholder="輸入學校名稱，或選擇建議"
+                              value={{
+                                schoolId: newCloudFileDraft.schoolId,
+                                schoolName: newCloudFileDraft.schoolName,
+                              }}
+                              variant="dropdown"
+                            />
                           ) : null}
                           <label>
                             <strong>學期</strong>
@@ -6681,23 +6674,19 @@ export default function App({ experimentalMode = false, runtime = "production" }
                             />
                           </label>
                           {currentProfileIsSmartSport ? (
-                            <label>
-                              <strong>檔案所屬學校</strong>
-                              <select
-                                disabled={!currentCloudFileIsOwner}
-                                onChange={(event) =>
-                                  updateFileSchool(normalizeSchoolId(event.target.value))
-                                }
-                                value={normalizeSchoolId(data.schoolId)}
-                              >
-                                <option value="">尚未設定</option>
-                                {SCHOOL_OPTIONS.map((school) => (
-                                  <option key={school.id} value={school.id}>
-                                    {school.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            <SchoolCombobox
+                              disabled={!currentCloudFileIsOwner}
+                              label="檔案所屬學校"
+                              onChange={(nextSchool) =>
+                                updateFileSchool(nextSchool.schoolId, nextSchool.schoolName)
+                              }
+                              placeholder="輸入學校名稱，或選擇建議"
+                              value={getSchoolComboboxValue(
+                                normalizeSchoolId(data.schoolId),
+                                data.schoolNameSnapshot,
+                              )}
+                              variant="chip"
+                            />
                           ) : null}
                           <label>
                             <strong>學期</strong>
@@ -6771,6 +6760,19 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               {currentCloudFileSummary.accessRole === "owner" ? "擁有者" : "共同編輯"}
                             </div>
                           </label>
+                        </div>
+                        <div className="file-basic-actions">
+                          <button
+                            className="primary-button"
+                            data-testid="file-basic-save-button"
+                            disabled={!currentCloudFileId || !isCloudDirty}
+                            onClick={() => {
+                              void handleSaveCurrentCloudFile(data, "在基本資料小卡按下「儲存」。");
+                            }}
+                            type="button"
+                          >
+                            儲存基本資料
+                          </button>
                         </div>
                         {currentCloudFileSummary.accessRole === "owner" ? (
                           <div className="file-share-section">
@@ -6873,16 +6875,6 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           </div>
                         ) : null}
                         <div className="file-accordion-actions">
-                          <button
-                            className="primary-button"
-                            disabled={!isCloudDirty}
-                            onClick={() => {
-                              void handleSaveCurrentCloudFile();
-                            }}
-                            type="button"
-                          >
-                            儲存目前檔案
-                          </button>
                           {currentCloudFileSummary.accessRole === "owner" ? (
                             <button
                               className="danger-button"
