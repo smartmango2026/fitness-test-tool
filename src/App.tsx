@@ -112,6 +112,7 @@ import {
 import { writeLoginLog } from "./login-logs";
 import SpreadsheetPlayground from "./SpreadsheetPlayground";
 import NewMetricPlayground from "./NewMetricPlayground";
+import SchoolComboboxLab from "./SchoolComboboxLab";
 import RosterSpreadsheet from "./RosterSpreadsheet";
 import SummarySpreadsheet from "./SummarySpreadsheet";
 import {
@@ -139,7 +140,8 @@ type TabKey =
   | "pdf"
   | "tablab"
   | "playground"
-  | "newMetric";
+  | "newMetric"
+  | "schoolLab";
 
 type EditableField = keyof FitnessRecord;
 type FriendInviteActionState = {
@@ -348,6 +350,7 @@ const tabTestIds: Partial<Record<TabKey, string>> = {
 const experimentalTabs: Array<{ key: TabKey; label: string }> = [
   ...tabs,
   { key: "tablab", label: "Tab 元件展示" },
+  { key: "schoolLab", label: "學校欄位測試" },
   { key: "playground", label: "試算表 Playground" },
   { key: "newMetric", label: "新版測驗項目" },
 ];
@@ -7580,6 +7583,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
             </section>
           </>
         ) : null}
+
+        {activeTab === "schoolLab" ? <SchoolComboboxLab /> : null}
 
         {activeTab === "playground" ? (
           <>

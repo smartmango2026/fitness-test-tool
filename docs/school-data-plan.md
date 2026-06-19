@@ -15,7 +15,38 @@ This is a planning document only. It does not mean the feature has already been 
 - Reports currently use a general report template and do not know which school the file belongs to.
 - Some accounts belong to Smart Sport / studio teachers, and those teachers may work with multiple schools.
 - Some school teachers may only need one school as their default context.
+- The site may later be used by schools that are not known to the team ahead of time.
 - Existing files may not have school information, so the system must continue to support school-less files.
+
+## Updated UX Direction: Combobox Instead Of Fixed List
+
+The early implementation used a small fixed school list because the first known cases were controlled internally. After discussing possible use by unknown schools, a backend-only managed list may be too rigid.
+
+The preferred next experiment is a hybrid input:
+
+- The field looks like a normal text input.
+- When the user types part of a school name, matching suggestions appear below the field.
+- The user can select a known suggestion, such as `何嘉仁`, `吉的堡`, or `聰明動`.
+- The user can also keep a custom typed school name if the school is not in the suggestion list.
+- Known schools can still carry managed metadata later, such as logo URL, display name, or verified status.
+- Unknown typed schools should be stored as text first and can be reviewed or normalized later.
+
+This interaction is similar to a country selector where typing `Ta` may show `Taiwan`, but the product should not require every possible school to be registered by an admin before a teacher can create a file.
+
+Recommended field behavior for the first prototype:
+
+- Store `schoolNameSnapshot` as the safe, always-available value.
+- Store `schoolId` only when the user picks a known managed school.
+- If the user types a custom value, leave `schoolId` empty and preserve the text in `schoolNameSnapshot`.
+- Keep the current fixed school options as suggestions, not as the only allowed answers.
+- Add a lab page prototype before changing the formal teacher workflow.
+
+Future maintenance ideas:
+
+- Add duplicate detection for similar school names.
+- Let admins merge or verify frequently used custom school names.
+- Attach logos only to verified school records.
+- Keep old file/report snapshots stable even if a school record is later merged or renamed.
 
 ## Recommended Data Model
 
