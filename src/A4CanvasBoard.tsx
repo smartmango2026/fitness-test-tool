@@ -470,10 +470,10 @@ function renderReportPage(
   context.stroke();
 
   const infoColumns = [
-    { label: "學校分校", value: payload.schoolBranchNameSnapshot ? [payload.schoolNameSnapshot, payload.schoolBranchNameSnapshot] : payload.schoolNameSnapshot || "-", x: 186, rightEdge: 326 },
-    { label: "班級", value: rosterName || "未設定班級", x: 441, rightEdge: 556 },
-    { label: "姓名", value: record?.studentName || "未選擇學生", x: 671, rightEdge: 786 },
-    { label: "身高 / 體重", value: `${record?.height || "-"} cm / ${record?.weight || "-"} kg`, x: 990, rightEdge: null },
+    { label: "學校分校", value: payload.schoolBranchNameSnapshot ? [payload.schoolNameSnapshot, payload.schoolBranchNameSnapshot] : payload.schoolNameSnapshot || "-", x: 186, rightEdge: 326, maxWidth: 260 },
+    { label: "班級", value: rosterName || "未設定班級", x: 441, rightEdge: 556, maxWidth: 210 },
+    { label: "姓名", value: record?.studentName || "未選擇學生", x: 671, rightEdge: 786, maxWidth: 210 },
+    { label: "身高 / 體重", value: `${record?.height || "-"} cm / ${record?.weight || "-"} kg`, x: 990, rightEdge: null, maxWidth: 380 },
   ];
 
   context.beginPath();
@@ -486,15 +486,22 @@ function renderReportPage(
 
     context.fillStyle = TEXT_COLOR;
     
+    const renderFittedText = (text: string, x: number, y: number, initialSize: number, maxWidth: number) => {
+      let size = initialSize;
+      context.font = `500 ${size}px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif`;
+      while (context.measureText(text).width > maxWidth && size > 14) {
+        size -= 2;
+        context.font = `500 ${size}px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif`;
+      }
+      context.fillText(text, x, y);
+    };
+
     if (Array.isArray(column.value)) {
-      context.font = "500 30px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-      context.fillText(String(column.value[0]), column.x, 284);
-      context.fillText(String(column.value[1]), column.x, 322);
+      renderFittedText(String(column.value[0]), column.x, 284, 30, column.maxWidth);
+      renderFittedText(String(column.value[1]), column.x, 322, 30, column.maxWidth);
     } else {
-      context.font = index === 3
-        ? "500 30px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif"
-        : "500 38px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
-      context.fillText(String(column.value), column.x, 296);
+      const initialSize = index === 3 ? 30 : 38;
+      renderFittedText(String(column.value), column.x, 296, initialSize, column.maxWidth);
     }
 
     if (column.rightEdge !== null) {
