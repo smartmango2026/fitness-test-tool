@@ -25,12 +25,14 @@ const productionFirebaseConfig: FitnessFirebaseConfig = {
 };
 
 const e2eFirebaseConfig: FitnessFirebaseConfig = {
-  apiKey: import.meta.env.VITE_E2E_FIREBASE_API_KEY ?? "",
-  authDomain: import.meta.env.VITE_E2E_FIREBASE_AUTH_DOMAIN ?? "",
-  projectId: import.meta.env.VITE_E2E_FIREBASE_PROJECT_ID ?? "",
-  storageBucket: import.meta.env.VITE_E2E_FIREBASE_STORAGE_BUCKET ?? "",
-  messagingSenderId: import.meta.env.VITE_E2E_FIREBASE_MESSAGING_SENDER_ID ?? "",
-  appId: import.meta.env.VITE_E2E_FIREBASE_APP_ID ?? "",
+  // Use optional chaining so this module can be safely imported in Node.js
+  // (e.g. by Playwright test files), where import.meta.env is undefined.
+  apiKey: import.meta.env?.VITE_E2E_FIREBASE_API_KEY ?? "",
+  authDomain: import.meta.env?.VITE_E2E_FIREBASE_AUTH_DOMAIN ?? "",
+  projectId: import.meta.env?.VITE_E2E_FIREBASE_PROJECT_ID ?? "",
+  storageBucket: import.meta.env?.VITE_E2E_FIREBASE_STORAGE_BUCKET ?? "",
+  messagingSenderId: import.meta.env?.VITE_E2E_FIREBASE_MESSAGING_SENDER_ID ?? "",
+  appId: import.meta.env?.VITE_E2E_FIREBASE_APP_ID ?? "",
 };
 
 const e2ePlaceholderFirebaseConfig: FitnessFirebaseConfig = {
