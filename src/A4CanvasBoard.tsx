@@ -890,6 +890,8 @@ const A4CanvasBoard = forwardRef<A4CanvasBoardHandle, A4CanvasBoardProps>(
         rosterName,
         seatNumber,
         testDate,
+        schoolNameSnapshot,
+        schoolBranchNameSnapshot,
       ],
     );
 
