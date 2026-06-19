@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { getSchoolName, SCHOOL_OPTIONS } from "./schools";
-import type { SchoolId } from "./schools";
+import { getSchoolName, SCHOOL_OPTIONS } from "../domain/schools";
+import type { SchoolId } from "../domain/schools";
 
 export type SchoolComboboxValue = {
   schoolId: SchoolId | "";

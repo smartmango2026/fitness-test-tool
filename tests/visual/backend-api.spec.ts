@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { doc, getDoc } from "firebase/firestore";
-import { registerWithUsername, signInWithUsername } from "../../src/firebase-auth";
-import { sendFriendRequest } from "../../src/friendships";
-import { db } from "../../src/firebase";
+import { registerWithUsername, signInWithUsername } from "../../src/features/auth/firebase-auth";
+import { sendFriendRequest } from "../../src/features/friends/friendships";
+import { db } from "../../src/services/firebase";
 
 test.describe("Backend API & Firestore Integration Tests", () => {
   test("direct friendship request API test without browser UI", async ({}, testInfo) => {

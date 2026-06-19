@@ -122,7 +122,7 @@ console.log(response.status, json.secure_url || json.error);
 
 ## Frontend Integration
 
-Diagnostic report screenshots are uploaded from `src/diagnostics.ts` through the
+Diagnostic report screenshots are uploaded from `src/features/diagnostics/diagnostics.ts` through the
 Cloudinary unsigned upload endpoint, and the resulting Cloudinary metadata is
 stored in the Firestore diagnostic report document.
 

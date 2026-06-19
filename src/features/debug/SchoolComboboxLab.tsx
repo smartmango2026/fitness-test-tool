@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import SchoolCombobox from "./SchoolCombobox";
-import type { SchoolComboboxValue } from "./SchoolCombobox";
+import SchoolCombobox from "../../components/SchoolCombobox";
+import type { SchoolComboboxValue } from "../../components/SchoolCombobox";
 
 const extraSchoolSuggestions = [
   "臺北市私立星星幼兒園",

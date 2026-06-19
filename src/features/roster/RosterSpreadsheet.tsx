@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ClipboardEvent, KeyboardEvent, ReactNode, RefObject } from "react";
-import type { RosterEntry } from "./types";
+import type { RosterEntry } from "../../domain/types";
 
 type RosterActiveCell = {
   rowIndex: number;

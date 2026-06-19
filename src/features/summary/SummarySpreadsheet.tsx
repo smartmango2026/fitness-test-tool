@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import type { ReactNode, RefObject } from "react";
-import type { FitnessField, FitnessRecord } from "./types";
+import type { FitnessField, FitnessRecord } from "../../domain/types";
 import {
   getMetricRuleDefinition,
   getMetricVariant,
   getMixedAgeMetricGroups,
-} from "./test-rule-set";
+} from "../metrics/test-rule-set";
 
 type EditableField = keyof FitnessRecord;
 

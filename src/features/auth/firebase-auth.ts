@@ -7,8 +7,8 @@ import {
   type User,
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { ensureAbilityRulesConfig } from "./ability-cloud";
-import { auth, db } from "./firebase";
+import { ensureAbilityRulesConfig } from "../../domain/ability-cloud";
+import { auth, db } from "../../services/firebase";
 
 const USERNAME_EMAIL_DOMAIN = "fitness-test.local";
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/;

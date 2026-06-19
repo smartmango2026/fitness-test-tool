@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
-import type { AppData, FitnessRecord, FitnessField } from "./types";
+import type { AppData, FitnessRecord, FitnessField } from "../../domain/types";
 import {
   aggregateMetricVariantValue,
   getMetricContainerGroups,

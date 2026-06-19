@@ -1,6 +1,6 @@
-import defaultLogo from "./assets/sgpea-logo.png";
-import kidCastleLogo1 from "./assets/kid-castle-logo-1.jpg";
-import kidCastleLogo2 from "./assets/kid-castle-logo-2.jpg";
+import defaultLogo from "../assets/sgpea-logo.png";
+import kidCastleLogo1 from "../assets/kid-castle-logo-1.jpg";
+import kidCastleLogo2 from "../assets/kid-castle-logo-2.jpg";
 
 /**
  * 預設協會 Logo

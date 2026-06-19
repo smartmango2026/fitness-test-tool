@@ -1,4 +1,4 @@
-import type { FitnessField, FitnessRecord, StudentGradeLabel } from "./types";
+import type { FitnessField, FitnessRecord, StudentGradeLabel } from "../../domain/types";
 
 export type MetricInputField = {
   id: keyof FitnessRecord;

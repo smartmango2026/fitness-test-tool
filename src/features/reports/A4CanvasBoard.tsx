@@ -8,16 +8,16 @@ import {
   useState,
   type TouchEvent,
 } from "react";
-import { getSchoolLogo } from "./school-logos";
+import { getSchoolLogo } from "../../domain/school-logos";
 import {
   findAbilityGradeProfile,
   generateObservationAndEncouragement,
   getAbilityBandLabel,
   getAbilityRuleForField,
   getAbilityScores,
-} from "./ability-scoring";
-import type { AbilityGradeProfile, AbilityRulesConfig } from "./ability-settings";
-import type { FitnessRecord } from "./types";
+} from "../../domain/ability-scoring";
+import type { AbilityGradeProfile, AbilityRulesConfig } from "../../domain/ability-settings";
+import type { FitnessRecord } from "../../domain/types";
 
 const CANVAS_WIDTH = 1240;
 const CANVAS_HEIGHT = 1754;

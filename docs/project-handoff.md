@@ -40,53 +40,53 @@ Recent maintenance has focused on:
   - Coordinates auth, cloud files, sharing, friends, diagnostics, spreadsheets, and reports
   - This is the highest-risk file for future changes
 
-- `src/firebase.ts` / `src/firebase-config.ts`
+- `src/services/firebase.ts` / `src/services/firebase-config.ts`
   - Firebase app initialization
   - Runtime-aware production vs `/e2e/` Firebase config selection
 
-- `src/firebase-auth.ts`
+- `src/features/auth/firebase-auth.ts`
   - Username/password wrapper around Firebase Auth
 
-- `src/cloud-files.ts`
+- `src/features/files/cloud-files.ts`
   - Firestore persistence for owned files and shared file indexes
   - Stores records, roster entries, school snapshots, sharing metadata, and archive status
 
-- `src/friendships.ts`
+- `src/features/friends/friendships.ts`
   - Firestore user profile, friend request, friend list, and QR invite helpers
 
-- `src/diagnostics.ts`
+- `src/features/diagnostics/diagnostics.ts`
   - Problem report flow
   - Browser action logs
   - Screenshot upload references and report history
 
-- `src/RadarChart.tsx`
+- `src/features/reports/RadarChart.tsx`
   - Interactive radar chart used in the analysis page
 
-- `src/A4CanvasBoard.tsx`
+- `src/features/reports/A4CanvasBoard.tsx`
   - A4 report/canvas prototype
   - Can place text blocks and image blocks
   - Renders selected student radar data into the A4 page
   - Exports a real PDF through `jsPDF`
 
-- `src/excel.ts`
+- `src/features/reports/excel.ts`
   - Excel export/import logic
   - Visible sheet for users
   - Hidden `_system` sheet stores embedded JSON
 
-- `src/storage.ts`
+- `src/services/storage.ts`
   - Legacy/local browser storage persistence
   - Still useful as compatibility context, but cloud files are now the main persistence model
 
-- `src/sample-data.ts`
+- `src/domain/sample-data.ts`
   - Default example data
 
-- `src/types.ts`
+- `src/domain/types.ts`
   - Shared project data types
 
-- `src/debug-settings.ts`
+- `src/features/debug/debug-settings.ts`
   - Debug-only sheet tuning parameters stored in `localStorage`
 
-- `src/DebugPage.tsx`
+- `src/features/debug/DebugPage.tsx`
   - Dedicated debug page UI
 
 - `debug/index.html`

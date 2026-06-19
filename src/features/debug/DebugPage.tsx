@@ -11,20 +11,20 @@ import {
   resetAbilityRulesConfigInCloud,
   saveAbilityRulesConfigToCloud,
   subscribeToAbilityRulesConfig,
-} from "./ability-cloud";
+} from "../../domain/ability-cloud";
 import {
   defaultAbilityRulesConfig,
   type AbilityGradeProfile,
   type AbilityRulesConfig,
-} from "./ability-settings";
+} from "../../domain/ability-settings";
 import type {
   AbilityMetricKey,
   NumericAbilityBand,
   RubricAbilityBand,
   SchoolGradeLabel,
-} from "./ability-rules";
-import { schoolGradeOptions } from "./ability-rules";
-import { subscribeToAuthState } from "./firebase-auth";
+} from "../../domain/ability-rules";
+import { schoolGradeOptions } from "../../domain/ability-rules";
+import { subscribeToAuthState } from "../auth/firebase-auth";
 import type { User } from "firebase/auth";
 
 const metricKeys: AbilityMetricKey[] = ["item1", "item2", "item3", "item4", "item5", "item6"];

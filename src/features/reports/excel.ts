@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { AppData, FitnessRecord, StudentGradeLabel } from "./types";
+import type { AppData, FitnessRecord, StudentGradeLabel } from "../../domain/types";
 
 const VISIBLE_SHEET_NAME = "Records";
 const SYSTEM_SHEET_NAME = "_system";

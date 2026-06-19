@@ -1,6 +1,6 @@
-import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
-import { defaultAppData } from "./sample-data";
-import { getSchoolName, normalizeSchoolId } from "./schools";
+import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "../domain/types";
+import { defaultAppData } from "../domain/sample-data";
+import { getSchoolName, normalizeSchoolId } from "../domain/schools";
 
 const STORAGE_KEY = "fitness-test-tool.app-data.v1";
 

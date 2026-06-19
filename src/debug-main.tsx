@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import DebugPage from "./DebugPage";
+import DebugPage from "./features/debug/DebugPage";
 import "./styles.css";
 
 function renderRuntimeError(error: unknown): void {

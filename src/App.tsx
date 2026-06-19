@@ -8,11 +8,11 @@ import type {
 import A4CanvasBoard, {
   exportAllReportsPdf,
   type A4CanvasBoardHandle,
-} from "./A4CanvasBoard";
+} from "./features/reports/A4CanvasBoard";
 import {
   ensureAbilityRulesConfig,
   subscribeToAbilityRulesConfig,
-} from "./ability-cloud";
+} from "./domain/ability-cloud";
 import {
   findAbilityGradeProfile,
   getAbilityBandLabel,
@@ -20,25 +20,25 @@ import {
   getAbilityScores,
   getDisplayValueForField,
   getRubricOptions,
-} from "./ability-scoring";
+} from "./domain/ability-scoring";
 import {
   defaultAbilityRulesConfig,
   type AbilityRulesConfig,
-} from "./ability-settings";
+} from "./domain/ability-settings";
 import {
   abilityRulesByGradeGroup,
   schoolGradeOptions,
   type AbilityRule,
-} from "./ability-rules";
+} from "./domain/ability-rules";
 import {
   loadDebugSettings,
   type DebugSettings,
-} from "./debug-settings";
+} from "./features/debug/debug-settings";
 import {
   readFirebaseConnectionTest,
   writeFirebaseConnectionTest,
-} from "./firebase-test";
-import { db, firebaseRuntimeInfo } from "./firebase";
+} from "./services/firebase-test";
+import { db, firebaseRuntimeInfo } from "./services/firebase";
 import {
   type DiagnosticScreenshotReference,
   type DiagnosticScreenshotUploadProgress,
@@ -55,7 +55,7 @@ import {
   recordUserAction,
   submitDiagnosticReport,
   type DiagnosticReportReference,
-} from "./diagnostics";
+} from "./features/diagnostics/diagnostics";
 import {
   emailToUsername,
   isValidUsername,
@@ -64,7 +64,7 @@ import {
   signInWithUsername,
   signOutCurrentUser,
   subscribeToAuthState,
-} from "./firebase-auth";
+} from "./features/auth/firebase-auth";
 import {
   archiveCloudFile,
   createCloudFile,
@@ -75,7 +75,7 @@ import {
   subscribeToCloudFiles,
   type CloudFileSummary,
   updateCloudFileInfo,
-} from "./cloud-files";
+} from "./features/files/cloud-files";
 import {
   acceptFriendRequest,
   cancelFriendRequest,
@@ -97,40 +97,40 @@ import {
   updateFriendCustomNickname,
   updateOwnDisplayNickname,
   updateOwnSchool,
-} from "./friendships";
-import RadarChart from "./RadarChart";
-import { defaultAppData } from "./sample-data";
-import type { AppData, FitnessField, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
+} from "./features/friends/friendships";
+import RadarChart from "./features/reports/RadarChart";
+import { defaultAppData } from "./domain/sample-data";
+import type { AppData, FitnessField, FitnessRecord, RosterEntry, StudentGradeLabel } from "./domain/types";
 import type { User } from "firebase/auth";
 import QRCode from "qrcode";
-import { getSchoolLogo } from "./school-logos";
+import { getSchoolLogo } from "./domain/school-logos";
 import {
   createSystemLogOperationId,
   writeSystemLog,
   type SystemLogEntry,
-} from "./system-logs";
-import { writeLoginLog } from "./login-logs";
-import SpreadsheetPlayground from "./SpreadsheetPlayground";
-import NewMetricPlayground from "./NewMetricPlayground";
+} from "./services/system-logs";
+import { writeLoginLog } from "./features/auth/login-logs";
+import SpreadsheetPlayground from "./features/debug/SpreadsheetPlayground";
+import NewMetricPlayground from "./features/metrics/NewMetricPlayground";
 import SchoolCombobox, {
   getSchoolComboboxValue,
   type SchoolComboboxValue,
-} from "./SchoolCombobox";
-import SchoolComboboxLab from "./SchoolComboboxLab";
-import RosterSpreadsheet from "./RosterSpreadsheet";
-import SummarySpreadsheet from "./SummarySpreadsheet";
+} from "./components/SchoolCombobox";
+import SchoolComboboxLab from "./features/debug/SchoolComboboxLab";
+import RosterSpreadsheet from "./features/roster/RosterSpreadsheet";
+import SummarySpreadsheet from "./features/summary/SummarySpreadsheet";
 import {
   aggregateMetricVariantValue,
   getMetricRuleDefinition,
   getMetricVariant,
-} from "./test-rule-set";
+} from "./features/metrics/test-rule-set";
 import {
   getSchoolName,
   isSmartSportSchool,
   normalizeSchoolId,
   SMART_SPORT_SCHOOL_ID,
-} from "./schools";
-import type { SchoolId } from "./schools";
+} from "./domain/schools";
+import type { SchoolId } from "./domain/schools";
 
 import {
   type TabKey,

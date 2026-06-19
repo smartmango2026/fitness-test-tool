@@ -1,6 +1,6 @@
 import { collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
-import type { DiagnosticEnvironment } from "./diagnostics";
+import { db } from "../../services/firebase";
+import type { DiagnosticEnvironment } from "../diagnostics/diagnostics";
 
 export type LoginLogInput = {
   uid: string;

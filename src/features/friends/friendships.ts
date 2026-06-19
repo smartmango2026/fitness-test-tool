@@ -17,10 +17,10 @@ import {
   type DocumentData,
   type Timestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { emailToUsername, normalizeUsername } from "./firebase-auth";
-import { getSchoolName, normalizeSchoolId } from "./schools";
-import type { SchoolId } from "./schools";
+import { db } from "../../services/firebase";
+import { emailToUsername, normalizeUsername } from "../auth/firebase-auth";
+import { getSchoolName, normalizeSchoolId } from "../../domain/schools";
+import type { SchoolId } from "../../domain/schools";
 
 export type FriendRecord = {
   friendUid: string;

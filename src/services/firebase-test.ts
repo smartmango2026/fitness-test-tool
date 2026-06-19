@@ -1,6 +1,6 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
-import type { AppData } from "./types";
+import type { AppData } from "../domain/types";
 
 const TEST_DOC_PATH = ["cloudDebug", "connection-test"] as const;
 

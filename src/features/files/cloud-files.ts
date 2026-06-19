@@ -12,11 +12,11 @@ import {
   type DocumentData,
   type Timestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { defaultAppData } from "./sample-data";
-import { getSchoolName, normalizeSchoolId } from "./schools";
-import type { SchoolId } from "./schools";
-import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "./types";
+import { db } from "../../services/firebase";
+import { defaultAppData } from "../../domain/sample-data";
+import { getSchoolName, normalizeSchoolId } from "../../domain/schools";
+import type { SchoolId } from "../../domain/schools";
+import type { AppData, FitnessRecord, RosterEntry, StudentGradeLabel } from "../../domain/types";
 
 export type CloudFileSummary = {
   id: string;

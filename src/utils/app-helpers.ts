@@ -1,13 +1,13 @@
-import { schoolGradeOptions } from "../ability-rules";
-import { defaultAppData } from "../sample-data";
-import { getSchoolName, normalizeSchoolId, type SchoolId } from "../schools";
+import { schoolGradeOptions } from "../domain/ability-rules";
+import { defaultAppData } from "../domain/sample-data";
+import { getSchoolName, normalizeSchoolId, type SchoolId } from "../domain/schools";
 import type {
   AppData,
   FitnessField,
   FitnessRecord,
   RosterEntry,
   StudentGradeLabel,
-} from "../types";
+} from "../domain/types";
 
 export type TabKey =
   | "files"
