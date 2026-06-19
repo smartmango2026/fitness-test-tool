@@ -109,6 +109,7 @@ import {
   writeSystemLog,
   type SystemLogEntry,
 } from "./system-logs";
+import { writeLoginLog } from "./login-logs";
 import SpreadsheetPlayground from "./SpreadsheetPlayground";
 import NewMetricPlayground from "./NewMetricPlayground";
 import RosterSpreadsheet from "./RosterSpreadsheet";
@@ -1183,11 +1184,20 @@ export default function App({ experimentalMode = false, runtime = "production" }
       }
 
       if (user) {
+        const signedInUsername = emailToUsername(user.email) || user.displayName || "";
         recordDiagnosticEvent("auth.signed-in", "Firebase 回報目前已登入。", {
           uid: user.uid,
           email: user.email,
-          username: emailToUsername(user.email),
+          username: signedInUsername,
           displayName: user.displayName,
+        });
+        void writeLoginLog({
+          uid: user.uid,
+          username: signedInUsername,
+          displayName: user.displayName ?? null,
+          email: user.email,
+          browserId: getDiagnosticBrowserId(),
+          environment: getDiagnosticEnvironment(),
         });
         void ensureUserProfile(user);
         setActiveTab((current) =>
