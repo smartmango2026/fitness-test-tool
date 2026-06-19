@@ -24,17 +24,40 @@ Recent maintenance has focused on:
 - `React 19`
 - `Vite`
 - `TypeScript`
+- `Firebase Auth`
+- `Cloud Firestore`
 - `Apache ECharts`
 - `SheetJS / xlsx`
 - `jsPDF`
+- `Playwright`
 
 ## Main Files
 
 - `src/App.tsx`
   - Main application shell
   - Tab navigation
-  - Most current page-level logic lives here
-  - Spreadsheet-like table editing behavior also lives here right now
+  - Most current page-level logic still lives here
+  - Coordinates auth, cloud files, sharing, friends, diagnostics, spreadsheets, and reports
+  - This is the highest-risk file for future changes
+
+- `src/firebase.ts` / `src/firebase-config.ts`
+  - Firebase app initialization
+  - Runtime-aware production vs `/e2e/` Firebase config selection
+
+- `src/firebase-auth.ts`
+  - Username/password wrapper around Firebase Auth
+
+- `src/cloud-files.ts`
+  - Firestore persistence for owned files and shared file indexes
+  - Stores records, roster entries, school snapshots, sharing metadata, and archive status
+
+- `src/friendships.ts`
+  - Firestore user profile, friend request, friend list, and QR invite helpers
+
+- `src/diagnostics.ts`
+  - Problem report flow
+  - Browser action logs
+  - Screenshot upload references and report history
 
 - `src/RadarChart.tsx`
   - Interactive radar chart used in the analysis page
@@ -51,8 +74,8 @@ Recent maintenance has focused on:
   - Hidden `_system` sheet stores embedded JSON
 
 - `src/storage.ts`
-  - Browser local storage persistence
-  - Includes migration handling for older data shapes
+  - Legacy/local browser storage persistence
+  - Still useful as compatibility context, but cloud files are now the main persistence model
 
 - `src/sample-data.ts`
   - Default example data
@@ -76,6 +99,11 @@ Recent maintenance has focused on:
 
 The app currently stores:
 
+- Auth/profile data
+  - Firebase Auth users
+  - User profile documents at `users/{uid}`
+  - Profile fields include username, display nickname, school, and school branch
+
 - `rosterName`
   - Class name, currently defaulting to `星星班`
 
@@ -93,9 +121,27 @@ The app currently stores:
     - `studentName`
     - `height`
     - `weight`
+    - `studentGradeLabel`
     - `item1 ~ item6`
+    - optional split fields such as `item6Left` / `item6Right`
     - `comment`
     - `testDate`
+
+- Cloud files
+  - Owned files live under `users/{ownerUid}/files/{fileId}`
+  - Shared file recipient indexes live under `users/{recipientUid}/sharedFiles/{ownerUid__fileId}`
+  - Each cloud file stores a full `AppData` snapshot plus summary metadata
+
+- Friends and sharing
+  - Friend requests live in top-level `friendRequests`
+  - Friend invite links live in top-level `friendInvites`
+  - Friend records live under `users/{uid}/friends/{friendUid}`
+
+- Diagnostics
+  - Problem reports live in top-level `diagnosticReports`
+  - Public status lookup lives in `diagnosticReportStatuses`
+  - User-visible references also live under `users/{uid}/diagnosticReports`
+  - System and login logs live in `systemLogs` and `loginLogs`
 
 ## Current Tabs
 
@@ -184,7 +230,7 @@ Additional current spreadsheet conventions:
 
 There is now a public debug route:
 
-- `https://falcon12400.github.io/fitness-test-tool/debug/`
+- `https://smartmango2026.github.io/fitness-test-tool/debug/`
 
 Current debug controls:
 
@@ -242,24 +288,34 @@ Current limitation:
 
 - `src/App.tsx` is now doing a lot of work
   - tab orchestration
+  - auth/session state
+  - cloud file state and dirty-state prompting
+  - friend and sharing workflows
+  - diagnostic report submission
   - table editing behavior
   - roster editor logic
   - report page wiring
-- It would be a good next refactor target
+- It is the main next refactor target, but changes should be small and behavior-preserving
 
-- There is still no backend or cloud persistence
-  - app data is still mainly local browser storage plus Excel import/export
+- Firebase is integrated
+  - production entry `/` uses the production Firebase project
+  - test entry `/e2e/` is intended to use a separate Firebase test project
+  - keep `/e2e/` guards in tests to avoid writing automated data into production
 
-- Firebase has not been integrated yet
-  - no Firebase SDK
-  - no auth flow
-  - no Firestore data model
+- Do not start with a large Context rewrite
+  - previous attempts to move auth/friend state into Context created build and integration issues
+  - prefer extracting pure presentational components first
+  - keep high-risk data flows in `App.tsx` until each flow has E2E coverage
 
 Suggested future split:
 
 - `src/features/roster/*`
 - `src/features/table/*`
 - `src/features/report/*`
+- `src/features/account/*`
+- `src/features/files/*`
+- `src/features/friends/*`
+- `src/features/diagnostics/*`
 - shared spreadsheet behavior extracted into a reusable hook or helper
 
 ## Deployment
@@ -268,8 +324,8 @@ This repo is deployed through GitHub Pages using GitHub Actions.
 
 Important notes:
 
-- Repo: `https://github.com/falcon12400/fitness-test-tool`
-- Pages URL: `https://falcon12400.github.io/fitness-test-tool/`
+- Repo: `https://github.com/smartmango2026/fitness-test-tool`
+- Pages URL: `https://smartmango2026.github.io/fitness-test-tool/`
 - The repo does **not** commit `dist/`
 - GitHub Actions builds and deploys the site
 
