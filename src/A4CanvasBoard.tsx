@@ -812,7 +812,7 @@ export async function exportAllReportsPdf(
         record,
         rosterName,
         testDate,
-        seatNumber: record.seatNo ?? null,
+        seatNumber: index + 1,
         schoolNameSnapshot,
       });
 
