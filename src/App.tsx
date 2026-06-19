@@ -2104,6 +2104,23 @@ export default function App({ experimentalMode = false, runtime = "production" }
     return "送出中";
   }
 
+
+
+
+
+  const currentCloudFileIsOwner = Boolean(
+    currentUser &&
+      currentCloudFileOwnerUid &&
+      currentUser.uid === currentCloudFileOwnerUid,
+  );
+
+  const liveSchoolNameSnapshot = currentCloudFileIsOwner && !currentProfileIsSmartSport
+    ? currentProfile?.schoolName?.trim() || getSchoolName(currentProfileSchoolId)
+    : data.schoolNameSnapshot;
+  const liveSchoolBranchNameSnapshot = currentCloudFileIsOwner && !currentProfileIsSmartSport
+    ? currentProfile?.schoolBranchName?.trim() ?? ""
+    : data.schoolBranchNameSnapshot ?? "";
+
   function showAuthAlert(title: string, detail: string): void {
     recordUserAction(`看到「${title}」提示。`, {
       title,
@@ -2185,11 +2202,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
     return shareEditorUids;
   }, [shareTargetFileSummary, shareEditorUids]);
-  const currentCloudFileIsOwner = Boolean(
-    currentUser &&
-      currentCloudFileOwnerUid &&
-      currentUser.uid === currentCloudFileOwnerUid,
-  );
+
   const currentWorkspaceFileLabel = currentCloudFileSummary
     ? `${currentCloudFileSummary.accessRole === "owner" ? "" : "【共享】"}${currentCloudFileSummary.academicTerm}／${currentCloudFileSummary.rosterName}`
     : "尚未開啟檔案";
@@ -3127,8 +3140,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
       records: data.records,
       rosterName: data.rosterName,
       testDate: data.testDate,
-      schoolNameSnapshot: data.schoolNameSnapshot,
-      schoolBranchNameSnapshot: data.schoolBranchNameSnapshot,
+      schoolNameSnapshot: liveSchoolNameSnapshot,
+      schoolBranchNameSnapshot: liveSchoolBranchNameSnapshot,
     });
     setMessage(`已下載 ${data.rosterName || "本班"} 全班報告。`);
   }
@@ -5628,8 +5641,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
           rosterName={data.rosterName}
           seatNumber={selectedSeatNumber}
           testDate={data.testDate}
-          schoolNameSnapshot={data.schoolNameSnapshot}
-          schoolBranchNameSnapshot={data.schoolBranchNameSnapshot}
+          schoolNameSnapshot={liveSchoolNameSnapshot}
+          schoolBranchNameSnapshot={liveSchoolBranchNameSnapshot}
         />
       </div>
     );
@@ -5662,11 +5675,11 @@ export default function App({ experimentalMode = false, runtime = "production" }
           <div className="hero-top">
             <div>
               <img
-                alt={data.schoolNameSnapshot?.includes("吉的堡") ? "吉的堡教育集團 標誌" : "新北市運動遊戲體育協會 SGPEA 標誌"}
+                alt={liveSchoolNameSnapshot?.includes("吉的堡") ? "吉的堡教育集團 標誌" : "新北市運動遊戲體育協會 SGPEA 標誌"}
                 className="hero-logo"
-                src={getSchoolLogo(data.schoolNameSnapshot)}
+                src={getSchoolLogo(liveSchoolNameSnapshot)}
               />
-              <p className="eyebrow">{data.schoolNameSnapshot?.includes("吉的堡") ? "吉的堡教育集團" : "新北市運動遊戲體育協會"}</p>
+              <p className="eyebrow">{liveSchoolNameSnapshot?.includes("吉的堡") ? "吉的堡教育集團" : "新北市運動遊戲體育協會"}</p>
               <h1>體適能測驗管理工具</h1>
             </div>
             <div className="hero-auth">
@@ -7774,8 +7787,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
                       rosterName={data.rosterName}
                       seatNumber={selectedSeatNumber}
                       testDate={data.testDate}
-                      schoolNameSnapshot={data.schoolNameSnapshot}
-                      schoolBranchNameSnapshot={data.schoolBranchNameSnapshot}
+                      schoolNameSnapshot={liveSchoolNameSnapshot}
+                      schoolBranchNameSnapshot={liveSchoolBranchNameSnapshot}
                     />
                   </div>
                 </>
