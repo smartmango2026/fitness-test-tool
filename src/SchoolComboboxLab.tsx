@@ -138,7 +138,13 @@ export default function SchoolComboboxLab() {
                 value={dropdownValue}
               />
               {activeDropdown === "dropdown" ? (
-                <SuggestionButtons query={dropdownValue} onPick={setDropdownValue} />
+                <SuggestionButtons
+                  query={dropdownValue}
+                  onPick={(schoolName) => {
+                    setDropdownValue(schoolName);
+                    setActiveDropdown(null);
+                  }}
+                />
               ) : null}
             </label>
             <ResultPreview label="目前內容" value={dropdownValue} />
@@ -162,7 +168,13 @@ export default function SchoolComboboxLab() {
                 value={chipValue}
               />
               {activeDropdown === "chip" ? (
-                <SuggestionButtons query={chipValue} onPick={setChipValue} />
+                <SuggestionButtons
+                  query={chipValue}
+                  onPick={(schoolName) => {
+                    setChipValue(schoolName);
+                    setActiveDropdown(null);
+                  }}
+                />
               ) : null}
             </label>
             <div className="school-combobox-chip-row">
