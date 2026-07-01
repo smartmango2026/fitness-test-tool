@@ -3838,6 +3838,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
         detail: "目前尚未開啟雲端檔案，請先到檔案列表選擇或建立檔案。",
         step: "準備儲存",
       });
+      window.alert("無法儲存。\n\n目前尚未開啟雲端檔案，請先到檔案列表選擇或建立檔案。");
       return false;
     }
 
@@ -3916,6 +3917,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
         detail: "Firebase 已回傳成功，這份檔案已同步到雲端。",
         step: "完成",
       });
+      window.alert("儲存成功。\n\nFirebase 已回傳成功，這份檔案已同步到雲端。");
       return true;
     } catch (error) {
       const nextMessage =
@@ -3937,6 +3939,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
         detail: nextMessage,
         step: saveStep,
       });
+      window.alert(`儲存失敗。\n\n卡住階段：${saveStep}\n錯誤訊息：${nextMessage}`);
       return false;
     }
   }
@@ -5033,6 +5036,22 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const isCloudSaveInProgress = cloudSaveFeedback.status === "saving";
   const getCloudSaveButtonLabel = (label = "儲存") =>
     isCloudSaveInProgress ? "儲存中…" : label;
+  const cloudSaveInlineFeedback =
+    cloudSaveFeedback.status === "idle"
+      ? ""
+      : cloudSaveFeedback.status === "saving"
+        ? `${cloudSaveFeedback.step ?? "儲存中"}：${cloudSaveFeedback.detail}`
+        : cloudSaveFeedback.status === "success"
+          ? "儲存成功，雲端已同步。"
+          : `儲存失敗${cloudSaveFeedback.step ? `（${cloudSaveFeedback.step}）` : ""}：${cloudSaveFeedback.detail}`;
+
+  function renderCloudSaveInlineFeedback() {
+    return cloudSaveInlineFeedback ? (
+      <span className={`cloud-save-inline-feedback is-${cloudSaveFeedback.status}`}>
+        {cloudSaveInlineFeedback}
+      </span>
+    ) : null;
+  }
 
   return (
     <div
@@ -5543,22 +5562,6 @@ export default function App({ experimentalMode = false, runtime = "production" }
         </div>
       </header>
 
-      {cloudSaveFeedback.status !== "idle" ? (
-        <section
-          aria-live="polite"
-          className={`cloud-save-feedback is-${cloudSaveFeedback.status}`}
-          role="status"
-        >
-          <div>
-            <strong>{cloudSaveFeedback.title}</strong>
-            <span>{cloudSaveFeedback.detail}</span>
-          </div>
-          {cloudSaveFeedback.step ? (
-            <span className="cloud-save-feedback-step">{cloudSaveFeedback.step}</span>
-          ) : null}
-        </section>
-      ) : null}
-
       {experimentalMode ? (
         <section className="startup-banner experimental-banner" aria-live="polite">
           <div className="startup-banner-head">
@@ -5875,6 +5878,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   >
                     {getCloudSaveButtonLabel()}
                   </button>
+                  {renderCloudSaveInlineFeedback()}
                 </div>
               ) : null}
             </section>
@@ -6274,6 +6278,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           >
                             {getCloudSaveButtonLabel()}
                           </button>
+                          {renderCloudSaveInlineFeedback()}
                         </div>
                         {currentCloudFileSummary.accessRole === "owner" ? (
                           <div className="file-share-section">
@@ -6811,6 +6816,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
                   isCloudDirty={isCloudDirty}
                   isCloudSaveInProgress={isCloudSaveInProgress}
+                  cloudSaveInlineFeedback={cloudSaveInlineFeedback}
+                  cloudSaveStatus={cloudSaveFeedback.status}
                   resolvedItemLabels={resolvedItemLabels}
                   scoreFields={scoreFields}
                   selectRecord={selectRecord}
@@ -6972,6 +6979,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   >
                     {getCloudSaveButtonLabel()}
                   </button>
+                  {renderCloudSaveInlineFeedback()}
                 </div>
               </div>
               )}
@@ -7120,6 +7128,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   getMetricUnitLabel={getMetricUnitLabel}
                   isCloudDirty={isCloudDirty}
                   isCloudSaveInProgress={isCloudSaveInProgress}
+                  cloudSaveInlineFeedback={cloudSaveInlineFeedback}
+                  cloudSaveStatus={cloudSaveFeedback.status}
                   currentCloudFileId={currentCloudFileId}
                   handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
                 />

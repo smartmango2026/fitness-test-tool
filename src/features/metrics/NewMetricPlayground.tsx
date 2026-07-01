@@ -24,6 +24,8 @@ interface NewMetricPlaygroundProps {
   getMetricUnitLabel: (field: FitnessField) => string;
   isCloudDirty: boolean;
   isCloudSaveInProgress?: boolean;
+  cloudSaveInlineFeedback?: string;
+  cloudSaveStatus?: "idle" | "saving" | "success" | "error";
   currentCloudFileId: string | null;
   handleSaveCurrentCloudFile: (data: AppData, msg: string) => Promise<boolean>;
   debugInfo?: ReactNode;
@@ -48,6 +50,8 @@ export default function NewMetricPlayground({
   getMetricUnitLabel,
   isCloudDirty,
   isCloudSaveInProgress = false,
+  cloudSaveInlineFeedback = "",
+  cloudSaveStatus = "idle",
   currentCloudFileId,
   handleSaveCurrentCloudFile,
   debugInfo,
@@ -599,6 +603,11 @@ export default function NewMetricPlayground({
         >
           {isCloudSaveInProgress ? "儲存中…" : "儲存"}
         </button>
+        {cloudSaveInlineFeedback ? (
+          <span className={`cloud-save-inline-feedback is-${cloudSaveStatus}`}>
+            {cloudSaveInlineFeedback}
+          </span>
+        ) : null}
       </div>
     </div>
   );
