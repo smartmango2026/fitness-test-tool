@@ -23,6 +23,7 @@ interface NewMetricPlaygroundProps {
   getMetricRangeHint: (field: FitnessField) => string;
   getMetricUnitLabel: (field: FitnessField) => string;
   isCloudDirty: boolean;
+  isCloudSaveInProgress?: boolean;
   currentCloudFileId: string | null;
   handleSaveCurrentCloudFile: (data: AppData, msg: string) => Promise<boolean>;
   debugInfo?: ReactNode;
@@ -46,6 +47,7 @@ export default function NewMetricPlayground({
   getMetricRangeHint,
   getMetricUnitLabel,
   isCloudDirty,
+  isCloudSaveInProgress = false,
   currentCloudFileId,
   handleSaveCurrentCloudFile,
   debugInfo,
@@ -589,13 +591,13 @@ export default function NewMetricPlayground({
         <button
           className="primary-button"
           data-testid="metric-save-button"
-          disabled={!currentCloudFileId || !isCloudDirty}
+          disabled={!currentCloudFileId || !isCloudDirty || isCloudSaveInProgress}
           onClick={() => {
             void handleSaveCurrentCloudFile(data, "在測驗項目按下「儲存」。");
           }}
           type="button"
         >
-          儲存
+          {isCloudSaveInProgress ? "儲存中…" : "儲存"}
         </button>
       </div>
     </div>

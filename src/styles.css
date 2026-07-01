@@ -1004,6 +1004,70 @@ button {
   color: #0f766e;
 }
 
+.cloud-save-feedback {
+  width: 100%;
+  margin: -18px auto 22px;
+  padding: 14px 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.12);
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.cloud-save-feedback div {
+  display: grid;
+  gap: 4px;
+}
+
+.cloud-save-feedback strong {
+  color: #0f172a;
+}
+
+.cloud-save-feedback span {
+  color: #475569;
+}
+
+.cloud-save-feedback-step {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-weight: 700;
+}
+
+.cloud-save-feedback.is-saving {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.cloud-save-feedback.is-saving .cloud-save-feedback-step {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.cloud-save-feedback.is-success {
+  border-color: #99f6e4;
+  background: #ecfdf5;
+}
+
+.cloud-save-feedback.is-success .cloud-save-feedback-step {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.cloud-save-feedback.is-error {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.cloud-save-feedback.is-error .cloud-save-feedback-step {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .file-accordion-actions {
   display: flex;
   gap: 10px;

@@ -203,6 +203,19 @@ import {
   readReportDebugParamsFromUrl,
   readMobileTabVariantFromUrl
 } from "./utils/app-helpers";
+
+type CloudSaveFeedback = {
+  status: "idle" | "saving" | "success" | "error";
+  title: string;
+  detail: string;
+  step?: string;
+};
+
+const idleCloudSaveFeedback: CloudSaveFeedback = {
+  status: "idle",
+  title: "",
+  detail: "",
+};
 type AppProps = {
   experimentalMode?: boolean;
   runtime?: "production" | "e2e";
@@ -337,6 +350,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
     data.records[0] ?? makeEmptyRecord(data.testDate),
   );
   const [message, setMessage] = useState("前端已啟動。");
+  const [cloudSaveFeedback, setCloudSaveFeedback] = useState<CloudSaveFeedback>(
+    idleCloudSaveFeedback,
+  );
   const [loadCheckpoints, setLoadCheckpoints] = useState<Record<
     LoadCheckpointKey,
     LoadCheckpointState
@@ -3816,10 +3832,25 @@ export default function App({ experimentalMode = false, runtime = "production" }
   ): Promise<boolean> {
     if (!currentUser || !currentCloudFileId || !currentCloudFileOwnerUid) {
       setMessage("請先開啟一份雲端檔案，再儲存。");
+      setCloudSaveFeedback({
+        status: "error",
+        title: "無法儲存",
+        detail: "目前尚未開啟雲端檔案，請先到檔案列表選擇或建立檔案。",
+        step: "準備儲存",
+      });
       return false;
     }
 
+    let saveStep = "準備儲存";
+
     try {
+      setCloudSaveFeedback({
+        status: "saving",
+        title: "正在儲存",
+        detail: "正在整理目前檔案資料，請稍候。",
+        step: "1/3 準備資料",
+      });
+      setMessage("正在儲存目前檔案，請稍候。");
       const effectiveDataToSave = withEffectiveSchoolForSave(dataToSave);
       recordUserAction(actionLabel, {
         fileId: currentCloudFileId,
@@ -3831,6 +3862,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
         rosterCount: effectiveDataToSave.rosterEntries.length,
       });
       const operationId = createSystemLogOperationId();
+      saveStep = "寫入儲存開始紀錄";
+      setCloudSaveFeedback({
+        status: "saving",
+        title: "正在儲存",
+        detail: "正在建立儲存操作紀錄。",
+        step: "2/3 建立操作紀錄",
+      });
       await writeAppSystemLog({
         operationId,
         actionType: "file_saved",
@@ -3842,6 +3880,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
           : effectiveDataToSave.rosterName || "未命名班級",
         message: "開始儲存雲端檔案。",
       });
+      saveStep = "寫入雲端資料庫";
+      setCloudSaveFeedback({
+        status: "saving",
+        title: "正在儲存",
+        detail: "正在等待 Firebase 確認資料已寫入。",
+        step: "3/3 寫入雲端資料庫",
+      });
       await saveCloudFileData({
         ownerUid: currentCloudFileOwnerUid,
         fileId: currentCloudFileId,
@@ -3849,6 +3894,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
         displayName: currentProfile?.displayNickname ?? null,
         data: effectiveDataToSave,
       });
+      saveStep = "確認儲存完成";
       await writeAppSystemLog({
         operationId,
         actionType: "file_saved",
@@ -3864,6 +3910,12 @@ export default function App({ experimentalMode = false, runtime = "production" }
       setData(effectiveDataToSave);
       setIsCloudDirty(false);
       setMessage("目前檔案已儲存到雲端。");
+      setCloudSaveFeedback({
+        status: "success",
+        title: "儲存成功",
+        detail: "Firebase 已回傳成功，這份檔案已同步到雲端。",
+        step: "完成",
+      });
       return true;
     } catch (error) {
       const nextMessage =
@@ -3879,6 +3931,12 @@ export default function App({ experimentalMode = false, runtime = "production" }
         message: nextMessage,
       });
       setMessage(`儲存雲端檔案失敗：${nextMessage}`);
+      setCloudSaveFeedback({
+        status: "error",
+        title: "儲存失敗",
+        detail: nextMessage,
+        step: saveStep,
+      });
       return false;
     }
   }
@@ -4972,6 +5030,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const diagnosticEnvironmentPreview = getDiagnosticEnvironment();
   const diagnosticBrowserId = getDiagnosticBrowserId();
   const browserDiagnosticReports = getBrowserDiagnosticReportReferences().slice(0, 5);
+  const isCloudSaveInProgress = cloudSaveFeedback.status === "saving";
+  const getCloudSaveButtonLabel = (label = "儲存") =>
+    isCloudSaveInProgress ? "儲存中…" : label;
 
   return (
     <div
@@ -5482,6 +5543,22 @@ export default function App({ experimentalMode = false, runtime = "production" }
         </div>
       </header>
 
+      {cloudSaveFeedback.status !== "idle" ? (
+        <section
+          aria-live="polite"
+          className={`cloud-save-feedback is-${cloudSaveFeedback.status}`}
+          role="status"
+        >
+          <div>
+            <strong>{cloudSaveFeedback.title}</strong>
+            <span>{cloudSaveFeedback.detail}</span>
+          </div>
+          {cloudSaveFeedback.step ? (
+            <span className="cloud-save-feedback-step">{cloudSaveFeedback.step}</span>
+          ) : null}
+        </section>
+      ) : null}
+
       {experimentalMode ? (
         <section className="startup-banner experimental-banner" aria-live="polite">
           <div className="startup-banner-head">
@@ -5790,13 +5867,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   <button
                     className="primary-button"
                     data-testid="summary-save-button"
-                    disabled={!currentCloudFileId || !isCloudDirty}
+                    disabled={!currentCloudFileId || !isCloudDirty || isCloudSaveInProgress}
                     onClick={() => {
                       void handleSaveCurrentCloudFile(data, "在測驗總表按下「儲存」。");
                     }}
                     type="button"
                   >
-                    儲存
+                    {getCloudSaveButtonLabel()}
                   </button>
                 </div>
               ) : null}
@@ -6189,13 +6266,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <button
                             className="primary-button"
                             data-testid="file-basic-save-button"
-                            disabled={!currentCloudFileId || !isCloudDirty}
+                            disabled={!currentCloudFileId || !isCloudDirty || isCloudSaveInProgress}
                             onClick={() => {
                               void handleSaveCurrentCloudFile(data, "在基本資料小卡按下「儲存」。");
                             }}
                             type="button"
                           >
-                            儲存
+                            {getCloudSaveButtonLabel()}
                           </button>
                         </div>
                         {currentCloudFileSummary.accessRole === "owner" ? (
@@ -6733,6 +6810,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   getMetricUnitLabel={getMetricUnitLabel}
                   handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
                   isCloudDirty={isCloudDirty}
+                  isCloudSaveInProgress={isCloudSaveInProgress}
                   resolvedItemLabels={resolvedItemLabels}
                   scoreFields={scoreFields}
                   selectRecord={selectRecord}
@@ -6888,10 +6966,11 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   <button
                     className="primary-button"
                     data-testid="roster-save-button"
+                    disabled={isCloudSaveInProgress}
                     onClick={importRosterToRecords}
                     type="button"
                   >
-                    儲存
+                    {getCloudSaveButtonLabel()}
                   </button>
                 </div>
               </div>
@@ -7040,6 +7119,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                   getMetricRangeHint={getMetricRangeHint}
                   getMetricUnitLabel={getMetricUnitLabel}
                   isCloudDirty={isCloudDirty}
+                  isCloudSaveInProgress={isCloudSaveInProgress}
                   currentCloudFileId={currentCloudFileId}
                   handleSaveCurrentCloudFile={handleSaveCurrentCloudFile}
                 />
