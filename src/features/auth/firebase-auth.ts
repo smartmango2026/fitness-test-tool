@@ -1,8 +1,11 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
   updateProfile,
   type User,
 } from "firebase/auth";
@@ -81,6 +84,20 @@ export async function registerWithUsername(
   );
   await ensureAbilityRulesConfig(result.user.uid);
   return result.user;
+}
+
+export async function changeCurrentUserPassword(
+  user: User,
+  currentPassword: string,
+  nextPassword: string,
+): Promise<void> {
+  if (!user.email) {
+    throw new Error("目前帳號缺少登入 Email，無法修改密碼。");
+  }
+
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, nextPassword);
 }
 
 export async function signOutCurrentUser(): Promise<void> {

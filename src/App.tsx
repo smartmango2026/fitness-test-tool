@@ -57,6 +57,7 @@ import {
   type DiagnosticReportReference,
 } from "./features/diagnostics/diagnostics";
 import {
+  changeCurrentUserPassword,
   emailToUsername,
   isValidUsername,
   normalizeUsername,
@@ -256,6 +257,10 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [authReady, setAuthReady] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [currentPasswordDraft, setCurrentPasswordDraft] = useState("");
+  const [newPasswordDraft, setNewPasswordDraft] = useState("");
+  const [confirmNewPasswordDraft, setConfirmNewPasswordDraft] = useState("");
+  const [passwordChangeSaving, setPasswordChangeSaving] = useState(false);
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
@@ -619,6 +624,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
 
     return unsubscribe;
   }, [isReportDebugMode]);
+
+  useEffect(() => {
+    setCurrentPasswordDraft("");
+    setNewPasswordDraft("");
+    setConfirmNewPasswordDraft("");
+    setPasswordChangeSaving(false);
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -2617,6 +2629,101 @@ export default function App({ experimentalMode = false, runtime = "production" }
       });
       showAuthAlert("註冊失敗", nextMessage);
       setMessage(`註冊失敗：${nextMessage}`);
+    }
+  }
+
+  async function handleChangePassword(): Promise<void> {
+    if (!currentUser) {
+      const nextMessage = "請先登入，再修改密碼。";
+      showAuthAlert("尚未登入", nextMessage);
+      setMessage(nextMessage);
+      return;
+    }
+
+    if (!currentPasswordDraft || !newPasswordDraft || !confirmNewPasswordDraft) {
+      const nextMessage = "請輸入目前密碼、新密碼與確認密碼。";
+      showAuthAlert("修改密碼資料不完整", nextMessage);
+      setMessage(nextMessage);
+      return;
+    }
+
+    if (newPasswordDraft.length < 6) {
+      const nextMessage = "新密碼至少需要 6 個字元。";
+      showAuthAlert("新密碼太短", nextMessage);
+      setMessage(nextMessage);
+      return;
+    }
+
+    if (newPasswordDraft !== confirmNewPasswordDraft) {
+      const nextMessage = "兩次輸入的新密碼不一致。";
+      showAuthAlert("確認密碼不一致", nextMessage);
+      setMessage(nextMessage);
+      return;
+    }
+
+    if (currentPasswordDraft === newPasswordDraft) {
+      const nextMessage = "新密碼不能和目前密碼相同。";
+      showAuthAlert("密碼未變更", nextMessage);
+      setMessage(nextMessage);
+      return;
+    }
+
+    setPasswordChangeSaving(true);
+    const operationId = createSystemLogOperationId();
+
+    try {
+      recordUserAction("按下「修改密碼」按鈕。", {
+        username: currentUsername,
+        runtime,
+      });
+      recordDiagnosticEvent("auth.change-password-clicked", "使用者嘗試修改密碼。", {
+        uid: currentUser.uid,
+        username: currentUsername,
+        runtime,
+      });
+
+      await changeCurrentUserPassword(currentUser, currentPasswordDraft, newPasswordDraft);
+      setCurrentPasswordDraft("");
+      setNewPasswordDraft("");
+      setConfirmNewPasswordDraft("");
+
+      await writeAppSystemLog({
+        operationId,
+        actionType: "user_password_changed",
+        phase: "completed",
+        actorUid: currentUser.uid,
+        actorUsername: currentUsername,
+        actorDisplayName: currentDisplayName,
+        targetUid: currentUser.uid,
+        targetUsername: currentUsername,
+        message: "使用者已修改自己的密碼。",
+      });
+
+      showAuthAlert("修改密碼成功", "下次登入時請使用新密碼。");
+      setMessage("修改密碼成功，下次登入時請使用新密碼。");
+    } catch (error) {
+      const nextMessage = formatAuthError(error, "修改密碼失敗。");
+      recordDiagnosticEvent("auth.change-password-failed", "使用者修改密碼失敗。", {
+        uid: currentUser.uid,
+        username: currentUsername,
+        error: nextMessage,
+        runtime,
+      });
+      await writeAppSystemLog({
+        operationId,
+        actionType: "user_password_changed",
+        phase: "failed",
+        actorUid: currentUser.uid,
+        actorUsername: currentUsername,
+        actorDisplayName: currentDisplayName,
+        targetUid: currentUser.uid,
+        targetUsername: currentUsername,
+        message: `修改密碼失敗：${nextMessage}`,
+      });
+      showAuthAlert("修改密碼失敗", nextMessage);
+      setMessage(`修改密碼失敗：${nextMessage}`);
+    } finally {
+      setPasswordChangeSaving(false);
     }
   }
 
@@ -6508,6 +6615,69 @@ export default function App({ experimentalMode = false, runtime = "production" }
                     </div>
                   </div>
                 </article>
+
+                {runtime === "e2e" ? (
+                  <article className="account-card" data-testid="change-password-card">
+                    <div className="account-card-head">
+                      <div>
+                        <h3>修改密碼</h3>
+                        <p>測試版功能。需要先輸入目前密碼，確認身分後才會更新。</p>
+                      </div>
+                    </div>
+                    {currentUser ? (
+                      <div className="auth-form-grid">
+                        <input
+                          autoComplete="current-password"
+                          data-testid="current-password-input"
+                          disabled={passwordChangeSaving}
+                          onChange={(event) => setCurrentPasswordDraft(event.target.value)}
+                          placeholder="目前密碼"
+                          type="password"
+                          value={currentPasswordDraft}
+                        />
+                        <input
+                          autoComplete="new-password"
+                          data-testid="new-password-input"
+                          disabled={passwordChangeSaving}
+                          onChange={(event) => setNewPasswordDraft(event.target.value)}
+                          placeholder="新密碼（至少 6 個字元）"
+                          type="password"
+                          value={newPasswordDraft}
+                        />
+                        <input
+                          autoComplete="new-password"
+                          data-testid="confirm-new-password-input"
+                          disabled={passwordChangeSaving}
+                          onChange={(event) => setConfirmNewPasswordDraft(event.target.value)}
+                          placeholder="再次輸入新密碼"
+                          type="password"
+                          value={confirmNewPasswordDraft}
+                        />
+                        <div className="friend-row-actions">
+                          <button
+                            className="primary-button"
+                            data-testid="change-password-submit"
+                            disabled={passwordChangeSaving}
+                            onClick={() => {
+                              void handleChangePassword();
+                            }}
+                            type="button"
+                          >
+                            {passwordChangeSaving ? "修改中" : "修改密碼"}
+                          </button>
+                        </div>
+                        <p className="auth-help">
+                          修改成功後，下次登入請使用新密碼。這個功能目前只在測試環境顯示。
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <strong>尚未登入</strong>
+                        <p>請先登入測試帳號，再嘗試修改密碼。</p>
+                      </div>
+                    )}
+                  </article>
+                ) : null}
 
                 <article className="account-card">
                   <div className="account-card-head">
