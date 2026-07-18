@@ -561,7 +561,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
           browserId: getDiagnosticBrowserId(),
           environment: getDiagnosticEnvironment(),
         });
-        void ensureUserProfile(user);
+        void ensureUserProfile(user).catch((error) => {
+          const nextMessage =
+            error instanceof Error ? error.message : "無法建立或更新使用者基本資料。";
+          setMessage(`使用者基本資料更新失敗：${nextMessage}`);
+          updateLoadCheckpoint("profile", "error", nextMessage);
+          pushFrontendIssue(`使用者基本資料更新失敗：${nextMessage}`);
+        });
         setActiveTab((current) =>
           isReportDebugMode ? "pdf" : current === "account" ? "files" : current,
         );
@@ -656,25 +662,52 @@ export default function App({ experimentalMode = false, runtime = "production" }
       }
     };
 
-    const unsubscribeFriends = subscribeToFriends(currentUser.uid, (nextFriends) => {
-      setFriends(nextFriends);
-      updateLoadCheckpoint("friends", "success", `好友列表已載入，共 ${nextFriends.length} 位好友。`);
-    });
-    const unsubscribeProfile = subscribeToUserProfile(currentUser.uid, (profile) => {
-      setCurrentProfile(profile);
-      setNicknameDraft(profile?.displayNickname ?? "");
-      setProfileSchoolDraft(
-        getSchoolComboboxValue(profile?.schoolId ?? "", profile?.schoolName ?? ""),
-      );
-      setProfileSchoolBranchDraft(profile?.schoolBranchName ?? "");
-      updateLoadCheckpoint("profile", "success", "使用者基本資料已載入。");
-    });
+    const unsubscribeFriends = subscribeToFriends(
+      currentUser.uid,
+      (nextFriends) => {
+        setFriends(nextFriends);
+        updateLoadCheckpoint("friends", "success", `好友列表已載入，共 ${nextFriends.length} 位好友。`);
+      },
+      (error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法載入好友列表。";
+        setMessage(`好友列表載入失敗：${nextMessage}`);
+        updateLoadCheckpoint("friends", "error", nextMessage);
+        pushFrontendIssue(`好友列表載入失敗：${nextMessage}`);
+      },
+    );
+    const unsubscribeProfile = subscribeToUserProfile(
+      currentUser.uid,
+      (profile) => {
+        setCurrentProfile(profile);
+        setNicknameDraft(profile?.displayNickname ?? "");
+        setProfileSchoolDraft(
+          getSchoolComboboxValue(profile?.schoolId ?? "", profile?.schoolName ?? ""),
+        );
+        setProfileSchoolBranchDraft(profile?.schoolBranchName ?? "");
+        updateLoadCheckpoint("profile", "success", "使用者基本資料已載入。");
+      },
+      (error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法載入使用者基本資料。";
+        setMessage(`使用者基本資料載入失敗：${nextMessage}`);
+        updateLoadCheckpoint("profile", "error", nextMessage);
+        pushFrontendIssue(`使用者基本資料載入失敗：${nextMessage}`);
+      },
+    );
     const unsubscribeIncoming = subscribeToIncomingFriendRequests(
       currentUser.uid,
       (requests) => {
         setIncomingFriendRequests(requests);
         incomingLoaded = true;
         markFriendRequestsLoaded();
+      },
+      (error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法載入收到的好友邀請。";
+        setMessage(`好友邀請載入失敗：${nextMessage}`);
+        updateLoadCheckpoint("friendRequests", "error", nextMessage);
+        pushFrontendIssue(`收到的好友邀請載入失敗：${nextMessage}`);
       },
     );
     const unsubscribeOutgoing = subscribeToOutgoingFriendRequests(
@@ -683,6 +716,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
         setOutgoingFriendRequests(requests);
         outgoingLoaded = true;
         markFriendRequestsLoaded();
+      },
+      (error) => {
+        const nextMessage =
+          error instanceof Error ? error.message : "無法載入送出的好友邀請。";
+        setMessage(`好友邀請載入失敗：${nextMessage}`);
+        updateLoadCheckpoint("friendRequests", "error", nextMessage);
+        pushFrontendIssue(`送出的好友邀請載入失敗：${nextMessage}`);
       },
     );
     const unsubscribeCloudFiles = subscribeToCloudFiles(

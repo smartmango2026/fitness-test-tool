@@ -203,15 +203,22 @@ export async function ensureUserProfile(user: User): Promise<void> {
 export function subscribeToUserProfile(
   uid: string,
   callback: (profile: UserProfileRecord | null) => void,
+  onError?: (error: unknown) => void,
 ): () => void {
-  return onSnapshot(doc(db, "users", uid), (snapshot) => {
-    if (!snapshot.exists()) {
-      callback(null);
-      return;
-    }
+  return onSnapshot(
+    doc(db, "users", uid),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(null);
+        return;
+      }
 
-    callback(mapUserProfileDocument(snapshot.id, snapshot.data()));
-  });
+      callback(mapUserProfileDocument(snapshot.id, snapshot.data()));
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 }
 
 export async function updateOwnDisplayNickname(options: {
@@ -274,43 +281,64 @@ export async function updateOwnSchool(options: {
 export function subscribeToFriends(
   uid: string,
   callback: (friends: FriendRecord[]) => void,
+  onError?: (error: unknown) => void,
 ): () => void {
   const friendsQuery = query(collection(db, "users", uid, "friends"));
-  return onSnapshot(friendsQuery, (snapshot) => {
-    callback(
-      mapFriendSnapshot(snapshot).sort((a, b) =>
-        a.displayName.localeCompare(b.displayName, "zh-Hant"),
-      ),
-    );
-  });
+  return onSnapshot(
+    friendsQuery,
+    (snapshot) => {
+      callback(
+        mapFriendSnapshot(snapshot).sort((a, b) =>
+          a.displayName.localeCompare(b.displayName, "zh-Hant"),
+        ),
+      );
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 }
 
 export function subscribeToIncomingFriendRequests(
   uid: string,
   callback: (requests: FriendRequestRecord[]) => void,
+  onError?: (error: unknown) => void,
 ): () => void {
   const requestQuery = query(
     collection(db, "friendRequests"),
     where("toUid", "==", uid),
     where("status", "==", "pending"),
   );
-  return onSnapshot(requestQuery, (snapshot) => {
-    callback(mapRequestSnapshot(snapshot));
-  });
+  return onSnapshot(
+    requestQuery,
+    (snapshot) => {
+      callback(mapRequestSnapshot(snapshot));
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 }
 
 export function subscribeToOutgoingFriendRequests(
   uid: string,
   callback: (requests: FriendRequestRecord[]) => void,
+  onError?: (error: unknown) => void,
 ): () => void {
   const requestQuery = query(
     collection(db, "friendRequests"),
     where("fromUid", "==", uid),
     where("status", "==", "pending"),
   );
-  return onSnapshot(requestQuery, (snapshot) => {
-    callback(mapRequestSnapshot(snapshot));
-  });
+  return onSnapshot(
+    requestQuery,
+    (snapshot) => {
+      callback(mapRequestSnapshot(snapshot));
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 }
 
 export async function sendFriendRequest(options: {

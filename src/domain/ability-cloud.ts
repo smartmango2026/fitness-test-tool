@@ -49,13 +49,17 @@ export function subscribeToAbilityRulesConfig(
   return onSnapshot(
     settingsRef,
     async (snapshot) => {
-      if (!snapshot.exists()) {
-        const defaults = await ensureAbilityRulesConfig(uid);
-        callback(defaults);
-        return;
-      }
+      try {
+        if (!snapshot.exists()) {
+          const defaults = await ensureAbilityRulesConfig(uid);
+          callback(defaults);
+          return;
+        }
 
-      callback(normalizeAbilityRulesConfig(snapshot.data()));
+        callback(normalizeAbilityRulesConfig(snapshot.data()));
+      } catch (error) {
+        onError?.(error);
+      }
     },
     (error) => {
       onError?.(error);
