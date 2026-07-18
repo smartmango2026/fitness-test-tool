@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "fitness-test-tool-42789"
+    "default": "fitness-test-tool-42789",
+    "e2e": "fitness-test-tool-e2e"
   }
 }

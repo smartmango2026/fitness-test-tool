@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "firebase:e2e:rules": "pnpm dlx firebase-tools deploy --only firestore:rules,firestore:indexes --project e2e",
     "test:e2e": "playwright test",
+    "test:e2e:ready": "pnpm run firebase:e2e:rules && pnpm test:e2e",
     "test:e2e:ui": "playwright test --ui",
     "test:visual": "playwright test --config playwright.visual.config.ts",
     "reports": "node scripts/list-diagnostic-reports.mjs"

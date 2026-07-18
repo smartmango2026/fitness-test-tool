@@ -43,6 +43,20 @@ pnpm test:e2e
 
 The current E2E suite opens `/e2e/`, verifies the test environment banner, checks login/register controls, then runs a basic teacher workflow: register an isolated test account, create a class file, edit the roster, open the metric sheet, open the summary sheet, and verify the PDF report page loads.
 
+Before running write-heavy E2E tests against a fresh or changed test Firebase project, deploy the local Firestore rules and indexes to the isolated E2E project:
+
+```bash
+pnpm run firebase:e2e:rules
+```
+
+For a full local readiness check, run:
+
+```bash
+pnpm run test:e2e:ready
+```
+
+This command first deploys Firestore rules/indexes to the `e2e` Firebase alias, then runs the complete Playwright E2E suite. The Firebase alias is intentionally separate from `default` so automated tests do not accidentally deploy rules to or write data into production.
+
 ## Agent Notes
 
 Use this section as the fast orientation block for future maintenance agents.
@@ -83,6 +97,8 @@ Use this section as the fast orientation block for future maintenance agents.
 pnpm install --ignore-workspace
 pnpm dev
 pnpm build
+pnpm run firebase:e2e:rules
+pnpm run test:e2e:ready
 git push origin main
 gh run list -R smartmango2026/fitness-test-tool --workflow "Deploy GitHub Pages"
 ```
