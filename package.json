@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "copy:e2e-users": "node scripts/copy-users-to-e2e.mjs",
     "firebase:e2e:rules": "pnpm dlx firebase-tools deploy --only firestore:rules,firestore:indexes --project e2e",
     "test:e2e": "playwright test",
     "test:e2e:ready": "pnpm run firebase:e2e:rules && pnpm test:e2e",
