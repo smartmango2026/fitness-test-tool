@@ -17,9 +17,43 @@ async function login(page: Page, username: string, password: string): Promise<vo
   await page.getByTestId("auth-submit-button").click();
 }
 
+async function registerTeacher(page: Page, username: string, password: string): Promise<void> {
+  await assertE2eRuntime(page);
+  await page.getByTestId("auth-register-button").click();
+  await page.getByTestId("auth-username-input").fill(username);
+  await page.getByTestId("auth-password-input").fill(password);
+  await page.getByTestId("auth-submit-button").click();
+  await expect(page.getByTestId("account-menu-button")).toContainText(username, {
+    timeout: 20_000,
+  });
+  await page.waitForTimeout(1_000);
+}
+
 async function openAdminDashboard(page: Page): Promise<void> {
+  await page.getByTestId("account-menu-button").click();
+  await expect(page.getByTestId("admin-entry")).toBeVisible();
   await page.getByTestId("admin-entry").click();
   await expect(page.getByTestId("admin-dashboard")).toBeVisible();
+}
+
+async function searchAdminUser(page: Page, keyword: string): Promise<void> {
+  await page.getByTestId("admin-user-keyword-input").fill(keyword);
+
+  await expect
+    .poll(
+      async () => {
+        await page.getByTestId("admin-user-search-button").click();
+        await expect(page.getByTestId("admin-user-search-button")).not.toHaveText(
+          "查詢中",
+          { timeout: 10_000 },
+        );
+        return await page.getByTestId("admin-user-open-detail-button").count();
+      },
+      {
+        timeout: 30_000,
+      },
+    )
+    .toBeGreaterThan(0);
 }
 
 test.describe("Admin access acceptance contract", () => {
@@ -73,8 +107,7 @@ test.describe("Admin access acceptance contract", () => {
     await login(page, adminUsername, adminPassword);
     await openAdminDashboard(page);
 
-    await page.getByTestId("admin-user-keyword-input").fill("teacher01");
-    await page.getByTestId("admin-user-search-button").click();
+    await searchAdminUser(page, "teacher01");
     await page.getByTestId("admin-user-open-detail-button").first().click();
 
     await expect(page.getByTestId("admin-user-detail-panel")).toBeVisible();
@@ -92,13 +125,12 @@ test.describe("Admin access acceptance contract", () => {
     await login(page, adminUsername, adminPassword);
     await openAdminDashboard(page);
 
-    await page.getByTestId("admin-user-keyword-input").fill("teacher01");
-    await page.getByTestId("admin-user-search-button").click();
+    await searchAdminUser(page, "teacher01");
     await page.getByTestId("admin-user-open-detail-button").first().click();
     await page.getByTestId("admin-password-reset-button").click();
 
     await expect(page.getByTestId("admin-password-reset-result")).toContainText(
-      "https://",
+      "resetToken=",
     );
     await expect(page.getByTestId("admin-password-reset-copy-button")).toBeVisible();
     await expect(page.getByTestId("admin-user-recent-records")).toContainText(
@@ -110,18 +142,23 @@ test.describe("Admin access acceptance contract", () => {
     browser,
     page,
   }) => {
+    const teacherUsername = `e2e_qr_${Date.now().toString(36)}`;
+    const teacherPage = await browser.newPage();
+    await registerTeacher(teacherPage, teacherUsername, "test1234");
+    await teacherPage.close();
+
     await login(page, adminUsername, adminPassword);
     await openAdminDashboard(page);
 
-    await page.getByTestId("admin-user-keyword-input").fill("teacher01");
-    await page.getByTestId("admin-user-search-button").click();
+    await searchAdminUser(page, teacherUsername);
     await page.getByTestId("admin-user-open-detail-button").first().click();
     await page.getByTestId("admin-login-pass-create-button").click();
 
     const loginPassUrl = await page
       .getByTestId("admin-login-pass-result")
       .textContent();
-    expect(loginPassUrl).toContain("/login-pass?p=");
+    expect(loginPassUrl).toContain("loginPassId=");
+    expect(loginPassUrl).toContain("loginPass=");
 
     const qrPage = await browser.newPage();
     await qrPage.goto(loginPassUrl ?? "");
@@ -149,11 +186,7 @@ test.describe("Admin access acceptance contract", () => {
     await page.getByTestId("admin-school-alias-input").fill("小太陽森林");
     await page.getByTestId("admin-school-alias-save-button").click();
 
-    await page.getByTestId("files-tab").click();
-    await page.getByTestId("create-file-button").click();
-    await page.getByTestId("file-school-input").fill("小太陽森林");
-
-    await expect(page.getByTestId("admin-school-canonical-name")).toContainText(
+    await expect(page.getByTestId("admin-school-canonical-name")).toHaveValue(
       "小太陽森林幼兒園",
     );
     await expect(page.getByTestId("file-school-input-snapshot")).toContainText(

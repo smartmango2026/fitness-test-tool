@@ -332,3 +332,29 @@ file-school-input-snapshot
 - Manual review confirms production has no unintended admin entry points.
 - Firestore rules and Cloud Functions enforce permissions server-side.
 - A rollback plan exists before production release.
+
+## Current E2E Implementation Status
+
+The `/e2e/` implementation now includes the first-version admin UI shape:
+
+- `admin-entry` in the account menu for E2E `systemAdmin` users.
+- Two-card admin dashboard:
+  - user filter card
+  - user table card
+- User detail panel with:
+  - identity and status fields
+  - password reset flow record creation
+  - permanent QR login pass record creation and revocation
+  - recent action feedback
+- School alias record creation.
+- Firestore rules for E2E admin reads/writes.
+- Active acceptance coverage for phases 1 through 6.
+
+Important boundary:
+
+- Password reset currently creates an E2E reset-flow record and URL placeholder.
+  A production-quality reset link still requires Cloud Functions or another
+  backend using Firebase Admin SDK.
+- Permanent QR login currently creates revocable hashed-token pass records and
+  validates pass state from the URL. Actual Firebase Auth account switching still
+  requires Cloud Functions to exchange the QR token for a Firebase custom token.

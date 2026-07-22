@@ -10,6 +10,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function isSystemAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRoles is list &&
+        "systemAdmin" in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRoles;
+    }
+
     function isFileOwner(userId) {
       return isSelf(userId);
     }
@@ -31,7 +37,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSelf(userId);
-      allow update: if isSelf(userId);
+      allow update: if isSelf(userId) || isSystemAdmin();
       allow delete: if false;
 
       match /friends/{friendId} {
@@ -156,6 +162,29 @@ service cloud.firestore {
         isSignedIn() &&
         request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read, create: if isSystemAdmin();
+      allow update, delete: if false;
+    }
+
+    match /passwordResetLinks/{resetId} {
+      allow read, create: if isSystemAdmin();
+      allow update, delete: if false;
+    }
+
+    match /loginPasses/{passId} {
+      allow get: if true;
+      allow list: if isSystemAdmin();
+      allow create, update: if isSystemAdmin();
+      allow delete: if false;
+    }
+
+    match /schoolAliases/{aliasId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSystemAdmin();
+      allow delete: if false;
     }
 
     match /diagnosticReports/{reportId} {

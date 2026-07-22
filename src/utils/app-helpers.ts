@@ -12,6 +12,7 @@ import type {
 export type TabKey =
   | "files"
   | "account"
+  | "admin"
   | "table"
   | "metric"
   | "editor"

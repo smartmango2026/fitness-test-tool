@@ -35,6 +35,7 @@ export type UserProfileRecord = {
   uid: string;
   username: string;
   displayNickname: string | null;
+  globalRoles?: string[];
   schoolId: SchoolId | "";
   schoolName: string;
   schoolBranchName: string;
@@ -112,6 +113,9 @@ function mapUserProfileDocument(
       typeof data.displayNickname === "string" && data.displayNickname.trim()
         ? data.displayNickname.trim()
         : null,
+    globalRoles: Array.isArray(data.globalRoles)
+      ? data.globalRoles.filter((entry): entry is string => typeof entry === "string")
+      : [],
     schoolId,
     schoolName:
       typeof data.schoolName === "string" && data.schoolName.trim()
