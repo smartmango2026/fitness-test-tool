@@ -17,6 +17,11 @@ async function login(page: Page, username: string, password: string): Promise<vo
   await page.getByTestId("auth-submit-button").click();
 }
 
+async function openAdminDashboard(page: Page): Promise<void> {
+  await page.getByTestId("admin-entry").click();
+  await expect(page.getByTestId("admin-dashboard")).toBeVisible();
+}
+
 test.describe("Admin access acceptance contract", () => {
   test.beforeEach(async ({ page }) => {
     await assertE2eRuntime(page);
@@ -32,94 +37,71 @@ test.describe("Admin access acceptance contract", () => {
     );
   });
 
-  test("phase 1: system administrator sees admin dashboard and permission summary", async ({
+  test("phase 1: system administrator opens the two-card admin dashboard", async ({
     page,
   }) => {
     await login(page, adminUsername, adminPassword);
+    await openAdminDashboard(page);
 
-    await page.getByTestId("admin-tab").click();
-    await expect(page.getByTestId("admin-dashboard")).toBeVisible();
     await expect(page.getByTestId("admin-current-user-role")).toContainText(
       "systemAdmin",
     );
-    await expect(page.getByTestId("admin-permission-summary")).toContainText(
-      "all accounts",
-    );
+    await expect(page.getByTestId("admin-scope-summary")).toContainText("all");
+    await expect(page.getByTestId("admin-user-filter-card")).toBeVisible();
+    await expect(page.getByTestId("admin-user-table-card")).toBeVisible();
   });
 
-  test("phase 2: system administrator assigns a school account administrator", async ({
+  test("phase 2: administrator filters users and sees matching result count", async ({
     page,
   }) => {
     await login(page, adminUsername, adminPassword);
-    await page.getByTestId("admin-tab").click();
+    await openAdminDashboard(page);
 
-    await page.getByTestId("admin-schools-panel").click();
-    await page.getByTestId("admin-school-create-button").click();
-    await page.getByTestId("admin-school-name-input").fill("E2E 驗收幼兒園");
-    await page.getByTestId("admin-school-save-button").click();
+    await page.getByTestId("admin-user-keyword-input").fill("teacher");
+    await page.getByTestId("admin-user-status-filter").selectOption("active");
+    await page.getByTestId("admin-user-search-button").click();
 
-    await page.getByTestId("admin-school-member-add-button").click();
-    await page.getByTestId("admin-school-member-username-input").fill(
-      "e2e_school_admin",
-    );
-    await page
-      .getByTestId("admin-school-member-role-select")
-      .selectOption("schoolAccountAdmin");
-    await page.getByTestId("admin-school-member-save-button").click();
-
-    await expect(page.getByTestId("admin-user-table")).toContainText(
-      "e2e_school_admin",
-    );
-    await expect(page.getByTestId("admin-audit-log-list")).toContainText(
-      "schoolMemberRoleChanged",
-    );
-  });
-
-  test("phase 3: school account administrator scope is limited to assigned schools", async ({
-    browser,
-  }) => {
-    const systemAdminPage = await browser.newPage();
-    await assertE2eRuntime(systemAdminPage);
-    await login(systemAdminPage, adminUsername, adminPassword);
-    await systemAdminPage.getByTestId("admin-tab").click();
-    await expect(systemAdminPage.getByTestId("admin-user-table")).toContainText(
+    await expect(page.getByTestId("admin-user-result-count")).toContainText(
       "teacher",
     );
-
-    const schoolAdminPage = await browser.newPage();
-    await assertE2eRuntime(schoolAdminPage);
-    await login(
-      schoolAdminPage,
-      process.env.SCHOOL_ADMIN_ACCEPTANCE_USER ?? "e2e_school_admin",
-      process.env.SCHOOL_ADMIN_ACCEPTANCE_PASSWORD ?? "test1234",
-    );
-    await schoolAdminPage.getByTestId("admin-tab").click();
-
-    await expect(schoolAdminPage.getByTestId("admin-scope-badge")).toContainText(
-      "school",
-    );
-    await expect(schoolAdminPage.getByTestId("admin-user-table")).toContainText(
-      "e2e_school_teacher",
-    );
-    await expect(schoolAdminPage.getByTestId("admin-user-table")).not.toContainText(
-      "e2e_other_school_teacher",
-    );
+    await expect(page.getByTestId("admin-user-table")).toContainText("teacher");
   });
 
-  test("phase 4: administrator creates a password reset link and audit log", async ({
+  test("phase 3: administrator opens user detail panel from the user table", async ({
     page,
   }) => {
     await login(page, adminUsername, adminPassword);
-    await page.getByTestId("admin-tab").click();
+    await openAdminDashboard(page);
 
-    await page.getByTestId("admin-user-search-input").fill("e2e_school_teacher");
+    await page.getByTestId("admin-user-keyword-input").fill("teacher01");
+    await page.getByTestId("admin-user-search-button").click();
+    await page.getByTestId("admin-user-open-detail-button").first().click();
+
+    await expect(page.getByTestId("admin-user-detail-panel")).toBeVisible();
+    await expect(page.getByTestId("admin-user-detail-username")).toContainText(
+      "teacher01",
+    );
+    await expect(page.getByTestId("admin-user-detail-uid")).toBeVisible();
+    await expect(page.getByTestId("admin-user-detail-status")).toBeVisible();
+    await expect(page.getByTestId("admin-user-detail-role")).toBeVisible();
+  });
+
+  test("phase 4: administrator creates password reset link from detail panel", async ({
+    page,
+  }) => {
+    await login(page, adminUsername, adminPassword);
+    await openAdminDashboard(page);
+
+    await page.getByTestId("admin-user-keyword-input").fill("teacher01");
+    await page.getByTestId("admin-user-search-button").click();
+    await page.getByTestId("admin-user-open-detail-button").first().click();
     await page.getByTestId("admin-password-reset-button").click();
 
     await expect(page.getByTestId("admin-password-reset-result")).toContainText(
       "https://",
     );
     await expect(page.getByTestId("admin-password-reset-copy-button")).toBeVisible();
-    await expect(page.getByTestId("admin-audit-log-list")).toContainText(
+    await expect(page.getByTestId("admin-user-recent-records")).toContainText(
       "passwordResetLinkCreated",
     );
   });
@@ -129,8 +111,11 @@ test.describe("Admin access acceptance contract", () => {
     page,
   }) => {
     await login(page, adminUsername, adminPassword);
-    await page.getByTestId("admin-tab").click();
-    await page.getByTestId("admin-user-search-input").fill("e2e_school_teacher");
+    await openAdminDashboard(page);
+
+    await page.getByTestId("admin-user-keyword-input").fill("teacher01");
+    await page.getByTestId("admin-user-search-button").click();
+    await page.getByTestId("admin-user-open-detail-button").first().click();
     await page.getByTestId("admin-login-pass-create-button").click();
 
     const loginPassUrl = await page
@@ -143,7 +128,7 @@ test.describe("Admin access acceptance contract", () => {
     await expect(qrPage.getByTestId("account-tab")).toBeVisible();
 
     await page.getByTestId("admin-login-pass-revoke-button").click();
-    await expect(page.getByTestId("admin-audit-log-list")).toContainText(
+    await expect(page.getByTestId("admin-user-recent-records")).toContainText(
       "loginQrUsed",
     );
 
@@ -158,7 +143,7 @@ test.describe("Admin access acceptance contract", () => {
     page,
   }) => {
     await login(page, adminUsername, adminPassword);
-    await page.getByTestId("admin-tab").click();
+    await openAdminDashboard(page);
 
     await page.getByTestId("admin-school-alias-panel").click();
     await page.getByTestId("admin-school-alias-input").fill("小太陽森林");

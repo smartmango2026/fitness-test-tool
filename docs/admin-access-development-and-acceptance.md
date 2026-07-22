@@ -1,37 +1,71 @@
 # Admin Access Phased Development And Acceptance Plan
 
-This document converts `docs/admin-and-school-access-plan.md` into a staged
-development and acceptance plan. The target is to implement and verify the admin
-features in `/e2e/` first, then decide when to promote the feature to production.
+This document converts `docs/admin-and-school-access-plan.md` into a smaller
+first-version development and acceptance plan.
+
+The first admin UI should not be a full back-office system. It should be a simple
+maintenance panel with two cards:
+
+```text
+Admin dashboard
+  Card 1: user filters
+  Card 2: user table
+  Detail panel: selected user details and account actions
+```
+
+The implementation target is `/e2e/` first. Production rollout should happen
+only after rules, Cloud Functions, and acceptance tests are reviewed.
 
 ## Operating Rules
 
 - Develop against `/e2e/` and `fitness-test-tool-e2e` first.
-- Do not enable production admin controls until Firestore rules and Cloud
-  Functions are reviewed.
-- Keep production test accounts copied into E2E as test system administrators.
-- Keep all new UI elements covered by stable `data-testid` selectors.
-- Keep acceptance tests skipped by default until the target phase is being
-  implemented.
+- Keep admin UI hidden from ordinary teachers.
+- Use stable `data-testid` selectors for acceptance tests.
+- Do not implement password reset or QR login only in frontend code.
+- Keep acceptance tests skipped by default until actively implementing admin
+  features.
+
+## Entry Point
+
+The admin entry should live in the account menu, not in the main teacher workflow
+tabs.
+
+```text
+Account menu
+  Account settings
+  Admin dashboard
+  Issue report
+  Sign out
+```
+
+Only `systemAdmin` and `schoolAccountAdmin` should see the admin entry.
+
+Stable selector contract:
+
+```text
+admin-entry
+admin-dashboard
+```
+
+The selector name should describe the function, not the UI form. Do not name it
+`admin-tab`, because the entry may later move from a tab to an account menu,
+sidebar, or route.
 
 ## Acceptance Test Entry
 
-The acceptance script is:
+Acceptance script:
 
 ```text
 tests/e2e/admin-access.acceptance.spec.ts
 ```
 
-Run it in documentation mode:
+Documentation/safe mode:
 
 ```powershell
 pnpm run test:e2e:admin-acceptance
 ```
 
-By default, the suite is skipped so the current app does not fail before the
-feature exists.
-
-Run it as an active acceptance suite:
+Active mode:
 
 ```powershell
 $env:RUN_ADMIN_ACCEPTANCE = "1"
@@ -43,7 +77,7 @@ Remove-Item Env:ADMIN_ACCEPTANCE_USER
 Remove-Item Env:ADMIN_ACCEPTANCE_PASSWORD
 ```
 
-Do not commit passwords or put them in documentation.
+Do not commit credentials.
 
 ## Phase 0: E2E Baseline
 
@@ -56,7 +90,7 @@ Do not commit passwords or put them in documentation.
 pnpm run firebase:e2e:rules
 ```
 
-- Keep seed system administrator accounts available in E2E through:
+- Keep copied system administrator test accounts available in E2E through:
 
 ```powershell
 pnpm run copy:e2e-users
@@ -68,91 +102,136 @@ pnpm run copy:e2e-users
 - E2E data remains isolated from production.
 - Seeded admin test users have `globalRoles: ["systemAdmin"]` in E2E.
 
-## Phase 1: Role Constants And Permission Helpers
+## Phase 1: Admin Entry And Two-Card Dashboard
 
 ### Development
 
-- Add centralized role constants.
-- Add permission helper functions.
-- Avoid raw role checks scattered across React components.
-
-Suggested helpers:
+- Add centralized role constants and permission helpers.
+- Show `admin-entry` only to `systemAdmin` and `schoolAccountAdmin`.
+- Clicking `admin-entry` opens `admin-dashboard`.
+- The dashboard contains exactly the first-version maintenance structure:
 
 ```text
-hasSystemAdminRole(userProfile)
-canViewAllUsers(actorProfile)
-canViewSchoolUsers(actorProfile, schoolId)
-canAssignSchoolAccountAdmin(actorProfile)
-canCreatePasswordResetLink(actorProfile, targetUser)
-canCreatePermanentLoginPass(actorProfile, targetUser)
+admin-user-filter-card
+admin-user-table-card
+admin-user-detail-panel
 ```
 
 ### Acceptance
 
-- System administrators can see admin navigation.
-- Ordinary teachers cannot see admin navigation.
-- The UI exposes the current admin scope clearly.
+- A system administrator can open the admin dashboard.
+- The dashboard shows the current role and scope.
+- The dashboard shows a filter card.
+- The dashboard shows a user table card.
 
 Expected selectors:
 
 ```text
-admin-tab
+admin-entry
 admin-dashboard
 admin-current-user-role
-admin-permission-summary
+admin-scope-summary
+admin-user-filter-card
+admin-user-table-card
 ```
 
-## Phase 2: School Membership Data
+## Phase 2: User Filtering
 
 ### Development
 
-- Add or prepare `schools/{schoolId}` records.
-- Add `schools/{schoolId}/members/{uid}` membership documents.
-- Store `role`, `status`, snapshots, and audit metadata.
+The first filter card should stay small:
+
+```text
+keyword: username / display name / school
+school: all or scoped school options
+status: all / active / inactive
+```
+
+Role filtering can be added later if needed, but it is not required for the first
+admin UI.
 
 ### Acceptance
 
-- A system administrator can create or select a school.
-- A system administrator can add a teacher to a school.
-- A system administrator can assign `schoolAccountAdmin`.
-- An audit log records the assignment.
+- System administrators can filter across all users.
+- School account administrators can only filter within assigned schools.
+- The filter result updates the user table.
 
 Expected selectors:
 
 ```text
-admin-schools-panel
-admin-school-create-button
-admin-school-name-input
-admin-school-save-button
-admin-school-member-add-button
-admin-school-member-username-input
-admin-school-member-role-select
-admin-school-member-save-button
-admin-audit-log-list
+admin-user-keyword-input
+admin-user-school-filter
+admin-user-status-filter
+admin-user-search-button
+admin-user-result-count
 ```
 
-## Phase 3: School Account Administrator Scope
+## Phase 3: User Table And Detail Panel
 
 ### Development
 
-- Let school account administrators view only assigned school members.
-- Prevent school account administrators from viewing global user lists.
-- Enforce the scope in Firestore rules or Cloud Functions, not only in UI.
+The user table should show basic account information and one action button.
+
+Columns:
+
+```text
+username
+display name
+school / branch
+role
+status
+last login
+action: view
+```
+
+Do not put many account actions directly in the table. Keep the table readable,
+especially on mobile.
+
+Clicking view opens a detail panel.
+
+Detail panel sections:
+
+```text
+Basic data
+  username
+  display name
+  uid
+  school / branch
+  role
+  status
+  last login
+
+Account actions
+  create password reset link
+  create permanent login QR
+  revoke login QR
+  activate / deactivate account
+
+Recent records
+  recent login
+  recent QR login
+  recent password reset
+  recent admin action
+```
 
 ### Acceptance
 
-- A school account administrator can see teachers in their school.
-- A school account administrator cannot see teachers from another school.
-- A system administrator can still see all accounts.
+- The table lists users matching the active filter.
+- Clicking view opens the selected user's detail panel.
+- The detail panel shows the selected user's identity and status.
+- Account action buttons are visible according to the actor's permissions.
 
 Expected selectors:
 
 ```text
-admin-user-search-input
 admin-user-table
 admin-user-row
-admin-scope-badge
-admin-denied-card
+admin-user-open-detail-button
+admin-user-detail-panel
+admin-user-detail-username
+admin-user-detail-uid
+admin-user-detail-status
+admin-user-detail-role
 ```
 
 ## Phase 4: Password Reset Link Flow
@@ -168,8 +247,8 @@ admin-denied-card
 
 - A system administrator can generate a reset link for any teacher.
 - A school account administrator can generate a reset link only for teachers in
-  their school.
-- The reset link result is visible to the administrator.
+  assigned schools.
+- The reset link result is visible in the user detail panel.
 - An audit log records actor, target, and school context.
 
 Expected selectors:
@@ -178,7 +257,7 @@ Expected selectors:
 admin-password-reset-button
 admin-password-reset-result
 admin-password-reset-copy-button
-admin-audit-log-list
+admin-user-recent-records
 ```
 
 ## Phase 5: Permanent Teacher QR Login
@@ -194,13 +273,13 @@ admin-audit-log-list
 
 ### Acceptance
 
-- An administrator can create a teacher QR login pass.
+- An administrator can create a teacher QR login pass from the detail panel.
 - The QR pass logs the teacher in.
 - If another user is already logged in, the app asks for confirmation before
   switching accounts.
 - The administrator can revoke the QR pass.
 - Revoked QR passes cannot log in.
-- QR login use creates an audit log entry.
+- QR login use appears in recent records.
 - System administrator accounts cannot receive permanent QR login passes.
 
 Expected selectors:
@@ -212,11 +291,16 @@ admin-login-pass-revoke-button
 login-pass-switch-confirm-dialog
 login-pass-switch-confirm-button
 login-pass-error-card
+admin-user-recent-records
 ```
 
 ## Phase 6: School Alias And Canonical Resolution
 
 ### Development
+
+This does not need a large school-management page in the first version. If alias
+maintenance is needed early, expose it from the selected user or school context,
+not as a separate complex admin area.
 
 - Add `schoolAliases/{aliasId}` records.
 - Resolve known aliases to canonical school records.
@@ -241,17 +325,10 @@ file-school-input-snapshot
 
 ## Phase 7: Production Readiness Review
 
-### Development
-
-- Review Firestore rules and Cloud Functions authorization.
-- Confirm admin UI does not expose production-only operations in `/e2e/`.
-- Confirm audit logs are queryable.
-- Confirm password reset and QR login are not implemented only in frontend code.
-
 ### Acceptance
 
 - All current E2E tests pass.
 - Active admin acceptance tests pass in `/e2e/`.
 - Manual review confirms production has no unintended admin entry points.
+- Firestore rules and Cloud Functions enforce permissions server-side.
 - A rollback plan exists before production release.
-
