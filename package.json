@@ -10,6 +10,7 @@
     "copy:e2e-users": "node scripts/copy-users-to-e2e.mjs",
     "firebase:e2e:rules": "pnpm dlx firebase-tools deploy --only firestore:rules,firestore:indexes --project e2e",
     "test:e2e": "playwright test",
+    "test:e2e:admin-acceptance": "playwright test tests/e2e/admin-access.acceptance.spec.ts",
     "test:e2e:ready": "pnpm run firebase:e2e:rules && pnpm test:e2e",
     "test:e2e:ui": "playwright test --ui",
     "test:visual": "playwright test --config playwright.visual.config.ts",
