@@ -4,9 +4,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../../services/firebase";
 
@@ -36,6 +39,14 @@ export type AdminUserFilters = {
   keyword: string;
   schoolName: string;
   status: string;
+};
+
+export type AdminLoginPassRecord = {
+  passId: string;
+  status: string;
+  url: string;
+  createdAt: string;
+  lastUsedAt: string;
 };
 
 function timestampToText(value: unknown): string {
@@ -180,6 +191,7 @@ export async function createLoginPassRecord(options: {
     targetUid: options.target.uid,
     targetUsername: options.target.username,
     tokenHash,
+    url,
   });
   await writeAdminAuditLog({
     actorUid: options.actorUid,
@@ -190,6 +202,35 @@ export async function createLoginPassRecord(options: {
   });
 
   return { passId, url };
+}
+
+export async function findActiveLoginPassForUser(
+  targetUid: string,
+): Promise<AdminLoginPassRecord | null> {
+  const snapshot = await getDocs(
+    query(
+      collection(db, "loginPasses"),
+      where("targetUid", "==", targetUid),
+      limit(10),
+    ),
+  );
+
+  const entry = snapshot.docs.find((documentSnapshot) => {
+    const data = documentSnapshot.data();
+    return data.status === "active";
+  });
+  if (!entry) {
+    return null;
+  }
+
+  const data = entry.data();
+  return {
+    passId: typeof data.passId === "string" ? data.passId : entry.id,
+    status: typeof data.status === "string" ? data.status : "active",
+    url: typeof data.url === "string" ? data.url : "",
+    createdAt: timestampToText(data.createdAt),
+    lastUsedAt: timestampToText(data.lastUsedAt),
+  };
 }
 
 export async function revokeLoginPass(passId: string, options: {

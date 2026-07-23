@@ -294,34 +294,41 @@ login-pass-error-card
 admin-user-recent-records
 ```
 
-## Phase 6: School Alias And Canonical Resolution
+## Phase 6: Admin List Usability
 
 ### Development
 
-This does not need a large school-management page in the first version. If alias
-maintenance is needed early, expose it from the selected user or school context,
-not as a separate complex admin area.
-
-- Add `schoolAliases/{aliasId}` records.
-- Resolve known aliases to canonical school records.
-- Preserve original teacher input as a snapshot when useful.
+- Keep the filter, selected user detail panel, and user table as stacked cards.
+- The user table should support pagination and page-size selection.
+- Selecting a user should move the viewport to the detail panel so the admin
+  receives immediate feedback.
+- Existing active QR passes should remain visible in the selected user's detail
+  card when the stored pass still contains a displayable URL.
 
 ### Acceptance
 
-- A system administrator can create an alias for a school.
-- A file using the alias resolves to the canonical school.
-- The original input is retained for troubleshooting.
-- Merged schools point to `canonicalSchoolId`.
+- A system administrator can change user-table page size.
+- The table remains inside its card and can scroll horizontally when needed.
+- Pressing a user's `查看` button reveals the selected user's detail panel.
+- The selected user detail panel can show an existing active QR pass.
 
 Expected selectors:
 
 ```text
-admin-school-alias-panel
-admin-school-alias-input
-admin-school-alias-save-button
-admin-school-canonical-name
-file-school-input-snapshot
+admin-user-page-size
+admin-user-pagination
+admin-user-table-card
+admin-user-table
+admin-user-detail-panel
+admin-login-pass-result
 ```
+
+## Deferred: School Alias And Canonical Resolution
+
+School aliases are currently intended as database records for later algorithmic
+resolution, not as a visible admin-page tool. Keep the data-service function
+available, but do not expose a page-level school alias editor until the school
+data model and moderation workflow are clearer.
 
 ## Phase 7: Production Readiness Review
 
@@ -338,15 +345,17 @@ file-school-input-snapshot
 The `/e2e/` implementation now includes the first-version admin UI shape:
 
 - `admin-entry` in the account menu for E2E `systemAdmin` users.
-- Two-card admin dashboard:
+- Stacked admin dashboard:
   - user filter card
-  - user table card
+  - selected user detail card
+  - paginated user table card
 - User detail panel with:
   - identity and status fields
   - password reset flow record creation
-  - permanent QR login pass record creation and revocation
+  - permanent QR login pass record creation, existing-pass display, and revocation
   - recent action feedback
-- School alias record creation.
+- School alias UI is intentionally hidden for now; alias writes remain a
+  deferred data-layer capability.
 - Firestore rules for E2E admin reads/writes.
 - Active acceptance coverage for phases 1 through 6.
 

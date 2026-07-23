@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -40,6 +40,24 @@ async function createE2eAuthUser(username: string, password: string): Promise<vo
   }
 }
 
+async function openLoginPanel(page: Page): Promise<void> {
+  if (await page.getByTestId("auth-username-input").isVisible().catch(() => false)) {
+    return;
+  }
+
+  await page.getByTestId("auth-login-button").click();
+  try {
+    await expect(page.getByTestId("auth-username-input")).toBeVisible({
+      timeout: 5_000,
+    });
+  } catch {
+    await page.getByTestId("auth-login-button").click();
+    await expect(page.getByTestId("auth-username-input")).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+}
+
 test.describe("Password change", () => {
   test.beforeAll(async ({ browser }) => {
     const page = await browser.newPage();
@@ -72,7 +90,7 @@ test.describe("Password change", () => {
 
     await page.goto("./");
 
-    await page.getByTestId("auth-login-button").click();
+    await openLoginPanel(page);
     await page.getByTestId("auth-username-input").fill(username);
     await page.getByTestId("auth-password-input").fill(originalPassword);
     await page.getByTestId("auth-submit-button").click();
@@ -93,7 +111,7 @@ test.describe("Password change", () => {
     await page.getByRole("button", { name: "登出" }).click();
     await expect(page.getByTestId("auth-login-button")).toBeVisible({ timeout: 20_000 });
 
-    await page.getByTestId("auth-login-button").click();
+    await openLoginPanel(page);
     await page.getByTestId("auth-username-input").fill(username);
     await page.getByTestId("auth-password-input").fill(originalPassword);
     const oldPasswordDialog = page.waitForEvent("dialog");
@@ -102,7 +120,7 @@ test.describe("Password change", () => {
     expect(oldPasswordAlert.message()).toContain("登入失敗");
     await oldPasswordAlert.accept();
 
-    await page.getByTestId("auth-login-button").click();
+    await openLoginPanel(page);
     await page.getByTestId("auth-username-input").fill(username);
     await page.getByTestId("auth-password-input").fill(nextPassword);
     await page.getByTestId("auth-submit-button").click();

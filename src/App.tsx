@@ -80,12 +80,13 @@ import {
 import {
   createLoginPassRecord,
   createPasswordResetRecord,
-  createSchoolAliasRecord,
+  findActiveLoginPassForUser,
   filterAdminUsers,
   hasSystemAdminRole,
   listAdminUsers,
   resolveLoginPassToken,
   revokeLoginPass,
+  type AdminLoginPassRecord,
   type AdminUserFilters,
   type AdminUserRecord,
 } from "./features/admin/admin-access";
@@ -284,11 +285,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
   const [selectedAdminUser, setSelectedAdminUser] = useState<AdminUserRecord | null>(null);
+  const [adminUsersPage, setAdminUsersPage] = useState(1);
+  const [adminUsersPageSize, setAdminUsersPageSize] = useState(20);
   const [adminPasswordResetUrl, setAdminPasswordResetUrl] = useState("");
   const [adminLoginPassUrl, setAdminLoginPassUrl] = useState("");
   const [adminLoginPassId, setAdminLoginPassId] = useState("");
-  const [schoolAliasDraft, setSchoolAliasDraft] = useState("");
-  const [canonicalSchoolDraft, setCanonicalSchoolDraft] = useState("小太陽森林幼兒園");
+  const [adminActiveLoginPass, setAdminActiveLoginPass] =
+    useState<AdminLoginPassRecord | null>(null);
   const [loginPassStatusMessage, setLoginPassStatusMessage] = useState("");
   const [loginPassStatusKind, setLoginPassStatusKind] = useState<"idle" | "active" | "error">("idle");
   const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
@@ -432,6 +435,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const rosterTableRef = useRef<HTMLTableElement | null>(null);
   const tableTableRef = useRef<HTMLTableElement | null>(null);
   const metricTableRef = useRef<HTMLTableElement | null>(null);
+  const adminUserDetailRef = useRef<HTMLElement | null>(null);
   const previousRosterScaleRef = useRef(1);
   const previousTableScaleRef = useRef(1);
   const previousMetricScaleRef = useRef(1);
@@ -1333,6 +1337,19 @@ export default function App({ experimentalMode = false, runtime = "production" }
     () => filterAdminUsers(adminUsers, adminFilters),
     [adminFilters, adminUsers],
   );
+  const adminUsersTotalPages = Math.max(
+    1,
+    Math.ceil(filteredAdminUsers.length / adminUsersPageSize),
+  );
+  const normalizedAdminUsersPage = Math.min(adminUsersPage, adminUsersTotalPages);
+  const pagedAdminUsers = useMemo(() => {
+    const startIndex = (normalizedAdminUsersPage - 1) * adminUsersPageSize;
+    return filteredAdminUsers.slice(startIndex, startIndex + adminUsersPageSize);
+  }, [adminUsersPageSize, filteredAdminUsers, normalizedAdminUsersPage]);
+
+  useEffect(() => {
+    setAdminUsersPage(1);
+  }, [adminFilters.keyword, adminFilters.schoolName, adminFilters.status, adminUsersPageSize]);
 
   function resolveFileSchoolIdForDraft(draftSchoolId: SchoolId | ""): SchoolId | "" {
     return currentProfileIsSmartSport
@@ -3578,6 +3595,34 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
   }
 
+  async function handleSelectAdminUser(user: AdminUserRecord): Promise<void> {
+    setSelectedAdminUser(user);
+    setAdminPasswordResetUrl("");
+    setAdminLoginPassUrl("");
+    setAdminLoginPassId("");
+    setAdminActiveLoginPass(null);
+    setAdminMessage(`已選擇 ${user.username}。`);
+
+    requestAnimationFrame(() => {
+      adminUserDetailRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    try {
+      const activePass = await findActiveLoginPassForUser(user.uid);
+      setAdminActiveLoginPass(activePass);
+      if (activePass) {
+        setAdminLoginPassId(activePass.passId);
+        setAdminLoginPassUrl(activePass.url);
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setAdminMessage(`已選擇 ${user.username}，但讀取 QR pass 失敗：${detail}`);
+    }
+  }
+
   async function handleCreateAdminPasswordReset(): Promise<void> {
     if (!currentUser || !selectedAdminUser) {
       return;
@@ -3615,6 +3660,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
       });
       setAdminLoginPassId(pass.passId);
       setAdminLoginPassUrl(pass.url);
+      setAdminActiveLoginPass({
+        createdAt: "剛剛",
+        lastUsedAt: "",
+        passId: pass.passId,
+        status: "active",
+        url: pass.url,
+      });
       setAdminMessage("loginPassCreated：已建立永久登入 QR pass。e2e 目前會驗證 pass 狀態，正式登入仍需 Cloud Functions custom token。");
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -3634,33 +3686,12 @@ export default function App({ experimentalMode = false, runtime = "production" }
         target: selectedAdminUser,
       });
       setAdminMessage("loginQrUsed / loginPassRevoked：已撤銷 QR 登入 pass。");
+      setAdminLoginPassId("");
+      setAdminLoginPassUrl("");
+      setAdminActiveLoginPass(null);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       setAdminMessage(`撤銷 QR 登入失敗：${detail}`);
-    }
-  }
-
-  async function handleCreateSchoolAlias(): Promise<void> {
-    if (!currentUser) {
-      return;
-    }
-
-    if (!schoolAliasDraft.trim() || !canonicalSchoolDraft.trim()) {
-      setAdminMessage("請輸入別名與母學校名稱。");
-      return;
-    }
-
-    try {
-      await createSchoolAliasRecord({
-        actorUid: currentUser.uid,
-        actorUsername: currentUsername,
-        aliasName: schoolAliasDraft,
-        canonicalSchoolName: canonicalSchoolDraft,
-      });
-      setAdminMessage("已建立學校 alias。");
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      setAdminMessage(`建立學校 alias 失敗：${detail}`);
     }
   }
 
@@ -7215,7 +7246,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                 </div>
               ) : (
                 <>
-                  <div className="account-center-grid">
+                  <div className="admin-dashboard-stack">
                     <article className="account-card" data-testid="admin-user-filter-card">
                       <div className="account-card-head">
                         <div>
@@ -7224,7 +7255,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <p data-testid="admin-current-user-role">目前角色：systemAdmin</p>
                         </div>
                       </div>
-                      <div className="auth-form-grid">
+                      <div className="admin-filter-grid">
                         <input
                           data-testid="admin-user-keyword-input"
                           onChange={(event) =>
@@ -7274,20 +7305,162 @@ export default function App({ experimentalMode = false, runtime = "production" }
                         >
                           {adminLoading ? "查詢中" : "查詢"}
                         </button>
-                        <p className="auth-help" data-testid="admin-user-result-count">
-                          關鍵字：{adminFilters.keyword || "全部"}；符合條件：{filteredAdminUsers.length} / {adminUsers.length} 位使用者
-                        </p>
                       </div>
+                      <p className="auth-help" data-testid="admin-user-result-count">
+                        關鍵字：{adminFilters.keyword || "全部"}；符合條件：{filteredAdminUsers.length} / {adminUsers.length} 位使用者
+                      </p>
+                    </article>
+
+                    <article
+                      className="panel admin-detail-panel"
+                      data-testid="admin-user-detail-panel"
+                      ref={adminUserDetailRef}
+                    >
+                      <div className="panel-header">
+                        <div>
+                          <h3>使用者詳細資料</h3>
+                          <p>{selectedAdminUser ? "已選擇使用者，可在此處產生登入連結或啟動重設密碼流程。" : "請先從使用者列表按「查看」。"}</p>
+                        </div>
+                      </div>
+                      {selectedAdminUser ? (
+                        <div className="admin-detail-grid">
+                          <div className="account-card">
+                            <h4>基本資料</h4>
+                            <div className="auth-profile-grid">
+                              <div>
+                                <strong>帳號</strong>
+                                <div data-testid="admin-user-detail-username">{selectedAdminUser.username}</div>
+                              </div>
+                              <div>
+                                <strong>UID</strong>
+                                <div data-testid="admin-user-detail-uid">{selectedAdminUser.uid}</div>
+                              </div>
+                              <div>
+                                <strong>角色</strong>
+                                <div data-testid="admin-user-detail-role">{selectedAdminUser.roles.join(", ")}</div>
+                              </div>
+                              <div>
+                                <strong>狀態</strong>
+                                <div data-testid="admin-user-detail-status">{selectedAdminUser.status}</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="account-card">
+                            <h4>帳號操作</h4>
+                            <div className="friend-row-actions">
+                              <button
+                                className="secondary-button"
+                                data-testid="admin-password-reset-button"
+                                onClick={() => {
+                                  void handleCreateAdminPasswordReset();
+                                }}
+                                type="button"
+                              >
+                                啟動重設密碼流程
+                              </button>
+                              <button
+                                className="secondary-button"
+                                data-testid="admin-login-pass-create-button"
+                                onClick={() => {
+                                  void handleCreateAdminLoginPass();
+                                }}
+                                type="button"
+                              >
+                                {adminActiveLoginPass ? "重新產生永久登入 QR" : "產生永久登入 QR"}
+                              </button>
+                              <button
+                                className="secondary-button"
+                                data-testid="admin-login-pass-revoke-button"
+                                disabled={!adminLoginPassId}
+                                onClick={() => {
+                                  void handleRevokeAdminLoginPass();
+                                }}
+                                type="button"
+                              >
+                                撤銷目前 QR
+                              </button>
+                            </div>
+                            {adminPasswordResetUrl ? (
+                              <p className="auth-help admin-link-text" data-testid="admin-password-reset-result">
+                                {adminPasswordResetUrl}
+                              </p>
+                            ) : null}
+                            {adminPasswordResetUrl ? (
+                              <button
+                                className="secondary-button"
+                                data-testid="admin-password-reset-copy-button"
+                                onClick={() => {
+                                  void navigator.clipboard?.writeText(adminPasswordResetUrl);
+                                }}
+                                type="button"
+                              >
+                                複製重設連結
+                              </button>
+                            ) : null}
+                            {adminActiveLoginPass ? (
+                              <div className="admin-qr-pass-card">
+                                <strong>目前 active QR pass</strong>
+                                <p>Pass ID：{adminActiveLoginPass.passId}</p>
+                                <p>建立時間：{adminActiveLoginPass.createdAt || "舊版未記錄"}</p>
+                                <p>最近使用：{adminActiveLoginPass.lastUsedAt || "尚未使用"}</p>
+                                {adminLoginPassUrl ? (
+                                  <p className="auth-help admin-link-text" data-testid="admin-login-pass-result">
+                                    {adminLoginPassUrl}
+                                  </p>
+                                ) : (
+                                  <p className="auth-help" data-testid="admin-login-pass-result">
+                                    已有 active QR pass，但這筆舊資料沒有保存可顯示的連結；請重新產生一組。
+                                  </p>
+                                )}
+                              </div>
+                            ) : adminLoginPassUrl ? (
+                              <p className="auth-help admin-link-text" data-testid="admin-login-pass-result">
+                                {adminLoginPassUrl}
+                              </p>
+                            ) : null}
+                            <p className="auth-help">
+                              QR pass 目前已建立可撤銷資料。正式自動登入仍需 Cloud Functions 產生 Firebase custom token。
+                            </p>
+                          </div>
+
+                          <div className="account-card">
+                            <h4>近期紀錄</h4>
+                            <p data-testid="admin-user-recent-records">
+                              {adminMessage || "尚無近期管理操作。"}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="empty-state">
+                          <strong>尚未選擇使用者</strong>
+                          <p>請先從使用者列表按「查看」。</p>
+                        </div>
+                      )}
                     </article>
 
                     <article className="account-card" data-testid="admin-user-table-card">
                       <div className="account-card-head">
                         <div>
                           <h3>使用者列表</h3>
-                          <p>表格只保留「查看」操作，詳細處理放在下方使用者面板。</p>
+                          <p>按「查看」後，系統會自動捲到上方詳細資料小卡。</p>
                         </div>
+                        <label className="admin-page-size-control">
+                          每頁
+                          <select
+                            data-testid="admin-user-page-size"
+                            onChange={(event) => setAdminUsersPageSize(Number(event.target.value))}
+                            value={adminUsersPageSize}
+                          >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
+                          筆
+                        </label>
                       </div>
-                      <div className="summary-table-scroll">
+                      <div className="summary-table-scroll admin-user-table-scroll">
                         <table className="summary-table" data-testid="admin-user-table">
                           <thead>
                             <tr>
@@ -7301,7 +7474,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredAdminUsers.map((user) => (
+                            {pagedAdminUsers.map((user) => (
                               <tr data-testid="admin-user-row" key={user.uid}>
                                 <td>{user.username}</td>
                                 <td>{user.displayName}</td>
@@ -7314,10 +7487,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                     className="secondary-button"
                                     data-testid="admin-user-open-detail-button"
                                     onClick={() => {
-                                      setSelectedAdminUser(user);
-                                      setAdminPasswordResetUrl("");
-                                      setAdminLoginPassUrl("");
-                                      setAdminLoginPassId("");
+                                      void handleSelectAdminUser(user);
                                     }}
                                     type="button"
                                   >
@@ -7329,154 +7499,32 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           </tbody>
                         </table>
                       </div>
+                      <div className="admin-pagination" data-testid="admin-user-pagination">
+                        <span>
+                          第 {normalizedAdminUsersPage} / {adminUsersTotalPages} 頁；顯示 {pagedAdminUsers.length} 筆
+                        </span>
+                        <div className="friend-row-actions">
+                          <button
+                            className="secondary-button"
+                            disabled={normalizedAdminUsersPage <= 1}
+                            onClick={() => setAdminUsersPage((page) => Math.max(1, page - 1))}
+                            type="button"
+                          >
+                            上一頁
+                          </button>
+                          <button
+                            className="secondary-button"
+                            disabled={normalizedAdminUsersPage >= adminUsersTotalPages}
+                            onClick={() => setAdminUsersPage((page) => Math.min(adminUsersTotalPages, page + 1))}
+                            type="button"
+                          >
+                            下一頁
+                          </button>
+                        </div>
+                      </div>
                     </article>
                   </div>
 
-                  <article className="panel" data-testid="admin-user-detail-panel">
-                    <div className="panel-header">
-                      <div>
-                        <h3>使用者詳細資料</h3>
-                        <p>{selectedAdminUser ? "可在此處產生登入連結或啟動重設密碼流程。" : "請先從使用者列表按「查看」。"}</p>
-                      </div>
-                    </div>
-                    {selectedAdminUser ? (
-                      <div className="account-center-grid">
-                        <div className="account-card">
-                          <h4>基本資料</h4>
-                          <div className="auth-profile-grid">
-                            <div>
-                              <strong>帳號</strong>
-                              <div data-testid="admin-user-detail-username">{selectedAdminUser.username}</div>
-                            </div>
-                            <div>
-                              <strong>UID</strong>
-                              <div data-testid="admin-user-detail-uid">{selectedAdminUser.uid}</div>
-                            </div>
-                            <div>
-                              <strong>角色</strong>
-                              <div data-testid="admin-user-detail-role">{selectedAdminUser.roles.join(", ")}</div>
-                            </div>
-                            <div>
-                              <strong>狀態</strong>
-                              <div data-testid="admin-user-detail-status">{selectedAdminUser.status}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="account-card">
-                          <h4>帳號操作</h4>
-                          <div className="friend-row-actions">
-                            <button
-                              className="secondary-button"
-                              data-testid="admin-password-reset-button"
-                              onClick={() => {
-                                void handleCreateAdminPasswordReset();
-                              }}
-                              type="button"
-                            >
-                              啟動重設密碼流程
-                            </button>
-                            <button
-                              className="secondary-button"
-                              data-testid="admin-login-pass-create-button"
-                              onClick={() => {
-                                void handleCreateAdminLoginPass();
-                              }}
-                              type="button"
-                            >
-                              產生永久登入 QR
-                            </button>
-                            <button
-                              className="secondary-button"
-                              data-testid="admin-login-pass-revoke-button"
-                              disabled={!adminLoginPassId}
-                              onClick={() => {
-                                void handleRevokeAdminLoginPass();
-                              }}
-                              type="button"
-                            >
-                              撤銷目前 QR
-                            </button>
-                          </div>
-                          {adminPasswordResetUrl ? (
-                            <p className="auth-help" data-testid="admin-password-reset-result">
-                              {adminPasswordResetUrl}
-                            </p>
-                          ) : null}
-                          {adminPasswordResetUrl ? (
-                            <button
-                              className="secondary-button"
-                              data-testid="admin-password-reset-copy-button"
-                              onClick={() => {
-                                void navigator.clipboard?.writeText(adminPasswordResetUrl);
-                              }}
-                              type="button"
-                            >
-                              複製重設連結
-                            </button>
-                          ) : null}
-                          {adminLoginPassUrl ? (
-                            <p className="auth-help" data-testid="admin-login-pass-result">
-                              {adminLoginPassUrl}
-                            </p>
-                          ) : null}
-                          <p className="auth-help">
-                            QR pass 目前已建立可撤銷資料。正式自動登入仍需 Cloud Functions 產生 Firebase custom token。
-                          </p>
-                        </div>
-
-                        <div className="account-card">
-                          <h4>近期紀錄</h4>
-                          <p data-testid="admin-user-recent-records">
-                            {adminMessage || "尚無近期管理操作。"}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="empty-state">
-                        <strong>尚未選擇使用者</strong>
-                        <p>請先從使用者列表按「查看」。</p>
-                      </div>
-                    )}
-                  </article>
-
-                  <article className="panel" data-testid="admin-school-alias-panel">
-                    <div className="panel-header">
-                      <div>
-                        <h3>學校別名</h3>
-                        <p>先做最小可用版本：輸入子名稱與母學校名稱，建立 alias 紀錄。</p>
-                      </div>
-                    </div>
-                    <div className="auth-form-grid">
-                      <input
-                        data-testid="admin-school-alias-input"
-                        onChange={(event) => setSchoolAliasDraft(event.target.value)}
-                        placeholder="例如 小太陽森林"
-                        type="text"
-                        value={schoolAliasDraft}
-                      />
-                      <input
-                        data-testid="admin-school-canonical-name"
-                        onChange={(event) => setCanonicalSchoolDraft(event.target.value)}
-                        placeholder="母學校名稱"
-                        type="text"
-                        value={canonicalSchoolDraft}
-                      />
-                      <p className="auth-help" data-testid="file-school-input-snapshot">
-                        原始輸入：{schoolAliasDraft || "尚未輸入"}
-                      </p>
-                      <button
-                        className="primary-button"
-                        data-testid="admin-school-alias-save-button"
-                        onClick={() => {
-                          void handleCreateSchoolAlias();
-                        }}
-                        type="button"
-                      >
-                        儲存 alias
-                      </button>
-                    </div>
-                  </article>
                 </>
               )}
             </section>

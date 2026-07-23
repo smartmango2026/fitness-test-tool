@@ -176,21 +176,17 @@ test.describe("Admin access acceptance contract", () => {
     );
   });
 
-  test("phase 6: school alias resolves to canonical school while preserving input", async ({
+  test("phase 6: administrator changes user table page size and keeps detail panel visible", async ({
     page,
   }) => {
     await login(page, adminUsername, adminPassword);
     await openAdminDashboard(page);
 
-    await page.getByTestId("admin-school-alias-panel").click();
-    await page.getByTestId("admin-school-alias-input").fill("小太陽森林");
-    await page.getByTestId("admin-school-alias-save-button").click();
-
-    await expect(page.getByTestId("admin-school-canonical-name")).toHaveValue(
-      "小太陽森林幼兒園",
+    await page.getByTestId("admin-user-page-size").selectOption("10");
+    await expect(page.getByTestId("admin-user-pagination")).toContainText(
+      "顯示",
     );
-    await expect(page.getByTestId("file-school-input-snapshot")).toContainText(
-      "小太陽森林",
-    );
+    await page.getByTestId("admin-user-open-detail-button").first().click();
+    await expect(page.getByTestId("admin-user-detail-panel")).toBeInViewport();
   });
 });
