@@ -25,12 +25,26 @@ const FIREBASE_CONFIG_PATH = path.join(
   "configstore",
   "firebase-tools.json",
 );
+const FAST_CHECK_ROOT_COLLECTIONS = [
+  "auditLogs",
+  "diagnosticReports",
+  "diagnosticReportStatuses",
+  "friendInvites",
+  "friendRequests",
+  "loginLogs",
+  "loginPasses",
+  "passwordResetLinks",
+  "systemLogs",
+  "users",
+];
 
 function parseArgs(argv) {
   const options = {
     project: DEFAULT_PROJECT_ALIAS,
     prefixes: DEFAULT_PREFIXES,
+    testRunId: "",
     maxDocuments: 5000,
+    deepScan: false,
     skipAuth: false,
     json: false,
   };
@@ -50,12 +64,21 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--test-run-id") {
+      options.testRunId = argv[index + 1] ?? "";
+      index += 1;
+      continue;
+    }
     if (arg === "--max-documents") {
       const nextValue = Number(argv[index + 1]);
       if (Number.isInteger(nextValue) && nextValue > 0) {
         options.maxDocuments = nextValue;
       }
       index += 1;
+      continue;
+    }
+    if (arg === "--deep-scan") {
+      options.deepScan = true;
       continue;
     }
     if (arg === "--skip-auth") {
@@ -87,7 +110,9 @@ Usage:
 Options:
   --project <alias-or-id>       Firebase project alias/id. Default: e2e
   --prefix <a,b,c>              Test data prefixes. Default: ${DEFAULT_PREFIXES.join(",")}
-  --max-documents <number>      Maximum Firestore documents to scan. Default: 5000
+  --test-run-id <id>            Optional exact testRunId to query
+  --deep-scan                   Search all Firestore documents for prefix text
+  --max-documents <number>      Maximum Firestore documents to scan in deep mode. Default: 5000
   --skip-auth                   Skip Firebase Auth export check
   --json                        Print machine-readable JSON
 
@@ -188,6 +213,29 @@ async function fetchFirestore(url, token, options = {}) {
     throw new Error(`Firestore API 失敗：HTTP ${response.status} ${text}`);
   }
   return json;
+}
+
+async function runFirestoreQuery(projectId, token, structuredQuery) {
+  const url = `${firestoreBase(projectId)}:runQuery`;
+  const result = await fetchFirestore(url, token, {
+    method: "POST",
+    body: JSON.stringify({ structuredQuery }),
+  });
+  return result
+    .map((entry) => entry.document)
+    .filter((document) => document && typeof document.name === "string");
+}
+
+function fieldEqualsFilter(fieldPath, value) {
+  const firestoreValue =
+    typeof value === "boolean" ? { booleanValue: value } : { stringValue: value };
+  return {
+    fieldFilter: {
+      field: { fieldPath },
+      op: "EQUAL",
+      value: firestoreValue,
+    },
+  };
 }
 
 async function listCollectionIds(projectId, token, documentPath = "") {
@@ -357,6 +405,69 @@ async function scanFirestore(projectId, token, options) {
   return { findings, scannedDocuments, truncated };
 }
 
+async function queryFirestoreTestMarkers(projectId, token, options) {
+  const findings = [];
+  const seenDocumentPaths = new Set();
+  const markerQueries = [
+    {
+      label: "isTestData",
+      filter: fieldEqualsFilter("isTestData", true),
+    },
+    ...options.prefixes.map((prefix) => ({
+      label: `testDataPrefix=${prefix}`,
+      filter: fieldEqualsFilter("testDataPrefix", prefix),
+    })),
+  ];
+
+  if (options.testRunId) {
+    markerQueries.push({
+      label: `testRunId=${options.testRunId}`,
+      filter: fieldEqualsFilter("testRunId", options.testRunId),
+    });
+  }
+
+  let queryCount = 0;
+  for (const collectionId of FAST_CHECK_ROOT_COLLECTIONS) {
+    for (const markerQuery of markerQueries) {
+      queryCount += 1;
+      const documents = await runFirestoreQuery(projectId, token, {
+        from: [{ collectionId }],
+        where: markerQuery.filter,
+        limit: 100,
+      });
+
+      for (const document of documents) {
+        const documentPath = relativeDocumentPath(document.name, projectId);
+        const key = `${documentPath}:${markerQuery.label}`;
+        if (seenDocumentPaths.has(key)) {
+          continue;
+        }
+        seenDocumentPaths.add(key);
+        findings.push({
+          source: "firestore",
+          mode: "query",
+          documentPath,
+          matches: [
+            {
+              fieldPath: markerQuery.label,
+              prefix: options.prefixes[0] ?? "",
+              value: markerQuery.label,
+            },
+          ],
+        });
+      }
+    }
+  }
+
+  return {
+    findings,
+    mode: "query",
+    queryCount,
+    scannedDocuments: 0,
+    truncated: false,
+  };
+}
+
 async function scanAuthUsers(projectId, options) {
   if (options.skipAuth) {
     return { findings: [], skipped: true };
@@ -429,9 +540,14 @@ function quoteShellArg(value) {
 function printTextReport(result) {
   console.log(`Firebase project: ${result.projectId}`);
   console.log(`Prefixes: ${result.prefixes.join(", ")}`);
-  console.log(`Firestore scanned: ${result.firestore.scannedDocuments} documents`);
-  if (result.firestore.truncated) {
-    console.log("Firestore scan: truncated; increase --max-documents for full coverage.");
+  console.log(`Firestore mode: ${result.firestore.mode}`);
+  if (result.firestore.mode === "deep-scan") {
+    console.log(`Firestore scanned: ${result.firestore.scannedDocuments} documents`);
+    if (result.firestore.truncated) {
+      console.log("Firestore scan: truncated; increase --max-documents for full coverage.");
+    }
+  } else {
+    console.log(`Firestore marker queries: ${result.firestore.queryCount}`);
   }
   if (result.auth.skipped) {
     console.log("Auth scanned: skipped");
@@ -466,7 +582,9 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const projectId = resolveProjectId(options.project);
   const token = await getAccessToken();
-  const firestore = await scanFirestore(projectId, token, options);
+  const firestore = options.deepScan
+    ? { ...(await scanFirestore(projectId, token, options)), mode: "deep-scan" }
+    : await queryFirestoreTestMarkers(projectId, token, options);
   const auth = await scanAuthUsers(projectId, options);
   const findings = [...firestore.findings, ...auth.findings];
   const result = {
