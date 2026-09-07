@@ -92,3 +92,24 @@ slow and may be truncated by `--max-documents`.
 
 The check script must remain read-only. Destructive cleanup should be implemented
 as a separate explicit command.
+
+## Manual Feature-Validation Accounts
+
+Accounts used by people to inspect a feature are not E2E-run accounts. In the E2E
+Firebase project they use friendly, school-based usernames such as
+`wenshan_teacher_01`, and carry `isManualValidationAccount: true` plus
+`accountPurpose: "manual-feature-validation"`. They deliberately do **not** use
+the `e2e_` prefix and are excluded from E2E cleanup by default.
+
+The current starter set can be previewed without making changes:
+
+```bash
+pnpm seed:manual-school-accounts
+```
+
+Apply the six legacy-account renames and add teachers 2–3 for each school only
+after reviewing the preview:
+
+```bash
+pnpm seed:manual-school-accounts -- --apply
+```
