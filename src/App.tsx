@@ -1337,6 +1337,15 @@ export default function App({ experimentalMode = false, runtime = "production" }
     () => filterAdminUsers(adminUsers, adminFilters),
     [adminFilters, adminUsers],
   );
+  const adminSchoolNames = useMemo(
+    () =>
+      [...new Set(
+        adminUsers
+          .map((user) => user.schoolName.trim())
+          .filter(Boolean),
+      )].sort((left, right) => left.localeCompare(right, "zh-TW")),
+    [adminUsers],
+  );
   const adminUsersTotalPages = Math.max(
     1,
     Math.ceil(filteredAdminUsers.length / adminUsersPageSize),
@@ -7256,40 +7265,6 @@ export default function App({ experimentalMode = false, runtime = "production" }
                         </div>
                       </div>
                       <div className="admin-filter-grid">
-                        <label className="admin-user-select-control">
-                          直接選擇帳號
-                          <select
-                            data-testid="admin-user-select"
-                            disabled={adminLoading || adminUsers.length === 0}
-                            onChange={(event) => {
-                              const selectedUid = event.target.value;
-                              if (!selectedUid) {
-                                setSelectedAdminUser(null);
-                                setAdminPasswordResetUrl("");
-                                setAdminLoginPassUrl("");
-                                setAdminLoginPassId("");
-                                setAdminActiveLoginPass(null);
-                                setAdminMessage("尚未選擇使用者。");
-                                return;
-                              }
-
-                              const user = adminUsers.find((entry) => entry.uid === selectedUid);
-                              if (user) {
-                                void handleSelectAdminUser(user);
-                              }
-                            }}
-                            value={selectedAdminUser?.uid ?? ""}
-                          >
-                            <option value="">
-                              {adminLoading ? "正在載入帳號…" : "請選擇帳號"}
-                            </option>
-                            {adminUsers.map((user) => (
-                              <option key={user.uid} value={user.uid}>
-                                {user.username}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
                         <input
                           data-testid="admin-user-keyword-input"
                           onChange={(event) =>
@@ -7302,18 +7277,27 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           type="text"
                           value={adminFilters.keyword}
                         />
-                        <input
-                          data-testid="admin-user-school-filter"
-                          onChange={(event) =>
-                            setAdminFilters((current) => ({
-                              ...current,
-                              schoolName: event.target.value,
-                            }))
-                          }
-                          placeholder="學校名稱"
-                          type="text"
-                          value={adminFilters.schoolName}
-                        />
+                        <label className="admin-school-filter-control">
+                          學校
+                          <select
+                            data-testid="admin-user-school-filter"
+                            disabled={adminLoading || adminSchoolNames.length === 0}
+                            onChange={(event) =>
+                              setAdminFilters((current) => ({
+                                ...current,
+                                schoolName: event.target.value,
+                              }))
+                            }
+                            value={adminFilters.schoolName}
+                          >
+                            <option value="">全部學校</option>
+                            {adminSchoolNames.map((schoolName) => (
+                              <option key={schoolName} value={schoolName}>
+                                {schoolName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <select
                           data-testid="admin-user-status-filter"
                           onChange={(event) =>
