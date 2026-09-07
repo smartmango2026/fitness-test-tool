@@ -7256,6 +7256,40 @@ export default function App({ experimentalMode = false, runtime = "production" }
                         </div>
                       </div>
                       <div className="admin-filter-grid">
+                        <label className="admin-user-select-control">
+                          直接選擇帳號
+                          <select
+                            data-testid="admin-user-select"
+                            disabled={adminLoading || adminUsers.length === 0}
+                            onChange={(event) => {
+                              const selectedUid = event.target.value;
+                              if (!selectedUid) {
+                                setSelectedAdminUser(null);
+                                setAdminPasswordResetUrl("");
+                                setAdminLoginPassUrl("");
+                                setAdminLoginPassId("");
+                                setAdminActiveLoginPass(null);
+                                setAdminMessage("尚未選擇使用者。");
+                                return;
+                              }
+
+                              const user = adminUsers.find((entry) => entry.uid === selectedUid);
+                              if (user) {
+                                void handleSelectAdminUser(user);
+                              }
+                            }}
+                            value={selectedAdminUser?.uid ?? ""}
+                          >
+                            <option value="">
+                              {adminLoading ? "正在載入帳號…" : "請選擇帳號"}
+                            </option>
+                            {adminUsers.map((user) => (
+                              <option key={user.uid} value={user.uid}>
+                                {user.username}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <input
                           data-testid="admin-user-keyword-input"
                           onChange={(event) =>
@@ -7264,7 +7298,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               keyword: event.target.value,
                             }))
                           }
-                          placeholder="搜尋帳號、暱稱或學校"
+                          placeholder="篩選帳號、暱稱或學校"
                           type="text"
                           value={adminFilters.keyword}
                         />

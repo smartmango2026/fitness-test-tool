@@ -1052,9 +1052,21 @@ button {
 
 .admin-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) minmax(160px, 1fr) minmax(140px, 0.7fr) auto;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(180px, 1.2fr) minmax(160px, 1fr) minmax(140px, 0.7fr) auto;
   gap: 12px;
   align-items: center;
+}
+
+.admin-user-select-control {
+  display: grid;
+  gap: 4px;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-user-select-control select {
+  min-width: 0;
 }
 
 .admin-detail-panel {

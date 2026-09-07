@@ -119,6 +119,21 @@ test.describe("Admin access acceptance contract", () => {
     await expect(page.getByTestId("admin-user-detail-role")).toBeVisible();
   });
 
+  test("phase 3: administrator can select a user directly from the account list", async ({
+    page,
+  }) => {
+    await login(page, adminUsername, adminPassword);
+    await openAdminDashboard(page);
+
+    const userSelect = page.getByTestId("admin-user-select");
+    await expect(userSelect).toBeVisible();
+    await userSelect.selectOption({ label: "teacher01" });
+
+    await expect(page.getByTestId("admin-user-detail-username")).toContainText(
+      "teacher01",
+    );
+  });
+
   test("phase 4: administrator creates password reset link from detail panel", async ({
     page,
   }) => {
