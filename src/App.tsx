@@ -289,6 +289,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [adminUsersPageSize, setAdminUsersPageSize] = useState(20);
   const [adminPasswordResetUrl, setAdminPasswordResetUrl] = useState("");
   const [adminLoginPassUrl, setAdminLoginPassUrl] = useState("");
+  const [adminLoginPassQrDataUrl, setAdminLoginPassQrDataUrl] = useState("");
   const [adminLoginPassId, setAdminLoginPassId] = useState("");
   const [adminActiveLoginPass, setAdminActiveLoginPass] =
     useState<AdminLoginPassRecord | null>(null);
@@ -3608,6 +3609,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
     setSelectedAdminUser(user);
     setAdminPasswordResetUrl("");
     setAdminLoginPassUrl("");
+    setAdminLoginPassQrDataUrl("");
     setAdminLoginPassId("");
     setAdminActiveLoginPass(null);
     setAdminMessage(`已選擇 ${user.username}。`);
@@ -3676,10 +3678,10 @@ export default function App({ experimentalMode = false, runtime = "production" }
         status: "active",
         url: pass.url,
       });
-      setAdminMessage("loginPassCreated：已建立永久登入 QR pass。e2e 目前會驗證 pass 狀態，正式登入仍需 Cloud Functions custom token。");
+      setAdminMessage("loginPassCreated：已建立永久登入 QR Code。e2e 目前會驗證 pass 狀態，正式登入仍需 Cloud Functions custom token。");
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      setAdminMessage(`建立 QR 登入失敗：${detail}`);
+      setAdminMessage(`建立 QR Code 登入失敗：${detail}`);
     }
   }
 
@@ -3697,6 +3699,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
       setAdminMessage("loginQrUsed / loginPassRevoked：已撤銷 QR 登入 pass。");
       setAdminLoginPassId("");
       setAdminLoginPassUrl("");
+      setAdminLoginPassQrDataUrl("");
       setAdminActiveLoginPass(null);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -5324,6 +5327,35 @@ export default function App({ experimentalMode = false, runtime = "production" }
       isCancelled = true;
     };
   }, [activeFriendInvite]);
+
+  useEffect(() => {
+    if (!adminLoginPassUrl) {
+      setAdminLoginPassQrDataUrl("");
+      return;
+    }
+
+    let isCancelled = false;
+    void QRCode.toDataURL(adminLoginPassUrl, {
+      width: 280,
+      margin: 1,
+    })
+      .then((dataUrl: string) => {
+        if (!isCancelled) {
+          setAdminLoginPassQrDataUrl(dataUrl);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!isCancelled) {
+          setAdminLoginPassQrDataUrl("");
+          const detail = error instanceof Error ? error.message : String(error);
+          setAdminMessage(`產生永久登入 QR Code 圖片失敗：${detail}`);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [adminLoginPassUrl]);
 
   function renderSheetZoomToolbar(
     currentMode: SheetZoomMode,
@@ -7385,7 +7417,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 }}
                                 type="button"
                               >
-                                {adminActiveLoginPass ? "重新產生永久登入 QR" : "產生永久登入 QR"}
+                                {adminActiveLoginPass ? "重新產生永久登入 QR Code" : "產生永久登入 QR Code"}
                               </button>
                               <button
                                 className="secondary-button"
@@ -7396,7 +7428,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 }}
                                 type="button"
                               >
-                                撤銷目前 QR
+                                撤銷目前 QR Code
                               </button>
                             </div>
                             {adminPasswordResetUrl ? (
@@ -7418,27 +7450,61 @@ export default function App({ experimentalMode = false, runtime = "production" }
                             ) : null}
                             {adminActiveLoginPass ? (
                               <div className="admin-qr-pass-card">
-                                <strong>目前 active QR pass</strong>
+                                <strong>目前有效的永久登入 QR Code</strong>
                                 <p>Pass ID：{adminActiveLoginPass.passId}</p>
                                 <p>建立時間：{adminActiveLoginPass.createdAt || "舊版未記錄"}</p>
                                 <p>最近使用：{adminActiveLoginPass.lastUsedAt || "尚未使用"}</p>
                                 {adminLoginPassUrl ? (
-                                  <p className="auth-help admin-link-text" data-testid="admin-login-pass-result">
-                                    {adminLoginPassUrl}
-                                  </p>
+                                  <>
+                                    {adminLoginPassQrDataUrl ? (
+                                      <img
+                                        alt={`${selectedAdminUser.username} 的永久登入 QR Code`}
+                                        className="admin-qr-pass-image"
+                                        data-testid="admin-login-pass-qr-image"
+                                        src={adminLoginPassQrDataUrl}
+                                      />
+                                    ) : (
+                                      <p className="auth-help">正在產生 QR Code 圖片…</p>
+                                    )}
+                                    <a
+                                      className="auth-help admin-link-text admin-login-pass-link"
+                                      data-testid="admin-login-pass-result"
+                                      href={adminLoginPassUrl}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                    >
+                                      開啟永久登入連結
+                                    </a>
+                                  </>
                                 ) : (
                                   <p className="auth-help" data-testid="admin-login-pass-result">
-                                    已有 active QR pass，但這筆舊資料沒有保存可顯示的連結；請重新產生一組。
+                                    已有永久登入 QR Code，但這筆舊資料沒有保存可顯示的連結；請重新產生一組。
                                   </p>
                                 )}
                               </div>
                             ) : adminLoginPassUrl ? (
-                              <p className="auth-help admin-link-text" data-testid="admin-login-pass-result">
-                                {adminLoginPassUrl}
-                              </p>
+                              <div className="admin-qr-pass-card">
+                                {adminLoginPassQrDataUrl ? (
+                                  <img
+                                    alt={`${selectedAdminUser.username} 的永久登入 QR Code`}
+                                    className="admin-qr-pass-image"
+                                    data-testid="admin-login-pass-qr-image"
+                                    src={adminLoginPassQrDataUrl}
+                                  />
+                                ) : null}
+                                <a
+                                  className="auth-help admin-link-text admin-login-pass-link"
+                                  data-testid="admin-login-pass-result"
+                                  href={adminLoginPassUrl}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  開啟永久登入連結
+                                </a>
+                              </div>
                             ) : null}
                             <p className="auth-help">
-                              QR pass 目前已建立可撤銷資料。正式自動登入仍需 Cloud Functions 產生 Firebase custom token。
+                              QR Code 目前已建立可撤銷資料。正式自動登入仍需 Cloud Functions 產生 Firebase custom token。
                             </p>
                           </div>
 

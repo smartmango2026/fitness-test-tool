@@ -1135,6 +1135,21 @@ button {
   color: #475569;
 }
 
+.admin-qr-pass-image {
+  display: block;
+  width: min(280px, 100%);
+  height: auto;
+  margin-top: 14px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.admin-login-pass-link {
+  display: block;
+  margin-top: 12px;
+}
+
 .file-hub-bullets {
   margin: 14px 0 0;
   padding-left: 20px;

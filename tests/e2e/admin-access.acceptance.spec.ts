@@ -155,9 +155,15 @@ test.describe("Admin access acceptance contract", () => {
     await page.getByTestId("admin-user-open-detail-button").first().click();
     await page.getByTestId("admin-login-pass-create-button").click();
 
+    await expect(page.getByTestId("admin-login-pass-qr-image")).toBeVisible();
+    await expect(page.getByTestId("admin-login-pass-qr-image")).toHaveAttribute(
+      "src",
+      /^data:image\/png;base64,/,
+    );
+
     const loginPassUrl = await page
       .getByTestId("admin-login-pass-result")
-      .textContent();
+      .getAttribute("href");
     expect(loginPassUrl).toContain("loginPassId=");
     expect(loginPassUrl).toContain("loginPass=");
 
