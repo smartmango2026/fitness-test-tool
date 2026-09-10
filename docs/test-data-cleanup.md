@@ -93,6 +93,22 @@ slow and may be truncated by `--max-documents`.
 The check script must remain read-only. Destructive cleanup should be implemented
 as a separate explicit command.
 
+## Delete All E2E Accounts
+
+The separate command below only targets the isolated E2E Firebase project. It
+selects Firebase Auth usernames beginning with `e2e_`, recursively removes their
+user-document trees, removes top-level Firestore documents that reference their
+UID or username, and then deletes the Auth accounts. Manual validation accounts
+use school-based usernames and are not selected.
+
+```bash
+# Review the scope only
+pnpm cleanup:e2e
+
+# Permanently remove the selected E2E data
+pnpm cleanup:e2e -- --apply
+```
+
 ## Manual Feature-Validation Accounts
 
 Accounts used by people to inspect a feature are not E2E-run accounts. In the E2E
