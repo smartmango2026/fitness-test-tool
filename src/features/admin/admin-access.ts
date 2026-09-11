@@ -11,7 +11,8 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../../services/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../../services/firebase";
 
 export const ROLE = {
   SCHOOL_ACCOUNT_ADMIN: "schoolAccountAdmin",
@@ -136,30 +137,39 @@ export function filterAdminUsers(
 }
 
 export async function createPasswordResetRecord(options: {
-  actorUid: string;
-  actorUsername: string;
   target: AdminUserRecord;
-}): Promise<string> {
-  const token = crypto.randomUUID();
-  const resetUrl = `${window.location.origin}${window.location.pathname}?resetToken=${encodeURIComponent(token)}`;
+}): Promise<{ expiresAt: string; url: string }> {
+  const call = httpsCallable<
+    { targetUid: string },
+    { expiresAt: string; resetId: string; resetToken: string }
+  >(functions, "createPasswordResetTicket");
+  const result = await call({ targetUid: options.target.uid });
+  const { expiresAt, resetId, resetToken } = result.data;
+  if (!expiresAt || !resetId || !resetToken) {
+    throw new Error("密碼重設服務回傳資料不完整。");
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("passwordResetId", resetId);
+  url.searchParams.set("passwordResetToken", resetToken);
+  url.searchParams.delete("loginPassId");
+  url.searchParams.delete("loginPass");
+  url.hash = "";
+  return { expiresAt, url: url.toString() };
+}
 
-  await setDoc(doc(db, "passwordResetLinks", token), {
-    actorUid: options.actorUid,
-    actorUsername: options.actorUsername,
-    createdAt: serverTimestamp(),
-    status: "created",
-    targetUid: options.target.uid,
-    targetUsername: options.target.username,
-  });
-  await writeAdminAuditLog({
-    actorUid: options.actorUid,
-    actorUsername: options.actorUsername,
-    targetUid: options.target.uid,
-    targetUsername: options.target.username,
-    type: "passwordResetLinkCreated",
-  });
-
-  return resetUrl;
+export async function completePasswordReset(options: {
+  nextPassword: string;
+  resetId: string;
+  resetToken: string;
+}): Promise<void> {
+  const call = httpsCallable<
+    { nextPassword: string; resetId: string; resetToken: string },
+    { status: string }
+  >(functions, "completePasswordReset");
+  const result = await call(options);
+  if (result.data.status !== "completed") {
+    throw new Error("密碼重設服務未完成更新。");
+  }
 }
 
 async function sha256Hex(value: string): Promise<string> {

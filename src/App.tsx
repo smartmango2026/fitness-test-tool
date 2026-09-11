@@ -80,6 +80,7 @@ import {
 import {
   createLoginPassRecord,
   createPasswordResetRecord,
+  completePasswordReset,
   findActiveLoginPassForUser,
   filterAdminUsers,
   hasSystemAdminRole,
@@ -288,6 +289,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [adminUsersPage, setAdminUsersPage] = useState(1);
   const [adminUsersPageSize, setAdminUsersPageSize] = useState(20);
   const [adminPasswordResetUrl, setAdminPasswordResetUrl] = useState("");
+  const [adminPasswordResetExpiresAt, setAdminPasswordResetExpiresAt] = useState("");
+  const [adminPasswordResetQrDataUrl, setAdminPasswordResetQrDataUrl] = useState("");
   const [adminLoginPassUrl, setAdminLoginPassUrl] = useState("");
   const [adminLoginPassQrDataUrl, setAdminLoginPassQrDataUrl] = useState("");
   const [adminLoginPassId, setAdminLoginPassId] = useState("");
@@ -295,6 +298,18 @@ export default function App({ experimentalMode = false, runtime = "production" }
     useState<AdminLoginPassRecord | null>(null);
   const [loginPassStatusMessage, setLoginPassStatusMessage] = useState("");
   const [loginPassStatusKind, setLoginPassStatusKind] = useState<"idle" | "active" | "error">("idle");
+  const passwordResetParams = useMemo(() => {
+    if (typeof window === "undefined") return { resetId: "", resetToken: "" };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      resetId: params.get("passwordResetId") ?? "",
+      resetToken: params.get("passwordResetToken") ?? "",
+    };
+  }, []);
+  const [resetPasswordDraft, setResetPasswordDraft] = useState("");
+  const [resetPasswordConfirmDraft, setResetPasswordConfirmDraft] = useState("");
+  const [passwordResetSubmitting, setPasswordResetSubmitting] = useState(false);
+  const [passwordResetMessage, setPasswordResetMessage] = useState("");
   const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
   const [diagnosticTitle, setDiagnosticTitle] = useState("");
   const [diagnosticDescription, setDiagnosticDescription] = useState("");
@@ -3608,6 +3623,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
   async function handleSelectAdminUser(user: AdminUserRecord): Promise<void> {
     setSelectedAdminUser(user);
     setAdminPasswordResetUrl("");
+    setAdminPasswordResetExpiresAt("");
+    setAdminPasswordResetQrDataUrl("");
     setAdminLoginPassUrl("");
     setAdminLoginPassQrDataUrl("");
     setAdminLoginPassId("");
@@ -3640,13 +3657,14 @@ export default function App({ experimentalMode = false, runtime = "production" }
     }
 
     try {
-      const url = await createPasswordResetRecord({
-        actorUid: currentUser.uid,
-        actorUsername: currentUsername,
-        target: selectedAdminUser,
-      });
-      setAdminPasswordResetUrl(url);
-      setAdminMessage("passwordResetLinkCreated：已建立密碼重設流程紀錄。正式重設連結需由 Cloud Functions 產生。");
+      if (selectedAdminUser.roles.includes("systemAdmin")) {
+        setAdminMessage("系統管理員不可由後台重設密碼，請使用已登入的自行修改密碼功能。");
+        return;
+      }
+      const reset = await createPasswordResetRecord({ target: selectedAdminUser });
+      setAdminPasswordResetUrl(reset.url);
+      setAdminPasswordResetExpiresAt(reset.expiresAt);
+      setAdminMessage("已建立一次性密碼重設連結與 QR Code；15 分鐘內有效。重新產生會使前一組失效。");
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       setAdminMessage(`建立密碼重設紀錄失敗：${detail}`);
@@ -3682,6 +3700,44 @@ export default function App({ experimentalMode = false, runtime = "production" }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       setAdminMessage(`建立 QR Code 登入失敗：${detail}`);
+    }
+  }
+
+  async function handleCompletePasswordReset(): Promise<void> {
+    if (!passwordResetParams.resetId || !passwordResetParams.resetToken) {
+      return;
+    }
+    if (resetPasswordDraft.length < 8) {
+      setPasswordResetMessage("新密碼至少需要 8 個字元。");
+      return;
+    }
+    if (resetPasswordDraft !== resetPasswordConfirmDraft) {
+      setPasswordResetMessage("兩次輸入的新密碼不一致。");
+      return;
+    }
+
+    setPasswordResetSubmitting(true);
+    setPasswordResetMessage("");
+    try {
+      await completePasswordReset({
+        nextPassword: resetPasswordDraft,
+        resetId: passwordResetParams.resetId,
+        resetToken: passwordResetParams.resetToken,
+      });
+      setResetPasswordDraft("");
+      setResetPasswordConfirmDraft("");
+      setPasswordResetMessage("密碼已重設完成，請使用新密碼登入。");
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("passwordResetId");
+      nextUrl.searchParams.delete("passwordResetToken");
+      window.history.replaceState({}, "", nextUrl.toString());
+      setAuthMode("login");
+      setShowLoginPanel(true);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setPasswordResetMessage(`密碼重設失敗：${detail}`);
+    } finally {
+      setPasswordResetSubmitting(false);
     }
   }
 
@@ -5357,6 +5413,29 @@ export default function App({ experimentalMode = false, runtime = "production" }
     };
   }, [adminLoginPassUrl]);
 
+  useEffect(() => {
+    if (!adminPasswordResetUrl) {
+      setAdminPasswordResetQrDataUrl("");
+      return;
+    }
+
+    let isCancelled = false;
+    void QRCode.toDataURL(adminPasswordResetUrl, { width: 280, margin: 1 })
+      .then((dataUrl: string) => {
+        if (!isCancelled) setAdminPasswordResetQrDataUrl(dataUrl);
+      })
+      .catch((error: unknown) => {
+        if (!isCancelled) {
+          const detail = error instanceof Error ? error.message : String(error);
+          setAdminMessage(`產生密碼重設 QR Code 圖片失敗：${detail}`);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [adminPasswordResetUrl]);
+
   function renderSheetZoomToolbar(
     currentMode: SheetZoomMode,
     onChange: (nextMode: SheetZoomMode) => void,
@@ -5974,6 +6053,47 @@ export default function App({ experimentalMode = false, runtime = "production" }
           ) : null}
         </div>
       </header>
+
+      {passwordResetParams.resetId && passwordResetParams.resetToken ? (
+        <section className="startup-banner password-reset-page" data-testid="password-reset-page">
+          <div className="startup-banner-head">
+            <h2>設定新密碼</h2>
+          </div>
+          <p>這組重設連結只能使用一次，請設定至少 8 個字元的新密碼。</p>
+          <div className="auth-form-grid">
+            <input
+              autoComplete="new-password"
+              data-testid="password-reset-new-password"
+              disabled={passwordResetSubmitting}
+              onChange={(event) => setResetPasswordDraft(event.target.value)}
+              placeholder="新密碼（至少 8 個字元）"
+              type="password"
+              value={resetPasswordDraft}
+            />
+            <input
+              autoComplete="new-password"
+              data-testid="password-reset-confirm-password"
+              disabled={passwordResetSubmitting}
+              onChange={(event) => setResetPasswordConfirmDraft(event.target.value)}
+              placeholder="再次輸入新密碼"
+              type="password"
+              value={resetPasswordConfirmDraft}
+            />
+            <button
+              className="primary-button"
+              data-testid="password-reset-submit"
+              disabled={passwordResetSubmitting}
+              onClick={() => {
+                void handleCompletePasswordReset();
+              }}
+              type="button"
+            >
+              {passwordResetSubmitting ? "設定中" : "設定新密碼"}
+            </button>
+            {passwordResetMessage ? <p className="auth-help">{passwordResetMessage}</p> : null}
+          </div>
+        </section>
+      ) : null}
 
       {loginPassStatusMessage ? (
         <section
@@ -7432,21 +7552,43 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               </button>
                             </div>
                             {adminPasswordResetUrl ? (
-                              <p className="auth-help admin-link-text" data-testid="admin-password-reset-result">
-                                {adminPasswordResetUrl}
-                              </p>
-                            ) : null}
-                            {adminPasswordResetUrl ? (
-                              <button
-                                className="secondary-button"
-                                data-testid="admin-password-reset-copy-button"
-                                onClick={() => {
-                                  void navigator.clipboard?.writeText(adminPasswordResetUrl);
-                                }}
-                                type="button"
-                              >
-                                複製重設連結
-                              </button>
+                              <div className="admin-qr-pass-card">
+                                <strong>一次性密碼重設 QR Code</strong>
+                                <p>
+                                  有效至：{adminPasswordResetExpiresAt
+                                    ? new Date(adminPasswordResetExpiresAt).toLocaleString("zh-TW")
+                                    : "讀取中"}
+                                </p>
+                                {adminPasswordResetQrDataUrl ? (
+                                  <img
+                                    alt={`${selectedAdminUser.username} 的密碼重設 QR Code`}
+                                    className="admin-qr-pass-image"
+                                    data-testid="admin-password-reset-qr-image"
+                                    src={adminPasswordResetQrDataUrl}
+                                  />
+                                ) : (
+                                  <p className="auth-help">正在產生 QR Code 圖片…</p>
+                                )}
+                                <a
+                                  className="auth-help admin-link-text admin-login-pass-link"
+                                  data-testid="admin-password-reset-result"
+                                  href={adminPasswordResetUrl}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  開啟重設密碼連結
+                                </a>
+                                <button
+                                  className="secondary-button"
+                                  data-testid="admin-password-reset-copy-button"
+                                  onClick={() => {
+                                    void navigator.clipboard?.writeText(adminPasswordResetUrl);
+                                  }}
+                                  type="button"
+                                >
+                                  複製重設連結
+                                </button>
+                              </div>
                             ) : null}
                             {adminActiveLoginPass ? (
                               <div className="admin-qr-pass-card">

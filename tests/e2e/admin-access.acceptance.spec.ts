@@ -130,12 +130,14 @@ test.describe("Admin access acceptance contract", () => {
     await page.getByTestId("admin-user-open-detail-button").first().click();
     await page.getByTestId("admin-password-reset-button").click();
 
-    await expect(page.getByTestId("admin-password-reset-result")).toContainText(
-      "resetToken=",
+    await expect(page.getByTestId("admin-password-reset-result")).toHaveAttribute(
+      "href",
+      /passwordResetId=.*passwordResetToken=/,
     );
     await expect(page.getByTestId("admin-password-reset-copy-button")).toBeVisible();
+    await expect(page.getByTestId("admin-password-reset-qr-image")).toBeVisible();
     await expect(page.getByTestId("admin-user-recent-records")).toContainText(
-      "passwordResetLinkCreated",
+      "passwordResetTicketCreated",
     );
   });
 
