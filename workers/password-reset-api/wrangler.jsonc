@@ -4,5 +4,9 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-11",
   "workers_dev": true,
+  "keep_vars": true,
+  "secrets": {
+    "required": ["GOOGLE_SERVICE_ACCOUNT_JSON"]
+  },
   "account_id": "28f2061c5d23f1a796c374551c9354c2"
 }
