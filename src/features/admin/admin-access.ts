@@ -11,8 +11,10 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "../../services/firebase";
+import { db, auth } from "../../services/firebase";
+
+const PASSWORD_RESET_API_URL =
+  "https://fitness-test-tool-e2e-reset-api.smartmango2026.workers.dev";
 
 export const ROLE = {
   SCHOOL_ACCOUNT_ADMIN: "schoolAccountAdmin",
@@ -139,12 +141,12 @@ export function filterAdminUsers(
 export async function createPasswordResetRecord(options: {
   target: AdminUserRecord;
 }): Promise<{ expiresAt: string; url: string }> {
-  const call = httpsCallable<
-    { targetUid: string },
-    { expiresAt: string; resetId: string; resetToken: string }
-  >(functions, "createPasswordResetTicket");
-  const result = await call({ targetUid: options.target.uid });
-  const { expiresAt, resetId, resetToken } = result.data;
+  const result = await callPasswordResetApi<{
+    expiresAt: string;
+    resetId: string;
+    resetToken: string;
+  }>("/v1/password-reset-tickets", { targetUid: options.target.uid }, true);
+  const { expiresAt, resetId, resetToken } = result;
   if (!expiresAt || !resetId || !resetToken) {
     throw new Error("密碼重設服務回傳資料不完整。");
   }
@@ -162,14 +164,56 @@ export async function completePasswordReset(options: {
   resetId: string;
   resetToken: string;
 }): Promise<void> {
-  const call = httpsCallable<
-    { nextPassword: string; resetId: string; resetToken: string },
-    { status: string }
-  >(functions, "completePasswordReset");
-  const result = await call(options);
-  if (result.data.status !== "completed") {
+  const result = await callPasswordResetApi<{ status: string }>(
+    "/v1/password-reset/complete",
+    options,
+    false,
+  );
+  if (result.status !== "completed") {
     throw new Error("密碼重設服務未完成更新。");
   }
+}
+
+async function callPasswordResetApi<T>(
+  path: string,
+  body: Record<string, string>,
+  requiresAdminAuth: boolean,
+): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (requiresAdminAuth) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("請先登入系統管理員帳號。");
+    }
+    headers.Authorization = `Bearer ${await currentUser.getIdToken()}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${PASSWORD_RESET_API_URL}${path}`, {
+      body: JSON.stringify(body),
+      headers,
+      method: "POST",
+    });
+  } catch {
+    throw new Error("無法連線至密碼重設服務，請稍後再試。");
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { error?: string }
+    | T
+    | null;
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+        ? payload.error
+        : "密碼重設服務暫時無法使用。";
+    throw new Error(message);
+  }
+  if (!payload || typeof payload !== "object") {
+    throw new Error("密碼重設服務回傳資料不完整。");
+  }
+  return payload as T;
 }
 
 async function sha256Hex(value: string): Promise<string> {

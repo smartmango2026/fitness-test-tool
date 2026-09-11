@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fitness-test-tool-e2e-reset-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-11",
+  "workers_dev": true,
+  "account_id": "28f2061c5d23f1a796c374551c9354c2"
+}
