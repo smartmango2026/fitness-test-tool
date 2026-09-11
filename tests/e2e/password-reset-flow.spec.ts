@@ -114,6 +114,9 @@ async function submitPasswordReset(
   try {
     await resetPage.goto(resetUrl);
     await expect(resetPage.getByTestId("password-reset-page")).toBeVisible();
+    await expect(resetPage.locator("header")).toHaveCount(0);
+    await expect(resetPage.getByTestId("e2e-runtime-banner")).toHaveCount(0);
+    await expect(resetPage.locator('nav[aria-label="主要功能"]')).toHaveCount(0);
     await resetPage.getByTestId("password-reset-new-password").fill(password);
     await resetPage.getByTestId("password-reset-confirm-password").fill(password);
     await resetPage.getByTestId("password-reset-submit").click();

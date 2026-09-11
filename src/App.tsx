@@ -306,6 +306,9 @@ export default function App({ experimentalMode = false, runtime = "production" }
       resetToken: params.get("passwordResetToken") ?? "",
     };
   }, []);
+  const isPasswordResetPage = Boolean(
+    passwordResetParams.resetId && passwordResetParams.resetToken,
+  );
   const [resetPasswordDraft, setResetPasswordDraft] = useState("");
   const [resetPasswordConfirmDraft, setResetPasswordConfirmDraft] = useState("");
   const [passwordResetSubmitting, setPasswordResetSubmitting] = useState(false);
@@ -5548,6 +5551,51 @@ export default function App({ experimentalMode = false, runtime = "production" }
           <option key={branchName} value={branchName} />
         ))}
       </datalist>
+      {isPasswordResetPage ? (
+        <main className="password-reset-standalone">
+          <section className="startup-banner password-reset-page" data-testid="password-reset-page">
+            <p className="password-reset-product-name">體適能測驗管理工具</p>
+            <div className="startup-banner-head">
+              <h1>設定新密碼</h1>
+            </div>
+            <p>這組重設連結只能使用一次，請設定至少 8 個字元的新密碼。</p>
+            <div className="auth-form-grid">
+              <input
+                autoComplete="new-password"
+                data-testid="password-reset-new-password"
+                disabled={passwordResetSubmitting}
+                onChange={(event) => setResetPasswordDraft(event.target.value)}
+                placeholder="新密碼（至少 8 個字元）"
+                type="password"
+                value={resetPasswordDraft}
+              />
+              <input
+                autoComplete="new-password"
+                data-testid="password-reset-confirm-password"
+                disabled={passwordResetSubmitting}
+                onChange={(event) => setResetPasswordConfirmDraft(event.target.value)}
+                placeholder="再次輸入新密碼"
+                type="password"
+                value={resetPasswordConfirmDraft}
+              />
+              <button
+                className="primary-button"
+                data-testid="password-reset-submit"
+                disabled={passwordResetSubmitting}
+                onClick={() => {
+                  void handleCompletePasswordReset();
+                }}
+                type="button"
+              >
+                {passwordResetSubmitting ? "設定中" : "設定新密碼"}
+              </button>
+              {passwordResetMessage ? <p className="auth-help">{passwordResetMessage}</p> : null}
+            </div>
+          </section>
+        </main>
+      ) : null}
+      {!isPasswordResetPage ? (
+        <>
       <header className="hero">
         <div>
           <div className="hero-top">
@@ -6053,47 +6101,6 @@ export default function App({ experimentalMode = false, runtime = "production" }
           ) : null}
         </div>
       </header>
-
-      {passwordResetParams.resetId && passwordResetParams.resetToken ? (
-        <section className="startup-banner password-reset-page" data-testid="password-reset-page">
-          <div className="startup-banner-head">
-            <h2>設定新密碼</h2>
-          </div>
-          <p>這組重設連結只能使用一次，請設定至少 8 個字元的新密碼。</p>
-          <div className="auth-form-grid">
-            <input
-              autoComplete="new-password"
-              data-testid="password-reset-new-password"
-              disabled={passwordResetSubmitting}
-              onChange={(event) => setResetPasswordDraft(event.target.value)}
-              placeholder="新密碼（至少 8 個字元）"
-              type="password"
-              value={resetPasswordDraft}
-            />
-            <input
-              autoComplete="new-password"
-              data-testid="password-reset-confirm-password"
-              disabled={passwordResetSubmitting}
-              onChange={(event) => setResetPasswordConfirmDraft(event.target.value)}
-              placeholder="再次輸入新密碼"
-              type="password"
-              value={resetPasswordConfirmDraft}
-            />
-            <button
-              className="primary-button"
-              data-testid="password-reset-submit"
-              disabled={passwordResetSubmitting}
-              onClick={() => {
-                void handleCompletePasswordReset();
-              }}
-              type="button"
-            >
-              {passwordResetSubmitting ? "設定中" : "設定新密碼"}
-            </button>
-            {passwordResetMessage ? <p className="auth-help">{passwordResetMessage}</p> : null}
-          </div>
-        </section>
-      ) : null}
 
       {loginPassStatusMessage ? (
         <section
@@ -8182,6 +8189,8 @@ export default function App({ experimentalMode = false, runtime = "production" }
       </main>
         </>
       )}
+        </>
+      ) : null}
     </div>
   );
 }
