@@ -22,6 +22,28 @@ export const ROLE = {
   TEACHER: "teacher",
 } as const;
 
+export const ACCOUNT_SOURCE = {
+  E2E_AUTOMATION: "e2e-automation",
+  E2E_SIMULATION: "e2e-simulation",
+  PRODUCTION_COPY: "production-copy",
+  MANUAL_VALIDATION: "manual-validation",
+  UNCLASSIFIED: "unclassified",
+} as const;
+
+export type AccountSource = (typeof ACCOUNT_SOURCE)[keyof typeof ACCOUNT_SOURCE];
+
+const ACCOUNT_SOURCE_LABELS: Record<AccountSource, string> = {
+  [ACCOUNT_SOURCE.E2E_AUTOMATION]: "E2E 自動化測試",
+  [ACCOUNT_SOURCE.E2E_SIMULATION]: "E2E 情境模擬",
+  [ACCOUNT_SOURCE.PRODUCTION_COPY]: "正式版資料複製",
+  [ACCOUNT_SOURCE.MANUAL_VALIDATION]: "人工功能驗證",
+  [ACCOUNT_SOURCE.UNCLASSIFIED]: "未標註",
+};
+
+export function accountSourceLabel(source: AccountSource): string {
+  return ACCOUNT_SOURCE_LABELS[source];
+}
+
 export type GlobalRole = typeof ROLE.SYSTEM_ADMIN;
 export type SchoolMemberRole =
   | typeof ROLE.SCHOOL_ACCOUNT_ADMIN
@@ -36,12 +58,14 @@ export type AdminUserRecord = {
   roles: string[];
   status: string;
   lastLoginAt: string;
+  accountSource: AccountSource;
 };
 
 export type AdminUserFilters = {
   keyword: string;
   schoolName: string;
   status: string;
+  accountSource: "all" | AccountSource;
 };
 
 export type AdminLoginPassRecord = {
@@ -68,6 +92,37 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string")
     : [];
+}
+
+function readAccountSource(data: Record<string, unknown>, username: string): AccountSource {
+  const configuredSource = data.accountSource;
+  if (
+    typeof configuredSource === "string" &&
+    Object.values(ACCOUNT_SOURCE).includes(configuredSource as AccountSource)
+  ) {
+    return configuredSource as AccountSource;
+  }
+
+  const purpose =
+    typeof data.accountPurpose === "string" ? data.accountPurpose.trim().toLowerCase() : "";
+  if (purpose === "production-copy") {
+    return ACCOUNT_SOURCE.PRODUCTION_COPY;
+  }
+  if (
+    purpose.includes("simulation") ||
+    purpose.includes("scenario") ||
+    purpose.includes("mobile-guide") ||
+    stringList(data.globalRoles).includes(ROLE.SYSTEM_ADMIN)
+  ) {
+    return ACCOUNT_SOURCE.E2E_SIMULATION;
+  }
+  if (purpose === "manual-feature-validation" || data.isManualValidationAccount === true) {
+    return ACCOUNT_SOURCE.MANUAL_VALIDATION;
+  }
+  if (username.toLowerCase().startsWith("e2e_") || data.isTestData === true) {
+    return ACCOUNT_SOURCE.E2E_AUTOMATION;
+  }
+  return ACCOUNT_SOURCE.UNCLASSIFIED;
 }
 
 export function hasSystemAdminRole(profile: {
@@ -112,6 +167,7 @@ export async function listAdminUsers(): Promise<AdminUserRecord[]> {
               ? "inactive"
               : "active",
         lastLoginAt: timestampToText(data.lastLoginAt),
+        accountSource: readAccountSource(data, username),
       };
     })
     .sort((left, right) => left.username.localeCompare(right.username));
@@ -124,6 +180,7 @@ export function filterAdminUsers(
   const keyword = filters.keyword.trim().toLowerCase();
   const schoolName = filters.schoolName.trim().toLowerCase();
   const status = filters.status;
+  const accountSource = filters.accountSource;
 
   return users.filter((user) => {
     const matchesKeyword =
@@ -134,7 +191,9 @@ export function filterAdminUsers(
     const matchesSchool =
       !schoolName || user.schoolName.toLowerCase().includes(schoolName);
     const matchesStatus = status === "all" || user.status === status;
-    return matchesKeyword && matchesSchool && matchesStatus;
+    const matchesAccountSource =
+      accountSource === "all" || user.accountSource === accountSource;
+    return matchesKeyword && matchesSchool && matchesStatus && matchesAccountSource;
   });
 }
 

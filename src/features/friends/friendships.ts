@@ -17,7 +17,7 @@ import {
   type DocumentData,
   type Timestamp,
 } from "firebase/firestore";
-import { db } from "../../services/firebase";
+import { db, firebaseRuntime } from "../../services/firebase";
 import { emailToUsername, normalizeUsername } from "../auth/firebase-auth";
 import { getSchoolName, normalizeSchoolId } from "../../domain/schools";
 import type { SchoolId } from "../../domain/schools";
@@ -183,24 +183,31 @@ function mapInviteDocument(
 export async function ensureUserProfile(user: User): Promise<void> {
   const username =
     user.displayName || emailToUsername(user.email) || normalizeUsername(user.uid);
+  const normalizedUsername = normalizeUsername(username);
+  const accountSource =
+    firebaseRuntime === "e2e" && normalizedUsername.startsWith("e2e_")
+      ? "e2e-automation"
+      : undefined;
   const profileRef = doc(db, "users", user.uid);
   const profileSnapshot = await getDoc(profileRef);
 
   if (!profileSnapshot.exists()) {
     await setDoc(profileRef, {
-      username: normalizeUsername(username),
+      username: normalizedUsername,
       displayNickname: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status: "active",
+      ...(accountSource ? { accountSource } : {}),
     });
     return;
   }
 
   await updateDoc(profileRef, {
-    username: normalizeUsername(username),
+    username: normalizedUsername,
     updatedAt: serverTimestamp(),
     status: "active",
+    ...(accountSource && !profileSnapshot.data().accountSource ? { accountSource } : {}),
   });
 }
 

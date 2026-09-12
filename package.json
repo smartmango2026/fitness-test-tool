@@ -17,6 +17,7 @@
     "test:visual": "playwright test --config playwright.visual.config.ts",
     "cleanup:check": "node scripts/check-test-cleanup.mjs",
     "cleanup:e2e": "node scripts/cleanup-e2e-accounts.mjs",
+    "classify:e2e-account-sources": "node scripts/classify-e2e-account-sources.mjs",
     "seed:manual-school-accounts": "node scripts/seed-manual-school-accounts.mjs",
     "reports": "node scripts/list-diagnostic-reports.mjs"
   },

@@ -81,6 +81,8 @@ import {
   createLoginPassRecord,
   createPasswordResetRecord,
   completePasswordReset,
+  ACCOUNT_SOURCE,
+  accountSourceLabel,
   findActiveLoginPassForUser,
   filterAdminUsers,
   hasSystemAdminRole,
@@ -285,6 +287,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
     keyword: "",
     schoolName: "",
     status: "all",
+    accountSource: "all",
   });
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
@@ -1381,7 +1384,13 @@ export default function App({ experimentalMode = false, runtime = "production" }
 
   useEffect(() => {
     setAdminUsersPage(1);
-  }, [adminFilters.keyword, adminFilters.schoolName, adminFilters.status, adminUsersPageSize]);
+  }, [
+    adminFilters.accountSource,
+    adminFilters.keyword,
+    adminFilters.schoolName,
+    adminFilters.status,
+    adminUsersPageSize,
+  ]);
 
   function resolveFileSchoolIdForDraft(draftSchoolId: SchoolId | ""): SchoolId | "" {
     return currentProfileIsSmartSport
@@ -7501,6 +7510,27 @@ export default function App({ experimentalMode = false, runtime = "production" }
                           <option value="active">啟用</option>
                           <option value="inactive">停用</option>
                         </select>
+                        <label className="admin-school-filter-control">
+                          帳號類型
+                          <select
+                            data-testid="admin-user-account-source-filter"
+                            disabled={adminLoading}
+                            onChange={(event) =>
+                              setAdminFilters((current) => ({
+                                ...current,
+                                accountSource: event.target.value as AdminUserFilters["accountSource"],
+                              }))
+                            }
+                            value={adminFilters.accountSource}
+                          >
+                            <option value="all">全部類型</option>
+                            <option value={ACCOUNT_SOURCE.E2E_AUTOMATION}>E2E 自動化測試</option>
+                            <option value={ACCOUNT_SOURCE.E2E_SIMULATION}>E2E 情境模擬</option>
+                            <option value={ACCOUNT_SOURCE.PRODUCTION_COPY}>正式版資料複製</option>
+                            <option value={ACCOUNT_SOURCE.MANUAL_VALIDATION}>人工功能驗證</option>
+                            <option value={ACCOUNT_SOURCE.UNCLASSIFIED}>未標註</option>
+                          </select>
+                        </label>
                         <button
                           className="primary-button"
                           data-testid="admin-user-search-button"
@@ -7514,7 +7544,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                         </button>
                       </div>
                       <p className="auth-help" data-testid="admin-user-result-count">
-                        關鍵字：{adminFilters.keyword || "全部"}；符合條件：{filteredAdminUsers.length} / {adminUsers.length} 位使用者
+                        關鍵字：{adminFilters.keyword || "全部"}；帳號類型：{adminFilters.accountSource === "all" ? "全部" : accountSourceLabel(adminFilters.accountSource)}；符合條件：{filteredAdminUsers.length} / {adminUsers.length} 位使用者
                       </p>
                     </article>
 
@@ -7549,6 +7579,12 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               <div>
                                 <strong>狀態</strong>
                                 <div data-testid="admin-user-detail-status">{selectedAdminUser.status}</div>
+                              </div>
+                              <div>
+                                <strong>帳號類型</strong>
+                                <div data-testid="admin-user-detail-account-source">
+                                  {accountSourceLabel(selectedAdminUser.accountSource)}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -7750,6 +7786,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                               <th>帳號</th>
                               <th>顯示名稱</th>
                               <th>學校</th>
+                              <th>帳號類型</th>
                               <th>角色</th>
                               <th>狀態</th>
                               <th>最近登入</th>
@@ -7762,6 +7799,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 <td>{user.username}</td>
                                 <td>{user.displayName}</td>
                                 <td>{[user.schoolName, user.schoolBranchName].filter(Boolean).join(" / ") || "-"}</td>
+                                <td>{accountSourceLabel(user.accountSource)}</td>
                                 <td>{user.roles.join(", ")}</td>
                                 <td>{user.status}</td>
                                 <td>{user.lastLoginAt || "-"}</td>

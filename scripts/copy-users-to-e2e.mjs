@@ -258,14 +258,12 @@ function transformFirestoreFields(fields, uidMap) {
   );
 }
 
-function addSystemAdminRole(fields) {
+function addProductionCopyMetadata(fields) {
+  const { globalRoles: _globalRoles, ...nonAdminFields } = fields;
   return {
-    ...fields,
-    globalRoles: {
-      arrayValue: {
-        values: [{ stringValue: "systemAdmin" }],
-      },
-    },
+    ...nonAdminFields,
+    accountSource: { stringValue: "production-copy" },
+    accountPurpose: { stringValue: "production-copy" },
     status: fields.status ?? { stringValue: "active" },
   };
 }
@@ -310,7 +308,7 @@ async function copyDocumentTree({
   );
 
   const sourceFields = transformFirestoreFields(source.fields ?? {}, uidMap);
-  const targetFields = isUserRoot ? addSystemAdminRole(sourceFields) : sourceFields;
+  const targetFields = isUserRoot ? addProductionCopyMetadata(sourceFields) : sourceFields;
 
   await firestoreRequest(accessToken, `${firestoreBase(targetProjectId)}/${targetDocumentPath}`, {
     method: "PATCH",

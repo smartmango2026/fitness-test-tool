@@ -182,6 +182,7 @@ function profileFields({ username, schoolName, displayNickname, now }) {
     isTestData: { booleanValue: false },
     isManualValidationAccount: { booleanValue: true },
     accountPurpose: { stringValue: "manual-feature-validation" },
+    accountSource: { stringValue: "manual-validation" },
     updatedAt: { timestampValue: now },
   };
 }

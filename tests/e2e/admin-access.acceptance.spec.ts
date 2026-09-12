@@ -100,6 +100,7 @@ test.describe("Admin access acceptance contract", () => {
     );
     await expect(page.getByTestId("admin-user-table")).toContainText("teacher");
     await expect(page.getByTestId("admin-user-school-filter")).toBeVisible();
+    await expect(page.getByTestId("admin-user-account-source-filter")).toBeVisible();
   });
 
   test("phase 3: administrator opens user detail panel from the user table", async ({
@@ -118,6 +119,7 @@ test.describe("Admin access acceptance contract", () => {
     await expect(page.getByTestId("admin-user-detail-uid")).toBeVisible();
     await expect(page.getByTestId("admin-user-detail-status")).toBeVisible();
     await expect(page.getByTestId("admin-user-detail-role")).toBeVisible();
+    await expect(page.getByTestId("admin-user-detail-account-source")).toBeVisible();
   });
 
   test("phase 4: administrator creates password reset link from detail panel", async ({
