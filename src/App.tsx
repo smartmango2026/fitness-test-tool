@@ -275,7 +275,10 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [newPasswordDraft, setNewPasswordDraft] = useState("");
   const [confirmNewPasswordDraft, setConfirmNewPasswordDraft] = useState("");
   const [passwordChangeSaving, setPasswordChangeSaving] = useState(false);
-  const [showLoginPanel, setShowLoginPanel] = useState(false);
+  const [showLoginPanel, setShowLoginPanel] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("auth") === "login";
+  });
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [adminUsers, setAdminUsers] = useState<AdminUserRecord[]>([]);
   const [adminFilters, setAdminFilters] = useState<AdminUserFilters>({
@@ -312,6 +315,7 @@ export default function App({ experimentalMode = false, runtime = "production" }
   const [resetPasswordDraft, setResetPasswordDraft] = useState("");
   const [resetPasswordConfirmDraft, setResetPasswordConfirmDraft] = useState("");
   const [passwordResetSubmitting, setPasswordResetSubmitting] = useState(false);
+  const [passwordResetCompleted, setPasswordResetCompleted] = useState(false);
   const [passwordResetMessage, setPasswordResetMessage] = useState("");
   const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
   const [diagnosticTitle, setDiagnosticTitle] = useState("");
@@ -3730,18 +3734,25 @@ export default function App({ experimentalMode = false, runtime = "production" }
       setResetPasswordDraft("");
       setResetPasswordConfirmDraft("");
       setPasswordResetMessage("密碼已重設完成，請使用新密碼登入。");
+      setPasswordResetCompleted(true);
       const nextUrl = new URL(window.location.href);
       nextUrl.searchParams.delete("passwordResetId");
       nextUrl.searchParams.delete("passwordResetToken");
       window.history.replaceState({}, "", nextUrl.toString());
-      setAuthMode("login");
-      setShowLoginPanel(true);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       setPasswordResetMessage(`密碼重設失敗：${detail}`);
     } finally {
       setPasswordResetSubmitting(false);
     }
+  }
+
+  function handleReturnToLoginAfterPasswordReset(): void {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("passwordResetId");
+    nextUrl.searchParams.delete("passwordResetToken");
+    nextUrl.searchParams.set("auth", "login");
+    window.location.assign(nextUrl.toString());
   }
 
   async function handleRevokeAdminLoginPass(): Promise<void> {
@@ -5555,42 +5566,61 @@ export default function App({ experimentalMode = false, runtime = "production" }
         <main className="password-reset-standalone">
           <section className="startup-banner password-reset-page" data-testid="password-reset-page">
             <p className="password-reset-product-name">體適能測驗管理工具</p>
-            <div className="startup-banner-head">
-              <h1>設定新密碼</h1>
-            </div>
-            <p>這組重設連結只能使用一次，請設定至少 8 個字元的新密碼。</p>
-            <div className="auth-form-grid">
-              <input
-                autoComplete="new-password"
-                data-testid="password-reset-new-password"
-                disabled={passwordResetSubmitting}
-                onChange={(event) => setResetPasswordDraft(event.target.value)}
-                placeholder="新密碼（至少 8 個字元）"
-                type="password"
-                value={resetPasswordDraft}
-              />
-              <input
-                autoComplete="new-password"
-                data-testid="password-reset-confirm-password"
-                disabled={passwordResetSubmitting}
-                onChange={(event) => setResetPasswordConfirmDraft(event.target.value)}
-                placeholder="再次輸入新密碼"
-                type="password"
-                value={resetPasswordConfirmDraft}
-              />
-              <button
-                className="primary-button"
-                data-testid="password-reset-submit"
-                disabled={passwordResetSubmitting}
-                onClick={() => {
-                  void handleCompletePasswordReset();
-                }}
-                type="button"
-              >
-                {passwordResetSubmitting ? "設定中" : "設定新密碼"}
-              </button>
-              {passwordResetMessage ? <p className="auth-help">{passwordResetMessage}</p> : null}
-            </div>
+            {passwordResetCompleted ? (
+              <div className="password-reset-success" data-testid="password-reset-success">
+                <div className="startup-banner-head">
+                  <h1>密碼已設定完成</h1>
+                </div>
+                <p>請使用新密碼登入系統。</p>
+                <button
+                  className="primary-button"
+                  data-testid="password-reset-login-button"
+                  onClick={handleReturnToLoginAfterPasswordReset}
+                  type="button"
+                >
+                  前往登入
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="startup-banner-head">
+                  <h1>設定新密碼</h1>
+                </div>
+                <p>這組重設連結只能使用一次，請設定至少 8 個字元的新密碼。</p>
+                <div className="auth-form-grid">
+                  <input
+                    autoComplete="new-password"
+                    data-testid="password-reset-new-password"
+                    disabled={passwordResetSubmitting}
+                    onChange={(event) => setResetPasswordDraft(event.target.value)}
+                    placeholder="新密碼（至少 8 個字元）"
+                    type="password"
+                    value={resetPasswordDraft}
+                  />
+                  <input
+                    autoComplete="new-password"
+                    data-testid="password-reset-confirm-password"
+                    disabled={passwordResetSubmitting}
+                    onChange={(event) => setResetPasswordConfirmDraft(event.target.value)}
+                    placeholder="再次輸入新密碼"
+                    type="password"
+                    value={resetPasswordConfirmDraft}
+                  />
+                  <button
+                    className="primary-button"
+                    data-testid="password-reset-submit"
+                    disabled={passwordResetSubmitting}
+                    onClick={() => {
+                      void handleCompletePasswordReset();
+                    }}
+                    type="button"
+                  >
+                    {passwordResetSubmitting ? "設定中" : "設定新密碼"}
+                  </button>
+                  {passwordResetMessage ? <p className="auth-help">{passwordResetMessage}</p> : null}
+                </div>
+              </>
+            )}
           </section>
         </main>
       ) : null}

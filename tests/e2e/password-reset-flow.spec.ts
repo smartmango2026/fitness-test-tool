@@ -120,9 +120,11 @@ async function submitPasswordReset(
     await resetPage.getByTestId("password-reset-new-password").fill(password);
     await resetPage.getByTestId("password-reset-confirm-password").fill(password);
     await resetPage.getByTestId("password-reset-submit").click();
-    await expect(resetPage.getByText("密碼已重設完成，請使用新密碼登入。")).toBeVisible({
+    await expect(resetPage.getByTestId("password-reset-success")).toBeVisible({
       timeout: 20_000,
     });
+    await expect(resetPage.getByTestId("password-reset-new-password")).toHaveCount(0);
+    await expect(resetPage.getByTestId("password-reset-login-button")).toBeVisible();
   } finally {
     await resetPage.close();
   }

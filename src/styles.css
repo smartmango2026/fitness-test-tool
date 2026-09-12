@@ -2121,6 +2121,20 @@ button {
   font-size: clamp(1.5rem, 5vw, 2rem);
 }
 
+.password-reset-success {
+  display: grid;
+  gap: 18px;
+}
+
+.password-reset-success p {
+  margin: 0;
+  color: #334155;
+}
+
+.password-reset-success .primary-button {
+  width: 100%;
+}
+
 .experimental-banner {
   border-color: rgba(180, 83, 9, 0.18);
   background: linear-gradient(180deg, rgba(255, 251, 235, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
