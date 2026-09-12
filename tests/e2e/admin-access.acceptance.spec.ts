@@ -162,6 +162,7 @@ test.describe("Admin access acceptance contract", () => {
       "src",
       /^data:image\/png;base64,/,
     );
+    await expect(page.getByTestId("admin-login-pass-copy-button")).toBeVisible();
 
     const loginPassUrl = await page
       .getByTestId("admin-login-pass-result")

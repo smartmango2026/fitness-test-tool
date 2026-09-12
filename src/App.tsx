@@ -7654,6 +7654,16 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                     >
                                       開啟永久登入連結
                                     </a>
+                                    <button
+                                      className="secondary-button"
+                                      data-testid="admin-login-pass-copy-button"
+                                      onClick={() => {
+                                        void navigator.clipboard?.writeText(adminLoginPassUrl);
+                                      }}
+                                      type="button"
+                                    >
+                                      複製永久登入連結
+                                    </button>
                                   </>
                                 ) : (
                                   <p className="auth-help" data-testid="admin-login-pass-result">
@@ -7680,6 +7690,16 @@ export default function App({ experimentalMode = false, runtime = "production" }
                                 >
                                   開啟永久登入連結
                                 </a>
+                                <button
+                                  className="secondary-button"
+                                  data-testid="admin-login-pass-copy-button"
+                                  onClick={() => {
+                                    void navigator.clipboard?.writeText(adminLoginPassUrl);
+                                  }}
+                                  type="button"
+                                >
+                                  複製永久登入連結
+                                </button>
                               </div>
                             ) : null}
                             <p className="auth-help">
